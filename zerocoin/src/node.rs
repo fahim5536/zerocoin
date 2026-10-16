@@ -11,6 +11,9 @@
 //!   encrypted, replay-protected frames ([`crate::network::frame`]). Transactions
 //!   and blocks propagate by the classic Bitcoin `inv`/`getdata` gossip: a node
 //!   announces what it has, a peer asks for what it lacks, and relays it onward.
+//!   A node that is behind a peer also runs a header-first catch-up
+//!   (`getheaders`/`headers`), so it can pull a whole missing range of blocks in
+//!   order instead of only ever seeing the peer's newest block.
 //! - **RPC** — a plaintext, length-prefixed JSON server bound to the loopback
 //!   interface only. It is a *different trust boundary* from P2P: it is how the
 //!   operator's own `zerocoin-cli` drives the node (mine, send, query), and it is
@@ -22,7 +25,7 @@
 //! consensus state is a single [`Chain`] guarded by one lock, so there is no
 //! data-race surface and no async runtime to reason about.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
@@ -36,7 +39,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::chain::{now_timestamp, Chain, ChainError};
-use crate::consensus::block::Block;
+use crate::consensus::block::{Block, BlockHeader};
 use crate::consensus::difficulty::compact_to_target;
 use crate::consensus::pow::DEFAULT_SHARE_EASINESS;
 use crate::consensus::reward::{pool_coinbase_transaction, split_reward};
@@ -48,7 +51,10 @@ use crate::network::handshake::{
     begin_handshake, finish_handshake, respond_to_hello, Hello, HelloBack, NodeIdentity,
     SessionKeys,
 };
-use crate::network::message::{Inventory, Message, SharePayload, VersionPayload, PROTOCOL_VERSION};
+use crate::network::message::{
+    Inventory, Message, SharePayload, VersionPayload, MAX_HEADERS, MAX_INV_ENTRIES,
+    PROTOCOL_VERSION,
+};
 use crate::params::ChainParams;
 use crate::pool::{
     share_target_for, validate_share_submission, PoolLedger, ShareError, FINDER_SHARE_WEIGHT,
@@ -60,6 +66,10 @@ use crate::wallet::Wallet;
 const MAX_LEN_PREFIXED: usize = 8 * 1024 * 1024;
 /// How long the accept loops sleep between non-blocking polls.
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
+/// How many blocks one catch-up `GetData` requests. Bounded by the gossip list
+/// limit ([`crate::network::message::MAX_INV_ENTRIES`]) so a peer never has to
+/// reject our request as oversized, while still draining a long history quickly.
+const SYNC_BATCH: usize = MAX_INV_ENTRIES;
 
 type PeerId = u64;
 /// Each peer's outbound queue carries *plaintext* message bytes; the peer's writer
@@ -122,6 +132,19 @@ pub struct NodeState {
     pub pool: Mutex<PoolLedger>,
     /// Dial-back addresses this node has learned, served on `GetAddr`.
     pub known_addrs: Mutex<Vec<SocketAddr>>,
+    /// Block headers a peer announced that extend our chain but whose blocks we
+    /// have not requested yet, ordered by height. Keeping them lets catch-up fetch
+    /// blocks strictly in order, since [`crate::chain::Chain::connect_block`] only
+    /// accepts a block whose parent is the current tip.
+    sync_queue: Mutex<VecDeque<BlockHeader>>,
+    /// Height of the highest block catch-up has asked a peer for. Continuation
+    /// waits until our tip reaches it, so a further range is requested only once
+    /// the previous one has fully connected.
+    sync_requested_height: AtomicU64,
+    /// Set when a peer's `Headers` reply filled the whole list, hinting it likely
+    /// holds more. Continuation is gated on this, and clears it as it acts, so a
+    /// caught-up peer cannot start a request loop.
+    sync_more_available: AtomicBool,
     peers: Mutex<HashMap<PeerId, Outbox>>,
     next_peer: AtomicU64,
     /// A random per-connection nonce echoed in `Version`; a peer that returns it is
@@ -227,6 +250,9 @@ impl Node {
             wallet_path: config.data_dir.clone(),
             pool: Mutex::new(PoolLedger::new()),
             known_addrs: Mutex::new(Vec::new()),
+            sync_queue: Mutex::new(VecDeque::new()),
+            sync_requested_height: AtomicU64::new(0),
+            sync_more_available: AtomicBool::new(false),
             peers: Mutex::new(HashMap::new()),
             next_peer: AtomicU64::new(0),
             self_nonce,
@@ -479,9 +505,19 @@ fn handle_message(
                     items: vec![Inventory::block(tip)],
                 },
             );
+            // If the peer is ahead of us, ask for the headers above our tip so we
+            // catch up, rather than only ever requesting its newest block.
+            if payload.height > height {
+                request_headers(state, out);
+            }
         }
-        Message::Verack { .. } => {
-            // Handshake complete; nothing further to do until data flows.
+        Message::Verack { height, .. } => {
+            // The responder's `Verack` carries its height; if it is ahead, pull the
+            // headers above our tip so this node catches up instead of idling.
+            let ours = state.chain.lock().unwrap().height();
+            if height > ours {
+                request_headers(state, out);
+            }
         }
         Message::Ping { nonce } => send_msg(out, &Message::Pong { nonce }),
         Message::Pong { .. } => {}
@@ -586,6 +622,9 @@ fn handle_message(
                         },
                         Some(peer_id),
                     );
+                    // Keep catching up: fetch the next queued run, and — once all we
+                    // requested has connected — ask the peer for a further range.
+                    continue_sync(state, out);
                 }
                 BlockOutcome::Rejected => {}
                 BlockOutcome::FrozenInvariantViolation => {
@@ -606,8 +645,14 @@ fn handle_message(
             let headers = chain.headers_above(start, crate::network::message::MAX_HEADERS);
             send_msg(out, &Message::Headers { headers });
         }
-        Message::Headers { .. } => {
-            // Header sync is acknowledged; full block fetch is driven by inv/getdata.
+        Message::Headers { headers } => {
+            // A reply that filled the whole list means the peer truncated at the
+            // limit and likely holds more; remember so continuation can ask again.
+            state
+                .sync_more_available
+                .store(headers.len() >= MAX_HEADERS, Ordering::SeqCst);
+            queue_headers(state, headers);
+            pump_sync(state, out);
         }
         Message::Share(payload) => {
             // A low-end device submitted a partial proof of work. Validate it and, if
@@ -677,6 +722,96 @@ fn height_of_hash(chain: &Chain, hash: &Hash256) -> Option<u64> {
         }
     }
     None
+}
+
+// ---------------------------------------------------------------------------
+// Chain catch-up (header-first sync)
+// ---------------------------------------------------------------------------
+
+/// Ask a peer for the block headers above our tip. The locator is the chain's
+/// exponentially-spaced ancestor list, so the peer can locate our fork point in
+/// one round even across a long history and reply with everything we are missing.
+fn request_headers(state: &Arc<NodeState>, out: &Outbox) {
+    let locator = state.chain.lock().unwrap().locator();
+    send_msg(
+        out,
+        &Message::GetHeaders {
+            locator,
+            stop: Hash256::ZERO,
+        },
+    );
+}
+
+/// Queue the headers a peer returned, ignoring any that are already on our chain
+/// or already queued. [`crate::chain::Chain::headers_above`] yields ascending
+/// heights, so the queue stays ordered; contiguity is enforced when blocks are
+/// actually requested, so a header we cannot hang off our tip is never fetched.
+fn queue_headers(state: &Arc<NodeState>, headers: Vec<BlockHeader>) {
+    let tip_height = state.chain.lock().unwrap().height();
+    let mut queue = state.sync_queue.lock().unwrap();
+    for header in headers {
+        if header.height <= tip_height {
+            continue;
+        }
+        if queue.iter().any(|q| q.height == header.height) {
+            continue;
+        }
+        queue.push_back(header);
+    }
+}
+
+/// Request the next contiguous run of queued blocks, in ascending height order.
+///
+/// [`crate::chain::Chain::connect_block`] only accepts a block whose parent is the
+/// current tip, and a peer serves a `GetData` in the order it was sent while the
+/// per-peer stream preserves that order, so a run requested together connects one
+/// block at a time. The queue is drained as requests go out, so a block is never
+/// requested twice while its earlier siblings are still in flight.
+fn pump_sync(state: &Arc<NodeState>, out: &Outbox) {
+    let engine = state.params.build_engine();
+    let mut requests: Vec<Inventory> = Vec::new();
+    let mut highest = 0u64;
+    {
+        let (mut tip, mut next_height) = {
+            let chain = state.chain.lock().unwrap();
+            (chain.tip_hash(), chain.height().saturating_add(1))
+        };
+        let mut queue = state.sync_queue.lock().unwrap();
+        while requests.len() < SYNC_BATCH {
+            match queue.front() {
+                Some(h) if h.height == next_height && h.previous_hash == tip => {
+                    let id = h.pow_hash(engine.as_ref());
+                    requests.push(Inventory::block(id));
+                    tip = id;
+                    highest = next_height;
+                    next_height = next_height.saturating_add(1);
+                    queue.pop_front();
+                }
+                _ => break,
+            }
+        }
+    }
+    if !requests.is_empty() {
+        state.sync_requested_height.store(highest, Ordering::SeqCst);
+        send_msg(out, &Message::GetData { items: requests });
+    }
+}
+
+/// Carry catch-up one step after a block connects: request the next run of blocks
+/// we already know about, and — only once everything requested so far has actually
+/// connected — ask the peer for a further range if its last header reply was
+/// truncated. A caught-up peer answers with an empty `Headers`, which leaves the
+/// "more available" hint clear and ends the exchange.
+fn continue_sync(state: &Arc<NodeState>, out: &Outbox) {
+    pump_sync(state, out);
+    let caught_up = {
+        let chain = state.chain.lock().unwrap();
+        chain.height() >= state.sync_requested_height.load(Ordering::SeqCst)
+    };
+    let queue_empty = state.sync_queue.lock().unwrap().is_empty();
+    if caught_up && queue_empty && state.sync_more_available.swap(false, Ordering::SeqCst) {
+        request_headers(state, out);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1203,6 +1338,50 @@ mod tests {
                 .unwrap_or(false)
         });
         assert!(propagated, "node B did not reach height 1 via gossip");
+
+        node_a.stop();
+        node_b.stop();
+    }
+
+    /// A node that joins *after* the chain is already several blocks long must
+    /// catch up to the peer's tip. This is the regression for header sync: without
+    /// it the lagging node could only ever request the newest block, which
+    /// `connect_block` rejects out of order, so it stalled one block behind forever.
+    #[test]
+    fn a_lagging_node_catches_up_across_several_blocks() {
+        let dir_a = tempfile::tempdir().unwrap();
+        let dir_b = tempfile::tempdir().unwrap();
+
+        let config_a = regtest_config(dir_a.path(), true);
+        let node_a = Node::spawn(&config_a).expect("spawns A");
+        let rpc_a = node_a.rpc_addr.unwrap();
+
+        // A gets several blocks ahead before B ever connects.
+        rpc_call(rpc_a, "generate", json!({ "blocks": 6 })).unwrap();
+        let ahead = rpc_call(rpc_a, "getinfo", json!({})).unwrap();
+        assert_eq!(ahead["height"].as_u64(), Some(6));
+
+        let mut config_b = regtest_config(dir_b.path(), true);
+        config_b.seeds = vec![node_a.p2p_addr];
+        let node_b = Node::spawn(&config_b).expect("spawns B");
+        let rpc_b = node_b.rpc_addr.unwrap();
+
+        // B starts at genesis and must climb all the way to A's tip, not just one
+        // block, which is all inv/getdata alone would ever manage.
+        let caught_up = wait_until(Duration::from_secs(20), || {
+            rpc_call(rpc_b, "getinfo", json!({}))
+                .map(|v| v["height"].as_u64().unwrap_or(0) >= 6)
+                .unwrap_or(false)
+        });
+        assert!(
+            caught_up,
+            "node B did not catch up to height 6; header sync is not pulling the history"
+        );
+
+        // After catch-up the two nodes agree on the tip.
+        let tip_a = rpc_call(rpc_a, "getinfo", json!({})).unwrap()["tip"].clone();
+        let tip_b = rpc_call(rpc_b, "getinfo", json!({})).unwrap()["tip"].clone();
+        assert_eq!(tip_a, tip_b, "the lagging node converged on the peer's tip");
 
         node_a.stop();
         node_b.stop();
