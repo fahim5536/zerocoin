@@ -39,7 +39,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::chain::{now_timestamp, Chain, ChainError};
-use crate::consensus::block::{Block, BlockHeader};
+use crate::consensus::block::{Block, BlockHeader, MAX_BLOCK_TRANSACTIONS};
 use crate::consensus::difficulty::compact_to_target;
 use crate::consensus::pow::DEFAULT_SHARE_EASINESS;
 use crate::consensus::reward::{pool_coinbase_transaction, split_reward};
@@ -885,7 +885,7 @@ fn serve_rpc(state: Arc<NodeState>, mut stream: TcpStream) -> io::Result<()> {
     stream.flush()
 }
 
-/// Route one RPC call. Every method is served from the node's own state.
+/// Adapt one [`RpcRequest`] to [`handle_rpc`] and wrap the outcome for the wire.
 fn dispatch_rpc(state: &Arc<NodeState>, request: RpcRequest) -> RpcResponse {
     match handle_rpc(state, &request.method, &request.params) {
         Ok(result) => RpcResponse {
@@ -899,7 +899,13 @@ fn dispatch_rpc(state: &Arc<NodeState>, request: RpcRequest) -> RpcResponse {
     }
 }
 
-fn handle_rpc(state: &Arc<NodeState>, method: &str, params: &Value) -> Result<Value, String> {
+/// Route one RPC call. Every method is served from the node's own state.
+///
+/// This is the single implementation of the node's operations: the loopback
+/// RPC server dispatches through it, and so does [`crate::session::Session`]
+/// — the in-process wallet core used where no daemon can be spawned (mobile
+/// sandboxes) — so no two transports can ever drift apart.
+pub(crate) fn handle_rpc(state: &Arc<NodeState>, method: &str, params: &Value) -> Result<Value, String> {
     match method {
         "getinfo" => {
             let chain = state.chain.lock().unwrap();
@@ -951,19 +957,27 @@ fn handle_rpc(state: &Arc<NodeState>, method: &str, params: &Value) -> Result<Va
             let mut pooled = 0u64;
             for _ in 0..count {
                 let now = now_timestamp();
+                // Every block claims what our mempool is holding, so a payment
+                // this node signed confirms instead of sitting forever. The
+                // coinbase is a block transaction too, hence the minus one.
+                let txs = state
+                    .mempool
+                    .lock()
+                    .unwrap()
+                    .take_for_block(MAX_BLOCK_TRANSACTIONS - 1);
                 // Drain the pool first, then take the chain lock, so the two are never
                 // held at once (the same order `handle_share` uses).
                 let contributions = state.pool.lock().unwrap().drain();
-                let tip_hex = {
+                let (tip_hex, confirmed) = {
                     let mut chain = state.chain.lock().unwrap();
-                    if contributions.is_empty() {
+                    let block = if contributions.is_empty() {
                         chain
-                            .mine_block(&payout, Vec::new(), now)
-                            .map_err(|e| format!("mining failed: {e}"))?;
+                            .mine_block(&payout, txs, now)
+                            .map_err(|e| format!("mining failed: {e}"))?
                     } else {
                         let height = chain.next_height();
                         let reward = chain
-                            .projected_reward(&[])
+                            .projected_reward(&txs)
                             .map_err(|e| format!("mining failed: {e}"))?;
                         // Credit the finder as though it submitted a whole block of
                         // shares, so it keeps the bulk while mobiles earn their slice.
@@ -974,13 +988,17 @@ fn handle_rpc(state: &Arc<NodeState>, method: &str, params: &Value) -> Result<Va
                         }
                         let payouts = split_reward(reward, &weights);
                         let coinbase = pool_coinbase_transaction(height, reward, &payouts);
-                        chain
-                            .mine_block_with_coinbase(coinbase, Vec::new(), now)
+                        let block = chain
+                            .mine_block_with_coinbase(coinbase, txs, now)
                             .map_err(|e| format!("mining failed: {e}"))?;
                         pooled += 1;
-                    }
-                    chain.tip_hash().to_display_hex()
+                        block
+                    };
+                    (chain.tip_hash().to_display_hex(), block.transactions)
                 };
+                // The block is connected: drop everything it confirmed from the
+                // mempool, and everything whose coins it consumed.
+                state.mempool.lock().unwrap().prune_confirmed(&confirmed);
                 hashes.push(tip_hex);
             }
             let (height, tip) = {

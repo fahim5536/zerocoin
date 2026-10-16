@@ -36,8 +36,10 @@
 //! ```
 
 // A GUI binary should not open a console window on Windows; in debug builds we
-// keep it so `eprintln!` diagnostics stay visible while developing.
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// keep it so `eprintln!` diagnostics stay visible while developing. Gated to
+// Windows targets so a non-Windows build (e.g. `cargo check --target
+// aarch64-linux-android`) does not warn about an unused attribute.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 slint::include_modules!();
 
@@ -123,6 +125,27 @@ application directory, so they survive updates of these binaries. The wallet
 never touches keys itself; every signature happens inside the node.";
 
 fn main() -> Result<(), PlatformError> {
+    run_wallet()
+}
+
+/// Android entry point. The OS owns the event loop: the native activity calls
+/// this symbol once the app starts. It initialises Slint's Android backend and
+/// then runs the exact same wallet code path as the desktop binary — one UI,
+/// one core, no fork.
+#[cfg(target_os = "android")]
+#[no_mangle]
+fn android_main(app: slint::android::AndroidApp) {
+    if let Err(error) = slint::android::init(app) {
+        eprintln!("zerocoin-gui: initialising the Android backend failed: {error}");
+        return;
+    }
+    if let Err(error) = run_wallet() {
+        eprintln!("zerocoin-gui: {error}");
+    }
+}
+
+/// The wallet itself, shared by `main` (desktop) and `android_main` (Android).
+fn run_wallet() -> Result<(), PlatformError> {
     let (network, rpc_override, no_spawn) = match parse_args() {
         Ok(parsed) => parsed,
         Err(message) => {
@@ -614,7 +637,7 @@ fn wire_callbacks(ui: &WalletWindow, rpc_addr: SocketAddr, runtime: Handle, data
                 ui.set_status_is_error(true);
                 return;
             }
-            match arboard::Clipboard::new().and_then(|mut clipboard| clipboard.set_text(address)) {
+            match copy_to_clipboard(&address) {
                 Ok(()) => {
                     ui.set_status_message(COPY_OK_MESSAGE.into());
                     ui.set_status_is_error(false);
@@ -921,20 +944,16 @@ fn wire_callbacks(ui: &WalletWindow, rpc_addr: SocketAddr, runtime: Handle, data
             let weak = weak.clone();
             let dialog_open = dialog_open.clone();
             std::thread::spawn(move || {
-                let chosen = rfd::FileDialog::new()
-                    .set_title("Save your ZeroCoin wallet backup")
-                    .set_file_name(WALLET_FILE_NAME)
-                    .save_file();
-
-                let outcome = match chosen {
-                    Some(path) => std::fs::read(&keystore)
+                let outcome = match pick_backup_destination() {
+                    Ok(Some(path)) => std::fs::read(&keystore)
                         .and_then(|bytes| std::fs::write(&path, bytes))
                         .map(|_| path)
                         .map_err(|error| format!("Writing the backup failed: {error}")),
-                    None => Err(
+                    Ok(None) => Err(
                         "Backup cancelled. The dashboard unlocks after the wallet file is saved."
                             .to_string(),
                     ),
+                    Err(message) => Err(message),
                 };
 
                 let _ = weak.upgrade_in_event_loop(move |ui| {
@@ -965,6 +984,40 @@ fn wire_callbacks(ui: &WalletWindow, rpc_addr: SocketAddr, runtime: Handle, data
             });
         }
     });
+}
+
+// ---------------------------------------------------------------------------
+// Platform integrations
+// ---------------------------------------------------------------------------
+
+/// Copy `text` to the OS clipboard.
+#[cfg(not(target_os = "android"))]
+fn copy_to_clipboard(text: &str) -> Result<(), String> {
+    arboard::Clipboard::new()
+        .and_then(|mut clipboard| clipboard.set_text(text.to_owned()))
+        .map_err(|error| error.to_string())
+}
+
+/// Android has no clipboard crate wired up yet; the mobile UI milestone adds
+/// one. Refusing is honest — a silent fake success would not be.
+#[cfg(target_os = "android")]
+fn copy_to_clipboard(_text: &str) -> Result<(), String> {
+    Err("the clipboard is not available on this platform yet".to_string())
+}
+
+/// Ask the user where to save the wallet backup. `Ok(None)` means cancelled.
+#[cfg(not(target_os = "android"))]
+fn pick_backup_destination() -> Result<Option<PathBuf>, String> {
+    Ok(rfd::FileDialog::new()
+        .set_title("Save your ZeroCoin wallet backup")
+        .set_file_name(WALLET_FILE_NAME)
+        .save_file())
+}
+
+/// Android will export through the platform share sheet in a later milestone.
+#[cfg(target_os = "android")]
+fn pick_backup_destination() -> Result<Option<PathBuf>, String> {
+    Err("saving a backup file is not available on this platform yet".to_string())
 }
 
 /// The client-side pre-flight. Consensus rules are the node's job; this only
