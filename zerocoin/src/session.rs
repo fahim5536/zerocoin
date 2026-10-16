@@ -32,8 +32,9 @@
 //! [`Session::send`] reports a txid only after the node has signed the
 //! transaction, admitted it to the mempool and announced it to peers —
 //! confirmation still requires a mined block, which [`Session::info`] lets a
-//! UI track (height and mempool length). Nothing in this module ever
-//! fabricates a balance, an address or a transaction.
+//! UI track (height and mempool length), and [`Session::history`] re-derives
+//! the wallet's ledger from the chain on every call. Nothing in this module
+//! ever fabricates a balance, an address or a transaction.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -82,6 +83,22 @@ pub struct Balance {
     /// The balance mature enough to spend in the next block.
     #[serde(rename = "spendable")]
     pub spendable_fah: u64,
+}
+
+/// One row of the wallet's transaction ledger, exactly as `wallethistory`
+/// reports it. `amount` is the signed net effect on this wallet in Fah:
+/// positive for mined and received value, negative (fee included) for a
+/// payment this wallet signed. `height` is 0 while the payment still waits in
+/// the mempool, and `confirmations` counts blocks on top of the confirming
+/// block.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HistoryEntry {
+    pub txid: String,
+    pub height: u64,
+    pub direction: String,
+    pub amount: i64,
+    pub fee: u64,
+    pub confirmations: u64,
 }
 
 /// A snapshot of the chain and network this session is attached to.
@@ -152,6 +169,15 @@ impl Session {
         serde_json::from_value(value).map_err(|error| SessionError::Malformed(error.to_string()))
     }
 
+    /// Dispatch any operation of the node's RPC surface by name — the exact
+    /// entry point the loopback RPC server calls. Typed helpers above cover
+    /// the wallet lifecycle; this raw form lets a UI backend answer requests
+    /// that have no typed helper, and it can never drift from the daemon:
+    /// there is exactly one dispatch table.
+    pub fn call(&self, method: &str, params: &Value) -> Result<Value, SessionError> {
+        self.handle(method, params)
+    }
+
     /// Whether a wallet identity is present, and its address when it is.
     pub fn wallet_status(&self) -> Result<WalletStatus, SessionError> {
         self.typed("walletstatus", &json!({}))
@@ -207,6 +233,14 @@ impl Session {
     /// Network identity, height, tip, mempool and peer counts.
     pub fn info(&self) -> Result<ChainInfo, SessionError> {
         self.typed("getinfo", &json!({}))
+    }
+
+    /// The wallet's transaction ledger, newest first: mined rewards, sent
+    /// payments (pending ones on top) and received payments, each with its
+    /// confirmation count. Refused when no wallet is loaded.
+    pub fn history(&self) -> Result<Vec<HistoryEntry>, SessionError> {
+        let outcome: HistoryOutcome = self.typed("wallethistory", &json!({}))?;
+        Ok(outcome.history)
     }
 
     /// Sign, admit and broadcast a payment of `amount_fah` to `to`, paying
@@ -267,6 +301,12 @@ struct TxidOutcome {
 #[derive(Deserialize)]
 struct MinedOutcome {
     height: u64,
+}
+
+/// The `wallethistory` reply.
+#[derive(Deserialize)]
+struct HistoryOutcome {
+    history: Vec<HistoryEntry>,
 }
 
 #[cfg(test)]
@@ -509,6 +549,97 @@ mod tests {
         let status = reopened.wallet_status().unwrap();
         assert!(status.present);
         assert_eq!(status.address.as_deref(), Some(address.as_str()));
+    }
+
+    /// The ledger the mobile wallet renders: mined, sent and received rows
+    /// with honest amounts (a spend's fee included) and confirmation counts —
+    /// pending payments included, re-derived from real chain state only.
+    #[test]
+    fn history_lists_mined_sent_and_received_rows_with_confirmations() {
+        let dir = tempfile::tempdir().unwrap();
+        let session = open_session(&dir);
+        session.create_wallet("hunter2").unwrap();
+        session.mine(101).unwrap();
+
+        let (recipient_key, recipient_address) = recipient(regtest());
+        let amount_fah = 2 * FAH_PER_ZRO;
+        let sent_txid = session
+            .send("hunter2", &recipient_address, amount_fah, 1_000)
+            .unwrap();
+
+        // Before a block claims it, the payment is a pending sent row, and
+        // the wallet's net change is exactly -(amount + fee): the change
+        // output minus the spent coin.
+        let history = session.history().unwrap();
+        let pending = history
+            .iter()
+            .find(|entry| entry.txid == sent_txid)
+            .expect("the sent row");
+        assert_eq!(pending.direction, "sent");
+        assert_eq!(pending.height, 0, "pending until a block claims it");
+        assert_eq!(pending.confirmations, 0);
+        assert_eq!(pending.amount, -(amount_fah as i64 + 1_000));
+        assert_eq!(pending.fee, 1_000);
+
+        // After confirmation the same row carries its block and depth.
+        session.mine(1).unwrap();
+        let history = session.history().unwrap();
+        let confirmed = history
+            .iter()
+            .find(|entry| entry.txid == sent_txid)
+            .expect("the sent row");
+        assert_eq!(confirmed.height, 102);
+        assert_eq!(confirmed.confirmations, 1);
+        assert_eq!(confirmed.amount, -(amount_fah as i64 + 1_000));
+        assert_eq!(confirmed.fee, 1_000);
+
+        // Newest first, one row per mined reward: 101 coinbases plus the
+        // confirming block, with the tip block leading.
+        assert_eq!(
+            history
+                .iter()
+                .filter(|entry| entry.direction == "mined")
+                .count(),
+            102
+        );
+        assert_eq!(history.first().map(|entry| entry.height), Some(102));
+        let tip_coinbase = history
+            .iter()
+            .find(|entry| entry.height == 102 && entry.direction == "mined")
+            .expect("the tip coinbase row");
+        // The tip block claimed the pending payment, so its coinbase carries
+        // the block's collected fees on top of the subsidy — the ledger
+        // reports the real credited output, not the nominal subsidy.
+        assert_eq!(tip_coinbase.amount, block_subsidy(102) as i64 + 1_000);
+        assert_eq!(tip_coinbase.confirmations, 1);
+        let oldest = history
+            .iter()
+            .find(|entry| entry.height == 1)
+            .expect("the first coinbase row");
+        assert_eq!(oldest.amount, block_subsidy(1) as i64, "no fees to collect");
+        assert_eq!(oldest.confirmations, 102, "tip - height + 1");
+
+        // The recipient's view of the same chain: only the incoming payment
+        // touches their wallet, and it is honestly labelled.
+        let restored_dir = tempfile::tempdir().unwrap();
+        std::fs::copy(
+            dir.path().join(CHAIN_FILE),
+            restored_dir.path().join(CHAIN_FILE),
+        )
+        .expect("copying the chain store for the recipient");
+        let restored = open_session(&restored_dir);
+        restored
+            .import_secret("restore-me", &hex::encode(recipient_key.to_bytes()))
+            .unwrap();
+        let history = restored.history().unwrap();
+        assert_eq!(history.len(), 1, "only the incoming payment pays them");
+        let received = &history[0];
+        assert_eq!(received.direction, "received");
+        assert_eq!(received.txid, sent_txid);
+        assert_eq!(received.amount, amount_fah as i64);
+        assert_eq!(received.height, 102);
+        assert_eq!(received.confirmations, 1);
+        assert_eq!(received.fee, 0);
     }
 
     #[test]

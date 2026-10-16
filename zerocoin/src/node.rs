@@ -43,8 +43,10 @@ use crate::consensus::block::{Block, BlockHeader, MAX_BLOCK_TRANSACTIONS};
 use crate::consensus::difficulty::compact_to_target;
 use crate::consensus::pow::DEFAULT_SHARE_EASINESS;
 use crate::consensus::reward::{pool_coinbase_transaction, split_reward};
-use crate::crypto::hash::Hash256;
+use crate::crypto::hash::{Hash160, Hash256};
 use crate::crypto::secp256k1::PrivateKey;
+use crate::ledger::script::p2pkh_script_pubkey;
+use crate::ledger::transaction::Outpoint;
 use crate::mempool::Mempool;
 use crate::network::frame::SecureChannel;
 use crate::network::handshake::{
@@ -70,6 +72,11 @@ const POLL_INTERVAL: Duration = Duration::from_millis(50);
 /// limit ([`crate::network::message::MAX_INV_ENTRIES`]) so a peer never has to
 /// reject our request as oversized, while still draining a long history quickly.
 const SYNC_BATCH: usize = MAX_INV_ENTRIES;
+
+/// Upper bound on the rows `wallethistory` answers with, newest first. The
+/// wallet view slices this further; the cap here keeps the response bounded
+/// for any client.
+const HISTORY_ROW_LIMIT: usize = 250;
 
 type PeerId = u64;
 /// Each peer's outbound queue carries *plaintext* message bytes; the peer's writer
@@ -899,6 +906,169 @@ fn dispatch_rpc(state: &Arc<NodeState>, request: RpcRequest) -> RpcResponse {
     }
 }
 
+/// The wallet's transaction ledger: pending payments first, then confirmed
+/// rows newest-first, capped at [`HISTORY_ROW_LIMIT`].
+///
+/// The history is rebuilt from the blocks on every call — there is no
+/// secondary index that could drift from the chain. One forward walk from
+/// genesis to the tip tracks which of the wallet's outputs each transaction
+/// consumed (`owned`), so a spend is attributed to the transaction that made
+/// it. A single-key wallet has exactly three row kinds:
+///
+/// - `mined`    — a coinbase paying this wallet (the reward).
+/// - `sent`     — a transaction spending wallet coins; `amount` is the net
+///   change (change minus spent, fee included) and `fee` the surplus the
+///   inputs left over every output.
+/// - `received` — a transaction paying this wallet without spending from it.
+fn wallet_history(chain: &Chain, pkhash: &Hash160, mempool: &Mempool) -> Value {
+    let script = p2pkh_script_pubkey(pkhash);
+    let tip = chain.height();
+
+    // Pending rows first. A pooled payment spends coins that are still in
+    // the UTXO set (the spend is not confirmed), so a walk over mined blocks
+    // alone would never attribute it; this pass books it as a sent row
+    // until a block claims it.
+    let mut rows = Vec::new();
+    for txid in mempool.txids() {
+        let Some(entry) = mempool.get(&txid) else {
+            continue; // a prune raced the snapshot; the next call sees the new set
+        };
+        let tx = &entry.tx;
+        let debit: u64 = tx
+            .inputs
+            .iter()
+            .filter_map(|input| chain.utxo().get(&input.previous_output))
+            .filter(|entry| entry.output.script_pubkey == script)
+            .map(|entry| entry.output.value)
+            .sum();
+        let credit: u64 = tx
+            .outputs
+            .iter()
+            .filter(|output| output.script_pubkey == script)
+            .map(|output| output.value)
+            .sum();
+        if debit == 0 && credit == 0 {
+            continue;
+        }
+        if debit > 0 {
+            rows.push(history_row(
+                txid.to_display_hex(),
+                0,
+                "sent",
+                credit as i64 - debit as i64,
+                entry.fee,
+                0,
+            ));
+        } else {
+            rows.push(history_row(
+                txid.to_display_hex(),
+                0,
+                "received",
+                credit as i64,
+                0,
+                0,
+            ));
+        }
+    }
+
+    // Confirmed rows: one walk in chain order keeps coin attribution exact.
+    // `owned` holds the wallet's outputs created so far; the block that
+    // spends one removes it, and the resulting debit belongs to that
+    // transaction.
+    let mut owned: HashMap<Outpoint, u64> = HashMap::new();
+    let mut confirmed = Vec::new();
+    for height in 1..=tip {
+        let Some(block) = chain.block_at(height) else {
+            continue;
+        };
+        for tx in &block.transactions {
+            let txid = tx.txid();
+            let mut debit = 0u64;
+            for input in &tx.inputs {
+                if let Some(value) = owned.remove(&input.previous_output) {
+                    debit += value;
+                }
+            }
+            let credit: u64 = tx
+                .outputs
+                .iter()
+                .filter(|output| output.script_pubkey == script)
+                .map(|output| output.value)
+                .sum();
+            for (vout, output) in tx.outputs.iter().enumerate() {
+                if output.script_pubkey == script {
+                    owned.insert(
+                        Outpoint {
+                            txid,
+                            vout: vout as u32,
+                        },
+                        output.value,
+                    );
+                }
+            }
+            if debit == 0 && credit == 0 {
+                continue;
+            }
+            let confirmations = tip - height + 1;
+            if tx.is_coinbase() {
+                confirmed.push(history_row(
+                    txid.to_display_hex(),
+                    height,
+                    "mined",
+                    credit as i64,
+                    0,
+                    confirmations,
+                ));
+            } else if debit > 0 {
+                // The fee is what the wallet's inputs left over: every coin
+                // they added, minus every output the transaction created.
+                let paid: u64 = tx.outputs.iter().map(|output| output.value).sum();
+                confirmed.push(history_row(
+                    txid.to_display_hex(),
+                    height,
+                    "sent",
+                    credit as i64 - debit as i64,
+                    debit.saturating_sub(paid),
+                    confirmations,
+                ));
+            } else {
+                confirmed.push(history_row(
+                    txid.to_display_hex(),
+                    height,
+                    "received",
+                    credit as i64,
+                    0,
+                    confirmations,
+                ));
+            }
+        }
+    }
+    confirmed.reverse();
+    rows.extend(confirmed);
+    rows.truncate(HISTORY_ROW_LIMIT);
+    json!({ "history": rows })
+}
+
+/// One `wallethistory` row, in the shape [`crate::session::HistoryEntry`]
+/// deserializes and the wallet view renders.
+fn history_row(
+    txid: String,
+    height: u64,
+    direction: &str,
+    amount: i64,
+    fee: u64,
+    confirmations: u64,
+) -> Value {
+    json!({
+        "txid": txid,
+        "height": height,
+        "direction": direction,
+        "amount": amount,
+        "fee": fee,
+        "confirmations": confirmations,
+    })
+}
+
 /// Route one RPC call. Every method is served from the node's own state.
 ///
 /// This is the single implementation of the node's operations: the loopback
@@ -1196,6 +1366,17 @@ pub(crate) fn handle_rpc(state: &Arc<NodeState>, method: &str, params: &Value) -
             } else {
                 Err("importwallet requires either a 'secret' scalar or a 'keystore' file".to_string())
             }
+        }
+        "wallethistory" => {
+            // The wallet's ledger, derived from current state — no stored
+            // index can drift from the chain. Lock order follows the other
+            // handlers: wallet, then chain, then mempool.
+            let wallet_guard = state.wallet.lock().unwrap();
+            let wallet = wallet_guard.as_ref().ok_or("no wallet loaded")?;
+            let pkhash = wallet.pubkey_hash();
+            let chain = state.chain.lock().unwrap();
+            let mempool = state.mempool.lock().unwrap();
+            Ok(wallet_history(&chain, &pkhash, &mempool))
         }
         "getpeercount" => Ok(json!({ "peers": state.peer_count() })),
         "stop" => {

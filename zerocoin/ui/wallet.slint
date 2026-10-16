@@ -39,6 +39,16 @@
 // looks identical everywhere, regardless of the OS light/dark theme.
 // =============================================================================
 
+// One row of the wallet's transaction ledger, as pushed by the backend: the
+// signed amount (already formatted, e.g. "-2.00001 ZRO") and the muted detail
+// line ("Sent · 1 confirmation · fee 1,000 Fah"). `incoming` tints the amount.
+// Every glyph is backend-owned; this file only paints it.
+export struct LedgerRow {
+    amount-text: string,
+    detail-text: string,
+    incoming: bool,
+}
+
 // -----------------------------------------------------------------------------
 // A themed single-line input (recipient / amount / password) with an electric
 // blue focus halo: on focus the border ignites and a soft ring blooms around
@@ -314,6 +324,12 @@ export component WalletWindow inherits Window {
     in-out property <string> wallet-address: "";
     in-out property <int> chain-height: 0;
     in-out property <int> peer-count: 0;
+
+    // ---- transaction ledger (pushed by the backend) ------------------------
+    // Rebuilt whenever the chain tip or the mempool moves (plus a slow
+    // fallback cadence); the backend owns the query and the formatting, this
+    // window only paints the rows.
+    in-out property <[LedgerRow]> history-rows: [];
 
     // ---- send-form bindings (read and cleared by the backend) -------------
     in-out property <string> recipient-address: "";
@@ -754,10 +770,10 @@ export component WalletWindow inherits Window {
                             border-width: 1px;
                             border-color: #22303E;
 
-                            // The scrollable ledger container. No transaction
-                            // feed is bound yet, so it shows an honest empty
-                            // state; the content-height contract is already in
-                            // place for rows to scroll once a feed exists.
+                            // The scrollable ledger container. Rows come from
+                            // the backend's `history-rows` model; until its
+                            // first answer arrives the column shows an honest
+                            // empty state.
                             history-flick := Flickable {
                                 x: 6px;
                                 y: 6px;
@@ -771,51 +787,88 @@ export component WalletWindow inherits Window {
                                     height: max(ledger-column.preferred-height, history-flick.height);
                                     spacing: 6px;
 
-                                    Rectangle { vertical-stretch: 1; }
+                                    // Empty state: the ledger query has not
+                                    // returned a row yet (or the wallet has
+                                    // never transacted).
+                                    if root.history-rows.length == 0 : VerticalLayout {
+                                        spacing: 6px;
 
-                                    // Ledger icon chip: the same three bars as
-                                    // the action row, one step quieter.
-                                    Rectangle {
-                                        height: 44px;
+                                        Rectangle { vertical-stretch: 1; }
 
+                                        // Ledger icon chip: the same three bars as
+                                        // the action row, one step quieter.
                                         Rectangle {
-                                            x: (parent.width - 44px) / 2;
-                                            width: 44px;
                                             height: 44px;
-                                            border-radius: 22px;
-                                            background: #18222D;
 
-                                            VerticalLayout {
-                                                width: 100%;
-                                                height: 100%;
-                                                spacing: 4px;
-                                                alignment: center;
-                                                cross-axis-alignment: center;
+                                            Rectangle {
+                                                x: (parent.width - 44px) / 2;
+                                                width: 44px;
+                                                height: 44px;
+                                                border-radius: 22px;
+                                                background: #18222D;
 
-                                                Rectangle { width: 16px; height: 2px; border-radius: 1px; background: #4E6275; }
-                                                Rectangle { width: 10px; height: 2px; border-radius: 1px; background: #4E6275; }
-                                                Rectangle { width: 16px; height: 2px; border-radius: 1px; background: #4E6275; }
+                                                VerticalLayout {
+                                                    width: 100%;
+                                                    height: 100%;
+                                                    spacing: 4px;
+                                                    alignment: center;
+                                                    cross-axis-alignment: center;
+
+                                                    Rectangle { width: 16px; height: 2px; border-radius: 1px; background: #4E6275; }
+                                                    Rectangle { width: 10px; height: 2px; border-radius: 1px; background: #4E6275; }
+                                                    Rectangle { width: 16px; height: 2px; border-radius: 1px; background: #4E6275; }
+                                                }
                                             }
                                         }
+
+                                        Text {
+                                            text: "No transactions yet";
+                                            color: #C9D8E6;
+                                            font-size: 13px;
+                                            font-weight: 600;
+                                            horizontal-alignment: center;
+                                        }
+
+                                        Text {
+                                            text: "Your sent and received ZRO will appear here.";
+                                            color: #5E7080;
+                                            font-size: 11px;
+                                            wrap: word-wrap;
+                                            horizontal-alignment: center;
+                                        }
+
+                                        Rectangle { vertical-stretch: 1; }
                                     }
 
-                                    Text {
-                                        text: "No transactions yet";
-                                        color: #C9D8E6;
-                                        font-size: 13px;
-                                        font-weight: 600;
-                                        horizontal-alignment: center;
-                                    }
+                                    // One row per entry, newest first: the
+                                    // signed amount on top (blue when value
+                                    // came in), the mined / sent / received
+                                    // label and confirmation count below.
+                                    for row[i] in root.history-rows : Rectangle {
+                                        height: 48px;
+                                        border-radius: 10px;
+                                        background: #0C1319;
 
-                                    Text {
-                                        text: "Your sent and received ZRO will appear here.";
-                                        color: #5E7080;
-                                        font-size: 11px;
-                                        wrap: word-wrap;
-                                        horizontal-alignment: center;
-                                    }
+                                        Text {
+                                            x: 12px;
+                                            y: 7px;
+                                            width: parent.width - 24px;
+                                            text: row.amount-text;
+                                            color: row.incoming ? #4FA7E8 : #EEF4F9;
+                                            font-size: 14px;
+                                            font-weight: 600;
+                                        }
 
-                                    Rectangle { vertical-stretch: 1; }
+                                        Text {
+                                            x: 12px;
+                                            y: 27px;
+                                            width: parent.width - 24px;
+                                            text: row.detail-text;
+                                            color: #5E7080;
+                                            font-size: 11px;
+                                            overflow: elide;
+                                        }
+                                    }
                                 }
                             }
                         }

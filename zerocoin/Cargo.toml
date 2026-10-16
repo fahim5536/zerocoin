@@ -23,6 +23,13 @@ authors = ["ZeroCoin Community"]
 default = ["gui"]
 gui = ["dep:slint", "dep:arboard", "dep:rfd"]
 
+# The wallet UI compiles two ways: `rlib` so the desktop `zerocoin-gui`
+# binary and the test harness link it like any other module, and `cdylib`
+# so Android can load the same code as a native library and call its
+# `android_main` — Android has no Rust `main`.
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -97,9 +104,17 @@ slint = { version = "1.18.1", default-features = false, optional = true, feature
 
 [target.'cfg(target_os = "android")'.dependencies]
 # Android renders through the platform's native activity: the OS owns the
-# event loop and calls the `android_main` entry point exported by
-# `src/bin/zerocoin_gui.rs`.
+# event loop and calls the `android_main` entry point exported by the
+# library (`zerocoin::gui`).
 slint = { version = "1.18.1", default-features = false, optional = true, features = ["backend-android-activity-06"] }
+
+# Slint exposes no clipboard API and Android has no `arboard` backend, so
+# the GUI's copy button talks to the platform's ClipboardManager through
+# JNI directly; `ndk-context` hands it the `JavaVM` + Activity jobject that
+# the android-activity glue already registered at startup. Android-only by
+# way of this target table, so desktop builds never see them.
+jni = "0.21"
+ndk-context = "0.1"
 
 [build-dependencies]
 slint-build = "1.18.1"
@@ -127,3 +142,20 @@ required-features = ["gui"]
 opt-level = 3
 lto = true
 codegen-units = 1
+
+# `cargo apk` packaging: the crate's `cdylib` becomes the app's native
+# library inside an APK built for 64-bit ARM devices. minSdk 26 is the floor
+# of the Slint android-activity backend (and Android 8.0, the oldest version
+# the wallet's storage/TLS stack supports); targetSdk 35 matches the
+# installed platform.
+[package.metadata.android]
+package = "org.zerocoin.wallet"
+apk_name = "zerocoin"
+build_targets = ["aarch64-linux-android"]
+
+[package.metadata.android.sdk]
+min_sdk_version = 26
+target_sdk_version = 35
+
+[package.metadata.android.application]
+label = "ZeroCoin"

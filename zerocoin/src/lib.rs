@@ -9,7 +9,9 @@
 //! state lives on a consumer machine, so the wallet survives software updates, and
 //! `session` exposes the same node state as a small in-process wallet API for
 //! front-ends that cannot spawn a daemon (mobile), backed by the exact same
-//! operation handlers as the loopback RPC.
+//! operation handlers as the loopback RPC. `gui` (behind the default `gui`
+//! feature) is the Slint wallet front-end shared by the desktop binary and the
+//! Android app.
 
 pub mod crypto;
 pub mod ledger;
@@ -26,6 +28,13 @@ pub mod wallet;
 pub mod pool;
 pub mod node;
 pub mod session;
+
+// The wallet UI: a library module (not a binary) because it compiles two ways
+// — linked into the desktop `zerocoin-gui` binary, and exported as this
+// package's `cdylib` for Android, where the OS calls its `android_main`
+// symbol instead of a Rust `main`.
+#[cfg(feature = "gui")]
+pub mod gui;
 
 pub use params::ChainParams;
 
