@@ -1,0 +1,1223 @@
+// ZeroCoin Wallet — Slint presentation layer ("Tonkeeper" edition).
+// =============================================================================
+// Rendered by `zerocoin-gui`. This file is pure presentation: it owns pixels,
+// never keys. Everything that costs a cryptography step (keystore unlock,
+// signing, broadcast, and the argon2id work that precedes them) happens inside
+// a running `zerocoind`; this window asks for it through the `request-*`
+// callbacks and receives plain values back as properties.
+//
+// Layout anatomy follows the Tonkeeper wallet:
+//   1. Hero balance      — "Spendable Balance" figure, top-centre, flanked by
+//                          a sleek ZRO tag, with the Fah / Confirmed figures
+//                          as muted sub-captions underneath.
+//   2. Circular actions  — exactly three centred icons: Send (opens the
+//                          transaction sheet), Receive (address copy block)
+//                          and History (scrollable ledger).
+//   3. Transaction sheet — all form surfaces live in one bordered sheet that
+//                          exists only while an action is toggled active.
+//                          Nothing else occupies fixed screen estate.
+//   4. Welcome session   — while no wallet identity exists on this machine,
+//                          the dashboard is replaced by a pristine onboarding
+//                          column (create a new wallet / import an existing
+//                          seed or keystore), driven by the backend's
+//                          `view-mode` property.
+//
+// Visual language — the Tonkeeper dark sheet:
+//   canvas   #0C1014   flat, full-bleed, no ambient decoration
+//   sheet    #18222D   the raised transaction sheet · #FFFFFF12 hairline edge
+//   inset    #101820   fields, address block and ledger sit one step down
+//   accent   #2481CC   electric blue: actions, focus rings, the ZRO tag
+//   type     #EEF4F9 primary · #8FA1B3 secondary · #5E7080 muted
+//
+// Slint 1.18 intentionally ships no box-shadow and no backdrop blur, so the
+// field focus ring is simulated with stacked translucent rounded Rectangles (a
+// wide soft halo plus a tight ring) sitting *behind* an inset surface. That is
+// plain alpha blending: no extra render passes, which keeps the window cheap
+// on the software renderer and on low-end (4 GB RAM class) machines.
+//
+// The palette stays hand-rolled (no `std-widgets` dependency) so the wallet
+// looks identical everywhere, regardless of the OS light/dark theme.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// A themed single-line input (recipient / amount / password) with an electric
+// blue focus halo: on focus the border ignites and a soft ring blooms around
+// it. The caret-scroll maths mirrors Slint's own LineEdit and must not drift.
+// -----------------------------------------------------------------------------
+component StyledField inherits Rectangle {
+    in property <string> placeholder-text: "";
+    in property <bool> masked: false;
+    in-out property <string> text <=> input.text;
+    in-out property <bool> revealed: false;
+    callback submitted();
+
+    height: 44px;
+    background: transparent;
+
+    private property <bool> focused: input.has-focus;
+
+    // Scroll offset that keeps the caret inside the viewport. Mirrors the
+    // technique Slint's own LineEdit uses (see i-slint-compiler widgets).
+    private property <length> computed-x: 0px;
+
+    // --- simulated outer glow: wide, soft halo -------------------------------
+    Rectangle {
+        x: -3px;
+        y: -3px;
+        width: parent.width + 6px;
+        height: parent.height + 6px;
+        border-radius: 15px;
+        background: #2481CC14;
+        opacity: root.focused ? 1 : 0;
+        animate opacity { duration: 200ms; easing: ease-out; }
+    }
+
+    // --- simulated outer glow: tight electric ring ---------------------------
+    Rectangle {
+        x: -1px;
+        y: -1px;
+        width: parent.width + 2px;
+        height: parent.height + 2px;
+        border-radius: 13px;
+        background: transparent;
+        border-width: 1px;
+        border-color: #2481CC52;
+        opacity: root.focused ? 1 : 0;
+        animate opacity { duration: 200ms; easing: ease-out; }
+    }
+
+    // --- the inset surface ----------------------------------------------------
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        border-radius: 12px;
+        background: root.focused ? #131D27 : #101820;
+        border-width: 1px;
+        border-color: root.focused ? #2481CC : #22303E;
+        animate background { duration: 160ms; }
+        animate border-color { duration: 160ms; }
+
+        Rectangle {
+            x: 11px;
+            width: parent.width - 22px;
+            height: parent.height;
+            clip: true;
+
+            input := TextInput {
+                x: min(0px, max(parent.width - self.width - self.text-cursor-width, root.computed-x));
+                width: max(parent.width - self.text-cursor-width, self.preferred-width);
+                height: 100%;
+                vertical-alignment: center;
+                single-line: true;
+                color: #EEF4F9;
+                selection-background-color: #2481CC;
+                selection-foreground-color: #FFFFFF;
+                font-size: 13px;
+                input-type: root.masked && !root.revealed ? InputType.password : InputType.text;
+                accessible-label: root.placeholder-text;
+
+                cursor-position-changed(cursor-position) => {
+                    if cursor-position.x + self.x < 0px {
+                        root.computed-x = -cursor-position.x;
+                    } else if cursor-position.x + self.x > parent.width - self.text-cursor-width {
+                        root.computed-x = parent.width - cursor-position.x - self.text-cursor-width;
+                    }
+                }
+
+                accepted => { root.submitted(); }
+            }
+
+            if input.text.is-empty : Text {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: parent.height;
+                text: root.placeholder-text;
+                color: #4C5D6E;
+                font-size: 13px;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+    }
+
+    // --- password show/hide toggle (drawn above the surface) ------------------
+    if root.masked : Rectangle {
+        x: parent.width - 46px;
+        width: 42px;
+        height: parent.height;
+
+        Text {
+            text: root.revealed ? "Hide" : "Show";
+            color: root.revealed || toggle-touch.has-hover ? #8FC9F0 : #5E7080;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            animate color { duration: 140ms; }
+        }
+
+        toggle-touch := TouchArea {
+            clicked => {
+                root.revealed = !root.revealed;
+                input.focus();
+            }
+            mouse-cursor: pointer;
+            accessible-role: button;
+            accessible-label: root.revealed ? "Hide password" : "Show password";
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// One circular Tonkeeper action: a 56 px control with a caption underneath.
+// Idle it rests one step above the canvas; the active action turns solid
+// electric blue. The History icon is drawn from three bars (no glyphs, no
+// font-fallback risk); Send/Receive use the plain arrow characters.
+// -----------------------------------------------------------------------------
+component CircleAction inherits Rectangle {
+    in property <string> label-text: "";
+    in property <string> icon-glyph: "";
+    in property <bool> has-bars: false;
+    in property <bool> active: false;
+    callback clicked();
+
+    width: 72px;
+    height: 84px;
+    background: transparent;
+
+    Rectangle {
+        x: (parent.width - 56px) / 2;
+        width: 56px;
+        height: 56px;
+        border-radius: 28px;
+        background: root.active ? #2481CC : (ctrl-touch.has-hover ? #202D3A : #18222D);
+        border-width: 1px;
+        border-color: root.active ? #4D9EDE : #FFFFFF12;
+        animate background { duration: 150ms; }
+        animate border-color { duration: 150ms; }
+
+        if root.has-bars == false : Text {
+            text: root.icon-glyph;
+            color: root.active ? #FFFFFF : #63B0E8;
+            font-size: 22px;
+            font-weight: 600;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            animate color { duration: 150ms; }
+        }
+
+        if root.has-bars : VerticalLayout {
+            width: 100%;
+            height: 100%;
+            spacing: 4px;
+            alignment: center;
+            cross-axis-alignment: center;
+
+            Rectangle {
+                width: 16px;
+                height: 2px;
+                border-radius: 1px;
+                background: root.active ? #FFFFFF : #63B0E8;
+                animate background { duration: 150ms; }
+            }
+
+            Rectangle {
+                width: 10px;
+                height: 2px;
+                border-radius: 1px;
+                background: root.active ? #FFFFFF : #63B0E8;
+                animate background { duration: 150ms; }
+            }
+
+            Rectangle {
+                width: 16px;
+                height: 2px;
+                border-radius: 1px;
+                background: root.active ? #FFFFFF : #63B0E8;
+                animate background { duration: 150ms; }
+            }
+        }
+    }
+
+    Text {
+        y: 64px;
+        width: 100%;
+        text: root.label-text;
+        color: root.active ? #EAF2FB : #8FA1B3;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        horizontal-alignment: center;
+        animate color { duration: 150ms; }
+    }
+
+    // The whole column is the hit target, caption included.
+    ctrl-touch := TouchArea {
+        clicked => { root.clicked(); }
+        mouse-cursor: pointer;
+        accessible-role: button;
+        accessible-label: root.label-text;
+    }
+}
+
+// -----------------------------------------------------------------------------
+// The global status banner: offline notices, copy confirmations and send /
+// onboarding results all land here, outside the conditional sheets so no
+// action can ever hide them. Whichever view is active renders one instance.
+// -----------------------------------------------------------------------------
+component StatusBanner inherits Rectangle {
+    in property <string> message: "";
+    in property <bool> is-error: false;
+
+    visible: root.message != "";
+    height: banner-text.preferred-height + 18px;
+    border-radius: 10px;
+    background: root.is-error ? #2E141B : #10281E;
+    border-width: 1px;
+    border-color: root.is-error ? #5A2432 : #1E4A36;
+    animate background { duration: 200ms; }
+    animate border-color { duration: 200ms; }
+
+    banner-text := Text {
+        x: 12px;
+        y: 9px;
+        width: parent.width - 24px;
+        text: root.message;
+        color: root.is-error ? #FF8A94 : #4ED09A;
+        font-size: 11px;
+        wrap: word-wrap;
+    }
+}
+
+// -----------------------------------------------------------------------------
+// The wallet window itself.
+// -----------------------------------------------------------------------------
+export component WalletWindow inherits Window {
+    title: "ZeroCoin Wallet — ZRO";
+    preferred-width: 460px;
+    preferred-height: 670px;
+    min-width: 420px;
+    min-height: 660px;
+    background: #0C1014;
+    default-font-family: "Segoe UI";
+    default-font-size: 14px;
+
+    // ---- state pushed by `zerocoin-gui` (polled from the node) ------------
+    in-out property <string> network-name: "Devnet";
+    in-out property <bool> node-online: false;
+    in-out property <string> confirmed-balance: "0.00000000";
+    in-out property <string> confirmed-balance-fah: "0 Fah";
+    in-out property <string> spendable-balance: "0.00000000";
+    in-out property <string> spendable-balance-fah: "0 Fah";
+    in-out property <string> wallet-address: "";
+    in-out property <int> chain-height: 0;
+    in-out property <int> peer-count: 0;
+
+    // ---- send-form bindings (read and cleared by the backend) -------------
+    in-out property <string> recipient-address: "";
+    in-out property <string> amount-zro: "";
+    in-out property <string> wallet-password: "";
+    in-out property <bool> password-visible: false;
+
+    // ---- onboarding / account lifecycle (driven by the backend) ------------
+    // view-mode: 0 = welcome session (no wallet identity on this machine),
+    // 1 = dashboard. The backend derives it from the keystore file plus the
+    // node's `walletstatus`; the UI never guesses. It defaults to 0 (welcome)
+    // so the window is fail-safe: until the backend positively confirms an
+    // identity the onboarding column is what renders, and the dashboard can
+    // never leak onto a machine that has no session. `import-mode` picks the
+    // welcome form: false = create a new wallet, true = import an existing
+    // seed / keystore (purely presentational, so it stays private).
+    in-out property <int> view-mode: 0;
+    private property <bool> import-mode: false;
+    in-out property <string> wallet-seed: "";
+    in-out property <string> wallet-password-confirm: "";
+    in-out property <bool> onboarding-busy: false;
+
+    // ---- Wallet Export / Download Shield -----------------------------------
+    // true from the instant the backend's `createwallet` succeeds until the
+    // fresh keystore has been downloaded once. While it is up, a glass
+    // overlay freezes the whole window and the dashboard stays locked even
+    // though the identity already exists; only a native "save file" round
+    // trip that reports success clears it (backend: `request-download-backup`).
+    in-out property <bool> show-download-prompt: false;
+
+    // ---- transient feedback -------------------------------------------------
+    in-out property <bool> sending: false;
+    in-out property <string> status-message: "";
+    in-out property <bool> status-is-error: false;
+    in-out property <bool> address-copied: false;
+
+    callback request-copy-address();
+    callback request-send();
+    callback request-create-wallet();
+    callback request-import-wallet();
+    callback request-download-backup();
+
+    // Drives the flashing network indicator. Purely cosmetic; the backend
+    // never sees this state.
+    private property <bool> blink: false;
+
+    // Which sheet the circular action row has toggled open: 0 = none,
+    // 1 = send, 2 = receive, 3 = history. Purely presentational; the backend
+    // has no notion of an "open sheet" and never reads it.
+    private property <int> sheet-mode: 0;
+
+    Timer {
+        interval: 500ms;
+        running: true;
+        triggered => { root.blink = !root.blink; }
+    }
+
+    VerticalLayout {
+        width: 100%;
+        height: 100%;
+        spacing: 0px;
+
+        // ================ dashboard column ==================================
+        // Shown only while a wallet identity exists; the welcome column
+        // below replaces it otherwise.
+        if root.view-mode == 1 : VerticalLayout {
+            vertical-stretch: 1;
+            padding-left: 16px;
+            padding-right: 16px;
+            padding-top: 10px;
+            padding-bottom: 8px;
+            spacing: 12px;
+
+            // ---- Header: brand + network pill ------------------------------
+            HorizontalLayout {
+                height: 38px;
+                spacing: 10px;
+                cross-axis-alignment: center;
+
+                // Brand tile.
+                Rectangle {
+                    width: 36px;
+                    height: 36px;
+                    background: transparent;
+
+                    Rectangle {
+                        width: 100%;
+                        height: 100%;
+                        border-radius: 12px;
+                        background: @linear-gradient(135deg, #2E90DB 0%, #2481CC 55%, #1B5FA0 100%);
+                        border-width: 1px;
+                        border-color: #63B0E855;
+
+                        Text {
+                            text: "Z";
+                            color: #FFFFFF;
+                            font-size: 18px;
+                            font-weight: 800;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                VerticalLayout {
+                    spacing: 1px;
+                    alignment: center;
+
+                    Text {
+                        text: "ZeroCoin";
+                        color: #EEF4F9;
+                        font-size: 16px;
+                        font-weight: 800;
+                        letter-spacing: 0.2px;
+                    }
+
+                    Text {
+                        text: "ZRO Wallet";
+                        color: #5E7080;
+                        font-size: 10px;
+                        letter-spacing: 0.8px;
+                    }
+                }
+
+                Rectangle { horizontal-stretch: 1; }
+
+                // Network pill: the blinking dot carries the connectivity
+                // state; the label stays quiet. The width is pinned to the
+                // pill's own content, so the pill hugs the label instead of
+                // stretching with the header row.
+                Rectangle {
+                    width: pill-row.preferred-width;
+                    height: 28px;
+                    border-radius: 14px;
+                    background: #18222D;
+                    border-width: 1px;
+                    border-color: #FFFFFF12;
+
+                    pill-row := HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 13px;
+                        spacing: 7px;
+                        alignment: center;
+                        cross-axis-alignment: center;
+
+                        Rectangle {
+                            width: 8px;
+                            height: 8px;
+                            border-radius: 4px;
+                            background: root.node-online ? #3ECF8E : #FF6B76;
+                            opacity: root.blink ? 0.25 : 1;
+                            animate opacity { duration: 480ms; easing: ease-in-out; }
+                            animate background { duration: 300ms; }
+                        }
+
+                        Text {
+                            text: "Network: \{root.network-name}";
+                            color: #8FA1B3;
+                            font-size: 10px;
+                            font-weight: 600;
+                            letter-spacing: 0.3px;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+
+            // ---- Hero balance: the massive spendable figure ----------------
+            VerticalLayout {
+                padding-top: 6px;
+                padding-bottom: 2px;
+                spacing: 6px;
+
+                Text {
+                    text: "Spendable Balance";
+                    color: #6B7C8D;
+                    font-size: 10px;
+                    font-weight: 700;
+                    letter-spacing: 1.4px;
+                    horizontal-alignment: center;
+                }
+
+                HorizontalLayout {
+                    alignment: center;
+                    cross-axis-alignment: center;
+                    spacing: 10px;
+
+                    Text {
+                        text: root.spendable-balance;
+                        color: #EEF4F9;
+                        font-size: 38px;
+                        font-weight: 800;
+                        letter-spacing: -0.8px;
+                        overflow: elide;
+                    }
+
+                    // The ZRO tag, Tonkeeper's ticker pill.
+                    Rectangle {
+                        width: 48px;
+                        height: 22px;
+                        border-radius: 11px;
+                        background: #2481CC1F;
+                        border-width: 1px;
+                        border-color: #2481CC47;
+
+                        Text {
+                            text: "ZRO";
+                            color: #6FB6EA;
+                            font-size: 10px;
+                            font-weight: 800;
+                            letter-spacing: 0.6px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                Text {
+                    text: root.spendable-balance-fah;
+                    color: #8FA1B3;
+                    font-family: "Consolas";
+                    font-size: 11px;
+                    horizontal-alignment: center;
+                    overflow: elide;
+                }
+
+                Text {
+                    text: "Confirmed \{root.confirmed-balance} ZRO · \{root.confirmed-balance-fah}";
+                    color: #5E7080;
+                    font-size: 10px;
+                    letter-spacing: 0.3px;
+                    horizontal-alignment: center;
+                    overflow: elide;
+                }
+            }
+
+            // ---- Circular action row: Send / Receive / History -------------
+            HorizontalLayout {
+                height: 84px;
+                alignment: center;
+                spacing: 30px;
+
+                CircleAction {
+                    label-text: "Send";
+                    icon-glyph: "↑";
+                    active: root.sheet-mode == 1;
+                    clicked => { root.sheet-mode = root.sheet-mode == 1 ? 0 : 1; }
+                }
+
+                CircleAction {
+                    label-text: "Receive";
+                    icon-glyph: "↓";
+                    active: root.sheet-mode == 2;
+                    clicked => { root.sheet-mode = root.sheet-mode == 2 ? 0 : 2; }
+                }
+
+                CircleAction {
+                    label-text: "History";
+                    has-bars: true;
+                    active: root.sheet-mode == 3;
+                    clicked => { root.sheet-mode = root.sheet-mode == 3 ? 0 : 3; }
+                }
+            }
+
+            // ---- Global status line ----------------------------------------
+            // The backend writes status messages no matter which sheet is
+            // open (offline notices, copy confirmations, send results), so the
+            // banner lives outside the sheets and is never hidden by them.
+            // The same component renders in the welcome column, so the
+            // message is visible in both views.
+            StatusBanner {
+                message: root.status-message;
+                is-error: root.status-is-error;
+            }
+
+            // ---- Transaction sheet: the only form surface ------------------
+            // Gracefully displays only while an action is toggled active: the
+            // send form, the receive address block, or the history ledger.
+            Rectangle {
+                visible: root.sheet-mode != 0;
+                opacity: root.sheet-mode != 0 ? 1 : 0;
+                animate opacity { duration: 220ms; easing: ease-out; }
+                height: sheet-inner.preferred-height + 32px;
+                border-radius: 18px;
+                background: #18222D;
+                border-width: 1px;
+                border-color: #FFFFFF12;
+
+                // Top hairline shine: a faint light catching the sheet edge.
+                Rectangle {
+                    x: 16px;
+                    y: 1px;
+                    width: parent.width - 32px;
+                    height: 1px;
+                    background: @linear-gradient(90deg, #FFFFFF00 0%, #FFFFFF26 50%, #FFFFFF00 100%);
+                }
+
+                sheet-inner := VerticalLayout {
+                    padding: 16px;
+                    spacing: 10px;
+
+                    // ---------- SEND ----------
+                    if root.sheet-mode == 1 : VerticalLayout {
+                        spacing: 10px;
+
+                        Text {
+                            text: "Send ZRO";
+                            color: #8FA1B3;
+                            font-size: 11px;
+                            font-weight: 700;
+                            letter-spacing: 1.1px;
+                        }
+
+                        StyledField {
+                            placeholder-text: "ZRO receiving address";
+                            text <=> root.recipient-address;
+                        }
+
+                        StyledField {
+                            placeholder-text: "0.00000000";
+                            text <=> root.amount-zro;
+                        }
+
+                        StyledField {
+                            placeholder-text: "Unlocks the AES-256-GCM keystore";
+                            text <=> root.wallet-password;
+                            masked: true;
+                            revealed <=> root.password-visible;
+                            submitted => { root.request-send(); }
+                        }
+
+                        // Electric-blue action button.
+                        Rectangle {
+                            height: 48px;
+                            border-radius: 14px;
+                            background: root.sending ? #1D5C8F : (send-touch.pressed ? #1F6FAF : (send-touch.has-hover ? #2E90DB : #2481CC));
+                            animate background { duration: 160ms; }
+
+                            Text {
+                                text: root.sending ? "Sending…" : "Send Transaction";
+                                color: root.sending ? #BBD9F2 : #FFFFFF;
+                                font-size: 15px;
+                                font-weight: 700;
+                                letter-spacing: 0.3px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                animate color { duration: 160ms; }
+                            }
+
+                            send-touch := TouchArea {
+                                enabled: !root.sending;
+                                clicked => { root.request-send(); }
+                                mouse-cursor: pointer;
+                                accessible-role: button;
+                                accessible-label: "Send transaction";
+                            }
+                        }
+                    }
+
+                    // ---------- RECEIVE ----------
+                    if root.sheet-mode == 2 : VerticalLayout {
+                        spacing: 10px;
+
+                        Text {
+                            text: "Receive ZRO";
+                            color: #8FA1B3;
+                            font-size: 11px;
+                            font-weight: 700;
+                            letter-spacing: 1.1px;
+                        }
+
+                        Rectangle {
+                            height: 36px;
+                            border-radius: 12px;
+                            background: #101820;
+                            border-width: 1px;
+                            border-color: #22303E;
+
+                            Text {
+                                x: 12px;
+                                width: parent.width - 24px;
+                                height: parent.height;
+                                text: root.wallet-address == "" ? "No wallet address yet" : root.wallet-address;
+                                color: root.wallet-address == "" ? #5E7080 : #C9D8E6;
+                                font-family: "Consolas";
+                                font-size: 12px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+                        }
+
+                        Rectangle {
+                            height: 46px;
+                            border-radius: 14px;
+                            background: root.wallet-address == "" ? #1A242F : (root.address-copied ? #1F8A4C : (copy-touch.pressed ? #1F6FAF : (copy-touch.has-hover ? #2E90DB : #2481CC)));
+                            border-width: 1px;
+                            border-color: root.wallet-address == "" ? #FFFFFF12 : transparent;
+                            animate background { duration: 160ms; }
+
+                            Text {
+                                text: root.address-copied ? "Copied" : "Copy";
+                                color: root.wallet-address == "" ? #5E7080 : #FFFFFF;
+                                font-size: 14px;
+                                font-weight: 700;
+                                letter-spacing: 0.3px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                animate color { duration: 140ms; }
+                            }
+
+                            copy-touch := TouchArea {
+                                enabled: root.wallet-address != "";
+                                clicked => { root.request-copy-address(); }
+                                mouse-cursor: pointer;
+                                accessible-role: button;
+                                accessible-label: "Copy receiving address";
+                            }
+                        }
+                    }
+
+                    // ---------- HISTORY ----------
+                    if root.sheet-mode == 3 : VerticalLayout {
+                        spacing: 10px;
+
+                        Text {
+                            text: "History";
+                            color: #8FA1B3;
+                            font-size: 11px;
+                            font-weight: 700;
+                            letter-spacing: 1.1px;
+                        }
+
+                        Rectangle {
+                            height: 212px;
+                            border-radius: 12px;
+                            background: #101820;
+                            border-width: 1px;
+                            border-color: #22303E;
+
+                            // The scrollable ledger container. No transaction
+                            // feed is bound yet, so it shows an honest empty
+                            // state; the content-height contract is already in
+                            // place for rows to scroll once a feed exists.
+                            history-flick := Flickable {
+                                x: 6px;
+                                y: 6px;
+                                width: parent.width - 12px;
+                                height: parent.height - 12px;
+                                content-width: self.width;
+                                content-height: max(ledger-column.preferred-height, self.height);
+
+                                ledger-column := VerticalLayout {
+                                    width: history-flick.width;
+                                    height: max(ledger-column.preferred-height, history-flick.height);
+                                    spacing: 6px;
+
+                                    Rectangle { vertical-stretch: 1; }
+
+                                    // Ledger icon chip: the same three bars as
+                                    // the action row, one step quieter.
+                                    Rectangle {
+                                        height: 44px;
+
+                                        Rectangle {
+                                            x: (parent.width - 44px) / 2;
+                                            width: 44px;
+                                            height: 44px;
+                                            border-radius: 22px;
+                                            background: #18222D;
+
+                                            VerticalLayout {
+                                                width: 100%;
+                                                height: 100%;
+                                                spacing: 4px;
+                                                alignment: center;
+                                                cross-axis-alignment: center;
+
+                                                Rectangle { width: 16px; height: 2px; border-radius: 1px; background: #4E6275; }
+                                                Rectangle { width: 10px; height: 2px; border-radius: 1px; background: #4E6275; }
+                                                Rectangle { width: 16px; height: 2px; border-radius: 1px; background: #4E6275; }
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        text: "No transactions yet";
+                                        color: #C9D8E6;
+                                        font-size: 13px;
+                                        font-weight: 600;
+                                        horizontal-alignment: center;
+                                    }
+
+                                    Text {
+                                        text: "Your sent and received ZRO will appear here.";
+                                        color: #5E7080;
+                                        font-size: 11px;
+                                        wrap: word-wrap;
+                                        horizontal-alignment: center;
+                                    }
+
+                                    Rectangle { vertical-stretch: 1; }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Spring: keeps the hero pinned to the top of the window.
+            Rectangle { vertical-stretch: 1; }
+        }
+
+        // ================ welcome column ====================================
+        // The onboarding session, shown while no wallet identity exists on
+        // this machine. One pristine surface: pick create or import, fill
+        // the form, and the backend flips `view-mode` to the dashboard.
+        if root.view-mode == 0 : VerticalLayout {
+            vertical-stretch: 1;
+            padding-left: 22px;
+            padding-right: 22px;
+            padding-top: 24px;
+            padding-bottom: 10px;
+            spacing: 14px;
+
+            // ---- Brand hero ------------------------------------------------
+            VerticalLayout {
+                spacing: 14px;
+                cross-axis-alignment: center;
+
+                Rectangle {
+                    width: 68px;
+                    height: 68px;
+                    border-radius: 22px;
+                    background: @linear-gradient(135deg, #2E90DB 0%, #2481CC 55%, #1B5FA0 100%);
+                    border-width: 1px;
+                    border-color: #63B0E855;
+
+                    Text {
+                        text: "Z";
+                        color: #FFFFFF;
+                        font-size: 30px;
+                        font-weight: 800;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+
+                VerticalLayout {
+                    spacing: 6px;
+                    cross-axis-alignment: center;
+
+                    Text {
+                        text: "Welcome to ZeroCoin";
+                        color: #EEF4F9;
+                        font-size: 22px;
+                        font-weight: 800;
+                        letter-spacing: -0.2px;
+                        horizontal-alignment: center;
+                    }
+
+                    Text {
+                        text: "No wallet was found on this computer. Create a new identity, or import one you already own.";
+                        color: #8FA1B3;
+                        font-size: 12px;
+                        wrap: word-wrap;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+
+            // ---- Mode toggle: create vs. import ----------------------------
+            Rectangle {
+                height: 40px;
+                border-radius: 12px;
+                background: #101820;
+                border-width: 1px;
+                border-color: #22303E;
+
+                HorizontalLayout {
+                    padding: 4px;
+                    spacing: 4px;
+
+                    Rectangle {
+                        horizontal-stretch: 1;
+                        border-radius: 9px;
+                        background: !root.import-mode ? #2481CC : transparent;
+                        animate background { duration: 160ms; }
+
+                        Text {
+                            text: "Create New Wallet";
+                            color: !root.import-mode ? #FFFFFF : #8FA1B3;
+                            font-size: 12px;
+                            font-weight: 700;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                            animate color { duration: 160ms; }
+                        }
+
+                        TouchArea {
+                            clicked => { root.import-mode = false; }
+                            mouse-cursor: pointer;
+                            accessible-role: button;
+                            accessible-label: "Create a new wallet";
+                        }
+                    }
+
+                    Rectangle {
+                        horizontal-stretch: 1;
+                        border-radius: 9px;
+                        background: root.import-mode ? #2481CC : transparent;
+                        animate background { duration: 160ms; }
+
+                        Text {
+                            text: "Import Wallet";
+                            color: root.import-mode ? #FFFFFF : #8FA1B3;
+                            font-size: 12px;
+                            font-weight: 700;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                            animate color { duration: 160ms; }
+                        }
+
+                        TouchArea {
+                            clicked => { root.import-mode = true; }
+                            mouse-cursor: pointer;
+                            accessible-role: button;
+                            accessible-label: "Import an existing wallet";
+                        }
+                    }
+                }
+            }
+
+            // ---- Onboarding form card --------------------------------------
+            Rectangle {
+                height: welcome-form.preferred-height + 32px;
+                border-radius: 18px;
+                background: #18222D;
+                border-width: 1px;
+                border-color: #FFFFFF12;
+
+                // Top hairline shine: the same catch of light as the sheet.
+                Rectangle {
+                    x: 16px;
+                    y: 1px;
+                    width: parent.width - 32px;
+                    height: 1px;
+                    background: @linear-gradient(90deg, #FFFFFF00 0%, #FFFFFF26 50%, #FFFFFF00 100%);
+                }
+
+                welcome-form := VerticalLayout {
+                    padding: 16px;
+                    spacing: 10px;
+
+                    // ---------- CREATE ----------
+                    if !root.import-mode : VerticalLayout {
+                        spacing: 10px;
+
+                        Text {
+                            text: "CREATE NEW WALLET";
+                            color: #8FA1B3;
+                            font-size: 11px;
+                            font-weight: 700;
+                            letter-spacing: 1.1px;
+                        }
+
+                        StyledField {
+                            placeholder-text: "Choose a wallet password";
+                            text <=> root.wallet-password;
+                            masked: true;
+                            revealed <=> root.password-visible;
+                        }
+
+                        StyledField {
+                            placeholder-text: "Confirm the password";
+                            text <=> root.wallet-password-confirm;
+                            masked: true;
+                            revealed <=> root.password-visible;
+                            submitted => { root.request-create-wallet(); }
+                        }
+
+                        Text {
+                            text: "The password encrypts your keystore (argon2id + AES-256-GCM). It is never stored anywhere and cannot be recovered — keep it safe.";
+                            color: #5E7080;
+                            font-size: 10px;
+                            wrap: word-wrap;
+                        }
+
+                        Rectangle {
+                            height: 48px;
+                            border-radius: 14px;
+                            background: !root.node-online || root.onboarding-busy ? #1D5C8F : (create-touch.pressed ? #1F6FAF : (create-touch.has-hover ? #2E90DB : #2481CC));
+                            animate background { duration: 160ms; }
+
+                            Text {
+                                text: root.onboarding-busy ? "Creating…" : (root.node-online ? "Create Wallet" : "Waiting for the node…");
+                                color: !root.node-online ? #BBD9F2 : #FFFFFF;
+                                font-size: 15px;
+                                font-weight: 700;
+                                letter-spacing: 0.3px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                animate color { duration: 160ms; }
+                            }
+
+                            create-touch := TouchArea {
+                                enabled: root.node-online && !root.onboarding-busy;
+                                clicked => { root.request-create-wallet(); }
+                                mouse-cursor: pointer;
+                                accessible-role: button;
+                                accessible-label: "Create the wallet";
+                            }
+                        }
+                    }
+
+                    // ---------- IMPORT ----------
+                    if root.import-mode : VerticalLayout {
+                        spacing: 10px;
+
+                        Text {
+                            text: "IMPORT EXISTING WALLET";
+                            color: #8FA1B3;
+                            font-size: 11px;
+                            font-weight: 700;
+                            letter-spacing: 1.1px;
+                        }
+
+                        StyledField {
+                            placeholder-text: "Recovery seed (64 hex) or wallet.json contents";
+                            text <=> root.wallet-seed;
+                        }
+
+                        StyledField {
+                            placeholder-text: "Password that decrypts it";
+                            text <=> root.wallet-password;
+                            masked: true;
+                            revealed <=> root.password-visible;
+                            submitted => { root.request-import-wallet(); }
+                        }
+
+                        Text {
+                            text: "Paste the private key seed your wallet was created with, or the full contents of its wallet.json keystore file. Your balance is restored as the chain syncs.";
+                            color: #5E7080;
+                            font-size: 10px;
+                            wrap: word-wrap;
+                        }
+
+                        Rectangle {
+                            height: 48px;
+                            border-radius: 14px;
+                            background: !root.node-online || root.onboarding-busy ? #1D5C8F : (import-touch.pressed ? #1F6FAF : (import-touch.has-hover ? #2E90DB : #2481CC));
+                            animate background { duration: 160ms; }
+
+                            Text {
+                                text: root.onboarding-busy ? "Importing…" : (root.node-online ? "Import Wallet" : "Waiting for the node…");
+                                color: !root.node-online ? #BBD9F2 : #FFFFFF;
+                                font-size: 15px;
+                                font-weight: 700;
+                                letter-spacing: 0.3px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                animate color { duration: 160ms; }
+                            }
+
+                            import-touch := TouchArea {
+                                enabled: root.node-online && !root.onboarding-busy;
+                                clicked => { root.request-import-wallet(); }
+                                mouse-cursor: pointer;
+                                accessible-role: button;
+                                accessible-label: "Import the wallet";
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ---- Shared status line (same component as the dashboard) ------
+            StatusBanner {
+                message: root.status-message;
+                is-error: root.status-is-error;
+            }
+
+            // Spring: keeps the onboarding stack anchored to the top.
+            Rectangle { vertical-stretch: 1; }
+        }
+
+        // ==================== Status bar ====================================
+        Rectangle {
+            height: 1px;
+            background: @linear-gradient(90deg, #23324400 0%, #233244 50%, #23324400 100%);
+        }
+
+        HorizontalLayout {
+            height: 32px;
+            padding-left: 18px;
+            padding-right: 18px;
+            alignment: center;
+            cross-axis-alignment: center;
+
+            Text {
+                text: root.node-online ? "Chain Height: \{root.chain-height}" : "Chain Height: —";
+                color: #5A6B7D;
+                font-size: 11px;
+                letter-spacing: 0.3px;
+            }
+
+            Rectangle { horizontal-stretch: 1; }
+
+            Text {
+                text: root.node-online ? "Peers: \{root.peer-count}" : "Peers: —";
+                color: #5A6B7D;
+                font-size: 11px;
+                letter-spacing: 0.3px;
+            }
+        }
+    }
+
+    // ==================== Wallet Export / Download Shield ====================
+    // The mandatory stop between "Wallet created" and the dashboard. It is
+    // the Window's last child, so it paints over both view-mode columns; its
+    // full-bleed TouchArea swallows every pointer event and the onboarding
+    // form underneath is frozen. Slint 1.18 ships no backdrop blur, so the
+    // "glassmorphism" is plain alpha blending — the same technique as the
+    // field focus ring: a translucent scrim, then a translucent raised card
+    // with a hairline edge and a top light-catch line.
+    if root.show-download-prompt : Rectangle {
+        x: 0;
+        y: 0;
+        width: 100%;
+        height: 100%;
+        background: #05080BC4;
+
+        // Freeze: nothing under the shield may take a click.
+        TouchArea {
+            mouse-cursor: default;
+        }
+
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: min(parent.width - 56px, 356px);
+            height: shield-stack.preferred-height + 44px;
+            border-radius: 20px;
+            background: #1B2836E8;
+            border-width: 1px;
+            border-color: #FFFFFF2E;
+
+            // Top hairline shine: the same catch of light as the sheets.
+            Rectangle {
+                x: 18px;
+                y: 1px;
+                width: parent.width - 36px;
+                height: 1px;
+                background: @linear-gradient(90deg, #FFFFFF00 0%, #FFFFFF33 50%, #FFFFFF00 100%);
+            }
+
+            shield-stack := VerticalLayout {
+                padding: 22px;
+                spacing: 14px;
+
+                Text {
+                    text: "🛡️ Action Required: Please download and back up your encrypted wallet.json file to a safe directory (like your Downloads folder) to secure your assets.";
+                    color: #EEF4F9;
+                    font-size: 13px;
+                    font-weight: 600;
+                    wrap: word-wrap;
+                    horizontal-alignment: center;
+                }
+
+                Rectangle {
+                    height: 48px;
+                    border-radius: 14px;
+                    // High-contrast electric blue: brighter than the touch
+                    // surfaces under the scrim, so the one live control on
+                    // screen reads instantly.
+                    background: download-touch.pressed ? #1F6FAF : (download-touch.has-hover ? #3FA1EF : #2E90DB);
+                    animate background { duration: 160ms; }
+
+                    Text {
+                        text: "Download Backup File";
+                        color: #FFFFFF;
+                        font-size: 15px;
+                        font-weight: 700;
+                        letter-spacing: 0.3px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    download-touch := TouchArea {
+                        clicked => { root.request-download-backup(); }
+                        mouse-cursor: pointer;
+                        accessible-role: button;
+                        accessible-label: "Download the wallet backup file";
+                    }
+                }
+
+                // The shield's own feedback surface (the banner under the
+                // scrim is invisible while the shield is up): reports the
+                // dialog hand-off and a cancelled or failed save.
+                StatusBanner {
+                    message: root.status-message;
+                    is-error: root.status-is-error;
+                }
+            }
+        }
+    }
+}

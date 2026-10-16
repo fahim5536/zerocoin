@@ -1,0 +1,90 @@
+[package]
+name = "zerocoin"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "ZeroCoin (ZRO) — a fair-launch, zero-premine, ownerless UTXO cryptocurrency built on the payd architecture."
+license = "MIT"
+authors = ["ZeroCoin Community"]
+
+# ZeroCoin mirrors Bitcoin's architecture with two deliberate deviations:
+#   1. a 60-second block time with a 1,440-block (24h) retarget window, and
+#   2. a CPU-friendly, ASIC-resistant Proof-of-Work instead of SHA-256d.
+# Every cryptographic primitive here is a battle-tested RustCrypto crate; there is
+# no hand-rolled cryptography. secp256k1 is provided by `k256`.
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+hex = "0.4"
+
+# Hashing / MACs
+sha2 = "0.10"
+ripemd = "0.1"
+hmac = "0.12"
+
+# secp256k1 ECDSA signatures + keys (RustCrypto's `k256` is the secp256k1 curve).
+# `ecdh` powers the authenticated P2P handshake; `sha256` is used for sighash.
+k256 = { version = "0.13", features = ["ecdsa", "arithmetic", "ecdh", "sha256", "pkcs8", "pem"] }
+
+# Wallet-at-rest: AES-256-GCM sealing over an argon2id-derived key
+aes-gcm = "0.10"
+argon2 = "0.5"
+zeroize = { version = "1.7", features = ["derive"] }
+
+# Key derivation for the handshake (shared secret -> session keys)
+hkdf = "0.12"
+
+# Randomness (keygen, salts, nonces, mining nonce search)
+rand = "0.8"
+getrandom = "0.2"
+
+# Base58Check for Bitcoin-style P2PKH addresses
+bs58 = { version = "0.5", features = ["check"] }
+
+# Constant-time comparisons for MACs and secrets
+subtle = "2.5"
+
+# Desktop wallet GUI. `slint` renders the UI from `ui/wallet.slint` (compiled by
+# `slint-build` in build.rs); `tokio` runs the loopback RPC client off the UI
+# thread so cryptographic signing never stalls rendering, and its `process`
+# feature lets the self-contained wallet spawn the embedded `zerocoind`
+# (`tokio::process::Command`) when nothing is listening on the RPC port yet.
+slint = "1.18.1"
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "net", "io-util", "time", "process"] }
+
+# The quick-copy button needs the OS clipboard. Slint 1.18 exposes no public
+# clipboard API (its `Platform::set_clipboard_text` is backend-internal), so we
+# use `arboard`, the crate the Slint maintainers recommend for this exact case.
+arboard = "3.6.1"
+
+# The mandatory Wallet Export / Download Shield after account creation needs
+# the platform's native "save file" dialog (IFileSaveDialog on Windows).
+# Slint exposes no file-dialog API, so `rfd` provides it; its blocking dialog
+# is invoked from a dedicated thread so the Slint event loop never freezes.
+rfd = "0.15"
+
+[build-dependencies]
+slint-build = "1.18.1"
+
+[dev-dependencies]
+proptest = "1.4"
+tempfile = "3.10"
+
+[[bin]]
+name = "zerocoind"
+path = "src/bin/zerocoind.rs"
+
+[[bin]]
+name = "zerocoin-cli"
+path = "src/bin/zerocoin_cli.rs"
+
+[[bin]]
+name = "zerocoin-gui"
+path = "src/bin/zerocoin_gui.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

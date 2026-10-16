@@ -1,0 +1,120 @@
+//! Where a node keeps its persistent state.
+//!
+//! The consumer wallet must survive the executable being rebuilt, moved or
+//! deleted: the chain store and the encrypted wallet keystore therefore live in
+//! the operating system's per-user application directory, not beside the binary
+//! and not in a temporary folder the OS is free to reclaim. One project-owned
+//! directory tree holds every network:
+//!
+//! - **Windows** — `%APPDATA%\ZeroCoin` (e.g. `C:\Users\alice\AppData\Roaming\ZeroCoin`)
+//! - **macOS**   — `~/Library/Application Support/ZeroCoin`
+//! - **Linux**   — `$XDG_DATA_HOME/zerocoin` or `~/.local/share/zerocoin`
+//!
+//! The `ZRO_HOME` environment variable overrides the base when set, which keeps
+//! throwaway test nodes and the operator guides working. Inside that base the
+//! path is always `<base>/<network>`, so devnet, regtest and mainnet never share
+//! a chain file and a wallet can never be opened against the wrong network.
+//!
+//! Both `zerocoind` and `zerocoin-gui` call [`default_datadir`], so the daemon
+//! the desktop wallet spawns and the daemon an operator starts by hand read and
+//! write the exact same files.
+
+use std::env;
+use std::path::PathBuf;
+
+/// Environment override for the data-directory base, kept for operators and
+/// tests that need scratch state outside the user profile.
+const HOME_ENV: &str = "ZRO_HOME";
+
+/// The data directory for `network` on this machine, e.g.
+/// `%APPDATA%\ZeroCoin\devnet` on Windows.
+pub fn default_datadir(network: &str) -> PathBuf {
+    base_dir().join(network)
+}
+
+/// The project-owned base directory, before the network segment is appended.
+pub fn base_dir() -> PathBuf {
+    if let Some(home) = env::var_os(HOME_ENV) {
+        if !home.is_empty() {
+            return PathBuf::from(home);
+        }
+    }
+    platform_base()
+}
+
+#[cfg(windows)]
+fn platform_base() -> PathBuf {
+    // %APPDATA% is the roaming profile: the wallet follows a domain user
+    // between machines, which is exactly the persistence the wallet wants.
+    match env::var_os("APPDATA") {
+        Some(appdata) if !appdata.is_empty() => PathBuf::from(appdata).join("ZeroCoin"),
+        // A service account can lack APPDATA; fall back to the profile root.
+        _ => match env::var_os("USERPROFILE") {
+            Some(profile) if !profile.is_empty() => {
+                PathBuf::from(profile).join("AppData").join("Roaming").join("ZeroCoin")
+            }
+            _ => env::temp_dir().join("ZeroCoin"),
+        },
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn platform_base() -> PathBuf {
+    match env::var_os("HOME") {
+        Some(home) if !home.is_empty() => PathBuf::from(home)
+            .join("Library")
+            .join("Application Support")
+            .join("ZeroCoin"),
+        _ => env::temp_dir().join("ZeroCoin"),
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn platform_base() -> PathBuf {
+    if let Some(data_home) = env::var_os("XDG_DATA_HOME") {
+        if !data_home.is_empty() {
+            return PathBuf::from(data_home).join("zerocoin");
+        }
+    }
+    match env::var_os("HOME") {
+        Some(home) if !home.is_empty() => {
+            PathBuf::from(home).join(".local").join("share").join("zerocoin")
+        }
+        _ => env::temp_dir().join("zerocoin"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn network_segment_namespaces_the_chain_and_wallet() {
+        let dir = default_datadir("devnet");
+        assert_eq!(dir.file_name().and_then(|n| n.to_str()), Some("devnet"));
+        let regtest = default_datadir("regtest");
+        assert_ne!(dir, regtest, "networks never share a data directory");
+        assert_eq!(
+            regtest.parent(),
+            dir.parent(),
+            "all networks live under one project base"
+        );
+    }
+
+    #[test]
+    fn zro_home_override_wins() {
+        // The override is read on every call, so setting and clearing it around
+        // one assertion exercises both paths without leaking global state.
+        let scratch = env::temp_dir().join("zro-datadir-test-override");
+        env::set_var(HOME_ENV, &scratch);
+        let overridden = default_datadir("devnet");
+        env::remove_var(HOME_ENV);
+        let platform = default_datadir("devnet");
+
+        assert_eq!(overridden, scratch.join("devnet"));
+        // Without the override the platform path is used; on a normal machine
+        // that is not the scratch directory.
+        assert_ne!(platform, overridden);
+        assert_eq!(platform.file_name().and_then(|n| n.to_str()), Some("devnet"));
+    }
+}

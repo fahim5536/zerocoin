@@ -1,0 +1,72 @@
+# =============================================================================
+#  ZeroCoin (ZRO) — Anti-Leak Protection Layer
+# -----------------------------------------------------------------------------
+#  Goal: no local runtime database, identity store, build output or OS debris
+#  can ever be committed or pushed to a remote. Patterns are matched relative
+#  to this file (the repository root); the Cargo crate lives in ./zerocoin.
+# =============================================================================
+
+# --- 1. Blockchain ledger state & wallet / identity stores -------------------
+# Written at runtime by `zerocoind` / `zerocoin-gui` when `--datadir` (or the
+# `ZRO_HOME` override) resolves inside the tree:
+#   chain.json  -> the full persisted ledger (src/storage.rs::CHAIN_FILE)
+#   wallet.json -> the AES-256-GCM sealed keystore, i.e. the private key
+chain.json
+wallet.json
+*.chain.json
+*.wallet.json
+
+# Atomic-write siblings (storage.rs / node.rs rename a temp file into place).
+wallet.json.tmp
+chain.json.tmp
+
+# Throwaway multi-node scratch data used by the devnet guide and demos
+# (e.g. `--datadir .\target\zro-a`); a stray in-tree data dir must never ship.
+data_node*/
+data_node_*/
+zro-regtest/
+zro-a/
+zro-b/
+
+# --- 2. Rust build output & derived artifacts --------------------------------
+# The crate is ./zerocoin, so the real artifact dir is ./zerocoin/target — a
+# root-anchored `/target` would miss it. `target/` matches at any depth.
+target/
+
+# NOTE: Cargo.lock is deliberately NOT ignored. This is a *binary* crate
+# (`zerocoind`, `zerocoin-cli`, `zerocoin-gui`), not a library: the lock file
+# pins exact dependency versions for reproducible builds and contains no
+# secrets. Cargo.toml is likewise tracked.
+
+# --- 3. Editor state, environment files & local scratch ----------------------
+.idea/
+.vscode/
+.env
+.env.*
+*.env
+!.env.example
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# --- 4. OS application-directory simulations & platform debris ---------------
+# src/datadir.rs resolves state to `%APPDATA%\ZeroCoin` (Windows),
+# `~/Library/Application Support/ZeroCoin` (macOS) and
+# `$XDG_DATA_HOME/zerocoin` (Linux). Those live OUTSIDE the repository, and the
+# sensitive payload they hold (`chain.json` / `wallet.json`) is already blocked
+# by section 1, so only fully-qualified in-tree copies need a rule here.
+#
+# NOTE: a bare `ZeroCoin/` rule is intentionally omitted. `%APPDATA%` is
+# meaningless to git, and on case-insensitive filesystems (Windows, macOS) git
+# would match a bare `ZeroCoin/` against this project's own crate directory
+# `zerocoin/` and ignore the ENTIRE source tree. Only the qualified roaming /
+# application-support paths are matched.
+**/AppData/Roaming/ZeroCoin/
+**/Application Support/ZeroCoin/
+
+# --- 5. General OS / log noise -----------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
