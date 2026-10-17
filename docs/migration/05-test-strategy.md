@@ -188,6 +188,10 @@ compare: tip hash, `state_root`, `subsidy_issued`, UTXO count. Any divergence is
 reported with the height, which is the single most useful debugging datum in the
 whole programme.
 
+The corpus ships the block bytes, not a mining script. `01` §12.2 shows why: the
+demo generates a fresh payout key each run, so re-mining produces different hashes
+even when every balance is identical.
+
 ---
 
 ## 5. Layer 3 — Wire interoperability

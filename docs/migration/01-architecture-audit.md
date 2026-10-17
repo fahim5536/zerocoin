@@ -684,6 +684,14 @@ This single run is worth three separate proofs:
 `difficulty_bits = 545259519` is `0x207fffff`, matching the regtest table, and the
 engine name reported is `sha256d-trivial`.
 
+**Nothing after genesis is reproducible across runs.** A second run of the same
+binary on the same commit produced address `mpUKpPWaDC5V5Uaz3cms9NMz3pDRSsVMKQ`,
+tip `6f668782…d78044`, and state root `4b9f45b1…3f2f89`, with identical balances.
+Wallet creation generates a fresh key, so the coinbase output script differs, and
+with it every Merkle root, every block hash, and the state root. Only the height-0
+values are pinned. Consequence: a replay corpus must ship the *blocks* (or pin a
+fixed test key), never a script that re-mines them.
+
 ### 12.3 Documentation drift `[VERIFIED]`
 
 `DEVNET_GUIDE.md` states the suite contains **196 tests**. The suite contains 235.
