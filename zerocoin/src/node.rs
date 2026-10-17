@@ -68,6 +68,11 @@ use crate::wallet::Wallet;
 const MAX_LEN_PREFIXED: usize = 8 * 1024 * 1024;
 /// How long the accept loops sleep between non-blocking polls.
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
+/// First pause before redialling a seed that refused or dropped us.
+const SEED_RETRY_INITIAL: Duration = Duration::from_secs(1);
+/// Ceiling for the seed redial backoff, so a permanently absent peer costs
+/// one idle wake-up per half minute instead of a busy retry loop.
+const SEED_RETRY_MAX: Duration = Duration::from_secs(30);
 /// How many blocks one catch-up `GetData` requests. Bounded by the gossip list
 /// limit ([`crate::network::message::MAX_INV_ENTRIES`]) so a peer never has to
 /// reject our request as oversized, while still draining a long history quickly.
@@ -307,11 +312,35 @@ impl Node {
         // closes, so `stop()` must not try to join one — it only stops the accept and
         // RPC loops, which poll the stop flag. Peer threads exit when their socket
         // does (or when the process ends).
+        //
+        // Each seed gets a redial loop. A single attempt would mean a seed that
+        // happens to be restarting when this node boots is lost for the whole
+        // run, leaving the node with no route to the network and a chain height
+        // frozen at whatever it had. Reconnecting is what makes catch-up
+        // eventually happen rather than only if the timing was lucky.
         for seed in &config.seeds {
             let state = Arc::clone(&state);
             let seed = *seed;
             std::thread::spawn(move || {
-                let _ = dial_peer(state, seed);
+                // First retry after a second, then 2s, 4s … capped at
+                // `SEED_RETRY_MAX`. Sleeping before widening the delay keeps the
+                // first retry prompt, which is what matters when a peer is only
+                // a moment slower to boot than this node.
+                let mut backoff = SEED_RETRY_INITIAL;
+                while !state.is_stopped() {
+                    if dial_peer(Arc::clone(&state), seed).is_ok() {
+                        // The handshake completed, so the peer is real; a
+                        // session that ends is worth re-establishing at once.
+                        backoff = SEED_RETRY_INITIAL;
+                        std::thread::sleep(backoff);
+                        continue;
+                    }
+                    if state.is_stopped() {
+                        break;
+                    }
+                    std::thread::sleep(backoff);
+                    backoff = (backoff * 2).min(SEED_RETRY_MAX);
+                }
             });
         }
 
@@ -1616,6 +1645,69 @@ mod tests {
         let tip_a = rpc_call(rpc_a, "getinfo", json!({})).unwrap()["tip"].clone();
         let tip_b = rpc_call(rpc_b, "getinfo", json!({})).unwrap()["tip"].clone();
         assert_eq!(tip_a, tip_b, "the lagging node converged on the peer's tip");
+
+        node_a.stop();
+        node_b.stop();
+    }
+
+    /// A seed that is not listening yet must not be abandoned.
+    ///
+    /// The node is started first, pointed at an address with nothing behind it,
+    /// and only later does the peer start listening there. A single-attempt dial
+    /// gives up during that window and the node stays isolated for the rest of
+    /// its life: no peers, no block gossip, and a chain height frozen at
+    /// genesis. The redial loop is what turns that into an ordinary slow start.
+    #[test]
+    fn a_seed_that_appears_later_is_still_dialled() {
+        let dir_a = tempfile::tempdir().unwrap();
+        let dir_b = tempfile::tempdir().unwrap();
+
+        // Claim a port for A and release it, so the address is concrete but
+        // genuinely empty while B boots.
+        let seed_addr = {
+            let probe = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            probe.local_addr().unwrap()
+        };
+
+        let mut config_b = regtest_config(dir_b.path(), true);
+        config_b.seeds = vec![seed_addr];
+        let node_b = Node::spawn(&config_b).expect("spawns B");
+        let rpc_b = node_b.rpc_addr.unwrap();
+
+        // Let the first dial attempt fail against the empty port. B must come
+        // up regardless — an unreachable seed is not a startup error.
+        std::thread::sleep(Duration::from_millis(300));
+        let peers_b = rpc_call(rpc_b, "getpeercount", json!({})).unwrap()["peers"]
+            .as_u64()
+            .unwrap_or(0);
+        assert_eq!(peers_b, 0, "B cannot already have a peer: nothing is listening yet");
+
+        // Now the peer appears at exactly the address B was given.
+        let mut config_a = regtest_config(dir_a.path(), true);
+        config_a.p2p_listen = seed_addr;
+        let node_a = Node::spawn(&config_a).expect("spawns A");
+        let rpc_a = node_a.rpc_addr.unwrap();
+        assert_eq!(node_a.p2p_addr, seed_addr, "A bound the contested address");
+
+        let reconnected = wait_until(Duration::from_secs(20), || {
+            rpc_call(rpc_b, "getpeercount", json!({}))
+                .map(|v| v["peers"].as_u64().unwrap_or(0) >= 1)
+                .unwrap_or(false)
+        });
+        assert!(
+            reconnected,
+            "B never redialled its seed; a seed that starts late leaves the node isolated"
+        );
+
+        // The session B re-established must be a working one, not just a
+        // counted socket: a block mined on A has to reach B.
+        rpc_call(rpc_a, "generate", json!({ "blocks": 1 })).unwrap();
+        let synced = wait_until(Duration::from_secs(15), || {
+            rpc_call(rpc_b, "getinfo", json!({}))
+                .map(|v| v["height"].as_u64().unwrap_or(0) >= 1)
+                .unwrap_or(false)
+        });
+        assert!(synced, "B redialled but never received A's block");
 
         node_a.stop();
         node_b.stop();
