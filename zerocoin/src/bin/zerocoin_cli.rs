@@ -9,8 +9,10 @@
 //! zerocoin-cli [--network devnet|regtest|mainnet] [--rpc HOST:PORT] <command> [options]
 //!
 //!   getinfo                                   chain/network summary
+//!   walletstatus                              does this node hold a wallet?
 //!   getnewaddress                             the wallet's receiving address
 //!   getbalance                                confirmed and spendable balances (Fah)
+//!   wallethistory                             the wallet's ledger, newest first
 //!   getpeercount                              number of connected peers
 //!   getpoolinfo                               in-built pool: contributors, weight, share target
 //!   mine --blocks N                           mine N blocks; splits the reward with pool
@@ -85,8 +87,13 @@ fn run() -> Result<String, String> {
 
     let (method, payload): (&str, Value) = match command.as_str() {
         "getinfo" => ("getinfo", json!({})),
+        "walletstatus" => ("walletstatus", json!({})),
         "getnewaddress" => ("getnewaddress", json!({})),
         "getbalance" => ("getbalance", json!({})),
+        // The wallet's ledger, derived from the chain rather than a stored
+        // index, so it is also the honest way to check what a node believes
+        // a wallet owns after a sync or a payment.
+        "wallethistory" | "history" => ("wallethistory", json!({})),
         "getpeercount" => ("getpeercount", json!({})),
         "getpoolinfo" => ("getpoolinfo", json!({})),
         "stop" => ("stop", json!({})),
@@ -169,8 +176,10 @@ fn print_help() {
          \n\
          COMMANDS:\n  \
            getinfo\n  \
+           walletstatus\n  \
            getnewaddress\n  \
            getbalance\n  \
+           wallethistory\n  \
            getpeercount\n  \
            getpoolinfo\n  \
            mine --blocks N\n  \
