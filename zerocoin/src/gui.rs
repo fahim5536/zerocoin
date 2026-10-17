@@ -152,16 +152,18 @@ const HELP_TEXT: &str = "\
 zerocoin-gui — desktop wallet for ZeroCoin (ZRO)
 
 USAGE:
-  zerocoin-gui [--network NAME] [--rpc HOST:PORT] [--no-spawn]
+  zerocoin-gui [--network NAME] [--rpc HOST:PORT] [--seed HOST:PORT]... [--no-spawn]
 
 OPTIONS:
   --network NAME   mainnet | devnet | regtest (default: devnet)
   --rpc HOST:PORT  node RPC address (default: 127.0.0.1:<network port>)
+  --seed HOST:PORT peer the embedded node dials so it can catch up to the
+                   network; repeat the flag for several peers
   --no-spawn       never start the embedded node; expect one to be running
   --help, -h       show this help
 
-By default the wallet starts its own `zerocoind` when nothing is listening on
-the network's default RPC port. Chain and wallet state live under the per-user
+By default the wallet starts its own `zerocoind` when no node answers on the
+network's default RPC port. Chain and wallet state live under the per-user
 application directory, so they survive updates of these binaries. The wallet
 never touches keys itself; every signature happens inside the node.";
 
@@ -251,14 +253,15 @@ pub fn run_wallet() -> Result<(), String> {
     // Platform setup: `(network, backend, data_dir)` — how this process
     // reaches a node, and where its chain and keystore live.
     #[cfg(not(target_os = "android"))]
-    let (network, backend, data_dir, auto_spawn) = {
-        let (network, rpc_override, no_spawn) = match parse_args() {
+    let (network, backend, data_dir, auto_spawn, seeds) = {
+        let options = match parse_args() {
             Ok(parsed) => parsed,
             Err(message) => {
                 eprintln!("zerocoin-gui: {message}");
                 std::process::exit(1);
             }
         };
+        let network = options.network.unwrap_or_else(|| "devnet".to_string());
 
         let params = match ChainParams::by_name(&network) {
             Some(params) => params,
@@ -270,8 +273,8 @@ pub fn run_wallet() -> Result<(), String> {
             }
         };
         // An explicit `--rpc` points at somebody else's node: never spawn one.
-        let using_own_endpoint = rpc_override.is_none();
-        let rpc_addr = rpc_override.unwrap_or_else(|| {
+        let using_own_endpoint = options.rpc.is_none();
+        let rpc_addr = options.rpc.unwrap_or_else(|| {
             format!("127.0.0.1:{}", params.default_rpc_port)
                 .parse()
                 .expect("valid loopback RPC address")
@@ -282,8 +285,8 @@ pub fn run_wallet() -> Result<(), String> {
         // %APPDATA%\ZeroCoin\<network> on Windows — so the balance and identity
         // survive updates, moves and reinstalls of the binaries.
         let data_dir = crate::datadir::default_datadir(params.name);
-        let auto_spawn = using_own_endpoint && !no_spawn;
-        (network, Backend::Rpc(rpc_addr), data_dir, auto_spawn)
+        let auto_spawn = using_own_endpoint && !options.no_spawn;
+        (network, Backend::Rpc(rpc_addr), data_dir, auto_spawn, options.seeds)
     };
 
     #[cfg(target_os = "android")]
@@ -337,6 +340,7 @@ pub fn run_wallet() -> Result<(), String> {
         backend.clone(),
         data_dir.clone(),
         auto_spawn,
+        seeds,
     ));
     #[cfg(target_os = "android")]
     runtime.spawn(run_backend(ui.as_weak(), backend.clone()));
@@ -779,13 +783,14 @@ async fn run_backend(
     backend: Backend,
     data_dir: PathBuf,
     auto_spawn: bool,
+    seeds: Vec<SocketAddr>,
 ) {
     let Backend::Rpc(rpc_addr) = backend else {
         return;
     };
     let mut boot_note = None;
     if auto_spawn && !probe_rpc(rpc_addr).await {
-        match spawn_embedded_node(&network, &data_dir) {
+        match spawn_embedded_node(&network, &data_dir, &seeds) {
             Ok(()) => {
                 boot_note = Some(EMBEDDED_BOOT_NOTE.to_string());
                 push_status_note(&weak, EMBEDDED_BOOT_NOTE, false);
@@ -817,13 +822,19 @@ async fn run_backend(weak: Weak<WalletWindow>, backend: Backend) {
     poll_loop(weak, backend, None, ANDROID_OFFLINE_NOTE.to_string()).await;
 }
 
-/// Is anything listening on `rpc_addr` right now? A loopback connect resolves
-/// instantly either way; the timeout only bounds a firewall that drops the SYN.
+/// Does a ZeroCoin node answer on `rpc_addr` right now?
+///
+/// A TCP connect is not enough: any process can hold the port (a leftover
+/// daemon for another network, an unrelated service, a firewall that accepts
+/// and closes). Asking for `getinfo` and requiring the reply to carry this
+/// node's own `network` field is what distinguishes "my node is up" from
+/// "something is listening". A wrong-network daemon is rejected by the same
+/// check, so the wallet never reports another chain's height as its own.
 #[cfg(not(target_os = "android"))]
 async fn probe_rpc(rpc_addr: SocketAddr) -> bool {
     matches!(
-        timeout(EMBEDDED_PROBE_TIMEOUT, TcpStream::connect(rpc_addr)).await,
-        Ok(Ok(_))
+        rpc_call_async(rpc_addr, "getinfo", json!({}), EMBEDDED_PROBE_TIMEOUT).await,
+        Ok(reply) if reply.get("network").and_then(Value::as_str).is_some()
     )
 }
 
@@ -845,6 +856,11 @@ async fn wait_for_rpc(rpc_addr: SocketAddr, deadline: Duration) -> bool {
 /// Launch a detached, windowless `zerocoind` for this network and data
 /// directory. Returns as soon as the process is started.
 ///
+/// `seeds` is forwarded as repeated `--connect` flags. Without them the
+/// embedded node has nobody to talk to: it would serve only the blocks it
+/// mines itself and the chain height would never match the network. With
+/// them it runs the same header-first catch-up any other node does.
+///
 /// No password is passed: the daemon comes up walletless and the onboarding
 /// view creates or imports the wallet over RPC, so the password never appears
 /// in the process list. The child is deliberately left running past this
@@ -852,14 +868,18 @@ async fn wait_for_rpc(rpc_addr: SocketAddr, deadline: Duration) -> bool {
 /// reattaches to the same node via the port probe, and the files it serves
 /// persist under `data_dir` regardless.
 #[cfg(not(target_os = "android"))]
-fn spawn_embedded_node(network: &str, data_dir: &Path) -> Result<(), String> {
+fn spawn_embedded_node(network: &str, data_dir: &Path, seeds: &[SocketAddr]) -> Result<(), String> {
     let daemon = locate_embedded_daemon()?;
     let mut command = tokio::process::Command::new(&daemon);
     command
         .arg("--network")
         .arg(network)
         .arg("--datadir")
-        .arg(data_dir)
+        .arg(data_dir);
+    for seed in seeds {
+        command.arg("--connect").arg(seed.to_string());
+    }
+    command
         // Isolation: strip any inherited wallet password. If the operator's
         // shell had exported the variable, the daemon would auto-create a
         // wallet at boot from it — bypassing onboarding and leaking the
@@ -1566,19 +1586,42 @@ fn display_network(name: &str) -> String {
 // Arguments (desktop only; same surface as `zerocoin-cli`)
 // ---------------------------------------------------------------------------
 
+/// Everything the desktop command line configures. Kept as a struct rather
+/// than a tuple because the peer list would otherwise be an unreadable
+/// fourth positional element.
 #[cfg(not(target_os = "android"))]
-fn parse_args() -> Result<(String, Option<SocketAddr>, bool), String> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let mut network = "devnet".to_string();
-    let mut rpc: Option<SocketAddr> = None;
-    let mut no_spawn = false;
+#[derive(Debug, Default, PartialEq, Eq)]
+struct GuiOptions {
+    /// `None` means "whatever `--network` says".
+    network: Option<String>,
+    /// `Some` when the operator pointed the wallet at somebody else's node.
+    rpc: Option<SocketAddr>,
+    /// Peers for the embedded node to dial. Empty means it only serves what it
+    /// mines itself, which is exactly right for a private regtest run.
+    seeds: Vec<SocketAddr>,
+    no_spawn: bool,
+}
+
+#[cfg(not(target_os = "android"))]
+fn parse_args() -> Result<GuiOptions, String> {
+    parse_args_from(std::env::args().skip(1).collect())
+}
+
+/// The parsing half of [`parse_args`], split out so it can be exercised
+/// without touching the process's real argument list.
+#[cfg(not(target_os = "android"))]
+fn parse_args_from(args: Vec<String>) -> Result<GuiOptions, String> {
+    let mut options = GuiOptions::default();
 
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
-            "--network" => network = next_value(&args, &mut i, "--network")?,
-            "--rpc" => rpc = Some(parse_addr(&next_value(&args, &mut i, "--rpc")?)?),
-            "--no-spawn" => no_spawn = true,
+            "--network" => options.network = Some(next_value(&args, &mut i, "--network")?),
+            "--rpc" => options.rpc = Some(parse_addr(&next_value(&args, &mut i, "--rpc")?)?),
+            "--seed" | "--connect" => {
+                options.seeds.push(parse_addr(&next_value(&args, &mut i, "--seed")?)?)
+            }
+            "--no-spawn" => options.no_spawn = true,
             "--help" | "-h" => {
                 println!("{HELP_TEXT}");
                 std::process::exit(0);
@@ -1588,7 +1631,7 @@ fn parse_args() -> Result<(String, Option<SocketAddr>, bool), String> {
         i += 1;
     }
 
-    Ok((network, rpc, no_spawn))
+    Ok(options)
 }
 
 #[cfg(not(target_os = "android"))]
@@ -1738,25 +1781,83 @@ mod tests {
         node.stop();
     }
 
-    /// The spawn-on-demand controller hinges on the port probe being both
-    /// truthful and bounded: up while a listener is bound, down right after it
-    /// is released.
+    /// The spawn-on-demand controller hinges on the probe being truthful and
+    /// bounded. A bound socket is *not* enough: only a node that answers
+    /// `getinfo` counts, or the wallet would attach to a stranger on the port
+    /// and report every call as offline.
     #[test]
     fn probes_the_rpc_endpoint() {
+        use crate::node::{Node, NodeConfig};
+
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("probe test runtime");
 
         runtime.block_on(async {
+            // A socket that accepts TCP but never speaks RPC. The old
+            // TCP-connect-only probe called this "up", which is the false
+            // positive this test pins down.
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
                 .await
                 .expect("binding a probe target");
             let addr = listener.local_addr().expect("probe target address");
-            assert!(probe_rpc(addr).await, "a bound listener must probe as up");
+            assert!(
+                !probe_rpc(addr).await,
+                "a listener that is not a node must not probe as up"
+            );
+
+            let dir = tempfile::tempdir().expect("temp directory");
+            let config = NodeConfig {
+                params: ChainParams::regtest(),
+                data_dir: dir.path().to_path_buf(),
+                p2p_listen: "127.0.0.1:0".parse().unwrap(),
+                rpc_listen: Some("127.0.0.1:0".parse().unwrap()),
+                seeds: Vec::new(),
+                wallet_password: "gui-test-password".to_string(),
+            };
+            let node = Node::spawn(&config).expect("spawning the test node");
+            let rpc_addr = node.rpc_addr.expect("RPC listener bound");
+            assert!(probe_rpc(rpc_addr).await, "a live node must probe as up");
+            node.stop();
+
             drop(listener);
             assert!(!probe_rpc(addr).await, "a released port must probe as down");
         });
+    }
+
+    /// `--seed` (and its `--connect` alias) is how the embedded node is given
+    /// peers. Without it the wallet's node has nobody to sync from.
+    #[test]
+    fn parses_repeated_peer_seeds() {
+        let options = parse_args_from(vec![
+            "--network".into(),
+            "regtest".into(),
+            "--seed".into(),
+            "127.0.0.1:18444".into(),
+            "--connect".into(),
+            "10.0.0.7:18233".into(),
+        ])
+        .expect("a valid command line");
+
+        assert_eq!(options.network.as_deref(), Some("regtest"));
+        assert_eq!(
+            options.seeds,
+            vec![
+                "127.0.0.1:18444".parse::<SocketAddr>().unwrap(),
+                "10.0.0.7:18233".parse::<SocketAddr>().unwrap(),
+            ]
+        );
+        assert!(options.rpc.is_none());
+        assert!(!options.no_spawn);
+
+        // Defaults stay exactly as before: devnet, own endpoint, auto-spawn.
+        let defaults = parse_args_from(Vec::new()).expect("no arguments is valid");
+        assert_eq!(defaults, GuiOptions::default());
+
+        // A malformed peer must fail loudly rather than be silently dropped.
+        assert!(parse_args_from(vec!["--seed".into(), "not-an-address".into()]).is_err());
+        assert!(parse_args_from(vec!["--seed".into()]).is_err());
     }
 
     /// The readiness wait must give up on its own — an embedded node that
