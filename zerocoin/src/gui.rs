@@ -595,7 +595,7 @@ async fn poll_loop(
                     if !wallet_gone {
                         wallet_gone = true;
                         last_history = None;
-                        push_history(&weak, &Value::Null);
+                        push_history(&weak, &Value::Null, false);
                     }
                 } else {
                     // Rebuild when the chain tip or the mempool moved, and at
@@ -605,13 +605,20 @@ async fn poll_loop(
                         (height, mempool) != key || at.elapsed() >= HISTORY_REFRESH_INTERVAL
                     });
                     if stale {
+                        // Nothing on screen is authoritative yet: say so, or an
+                        // empty ledger reads as "no transactions" before the
+                        // first answer has even been built.
+                        if last_history.is_none() {
+                            push_history_loading(&weak, true);
+                        }
                         match backend.call("wallethistory", json!({}), RPC_TIMEOUT).await {
                             Ok(history) => {
                                 last_history = Some((key.0, key.1, Instant::now()));
-                                push_history(&weak, &history);
+                                push_history(&weak, &history, false);
                             }
                             // The probe said a wallet exists but the ledger
-                            // call failed: retry on the next tick.
+                            // call failed: retry on the next tick, leaving the
+                            // loading state up rather than claiming emptiness.
                             Err(_) => last_history = None,
                         }
                     }
@@ -638,7 +645,7 @@ async fn poll_loop(
 /// Rebuild the ledger model from one `wallethistory` answer. `Value::Null`
 /// (or a malformed answer) reads as "no rows", which is exactly what the
 /// welcome frame needs.
-fn push_history(weak: &Weak<WalletWindow>, history: &Value) {
+fn push_history(weak: &Weak<WalletWindow>, history: &Value, loading: bool) {
     let rows: Vec<LedgerRow> = history
         .get("history")
         .and_then(Value::as_array)
@@ -652,7 +659,15 @@ fn push_history(weak: &Weak<WalletWindow>, history: &Value) {
         .unwrap_or_default();
     let _ = weak.upgrade_in_event_loop(move |ui| {
         ui.set_history_rows(ModelRc::from(Rc::new(VecModel::from(rows))));
+        ui.set_history_loading(loading);
     });
+}
+
+/// Mark the ledger as being read, without disturbing the rows already on
+/// screen. Kept separate from [`push_history`] so a refresh of a populated
+/// ledger never blanks it.
+fn push_history_loading(weak: &Weak<WalletWindow>, loading: bool) {
+    let _ = weak.upgrade_in_event_loop(move |ui| ui.set_history_loading(loading));
 }
 
 /// One ledger row from one `wallethistory` entry, or `None` if the entry is
@@ -1324,6 +1339,29 @@ fn wire_callbacks(ui: &WalletWindow, backend: Backend, runtime: Handle, data_dir
                     }
                 });
             });
+        }
+    });
+
+    ui.on_request_skip_backup({
+        let weak = weak.clone();
+        move || {
+            let Some(ui) = weak.upgrade() else {
+                return;
+            };
+            // Only meaningful while the shield is up. Dismissing it is safe:
+            // the identity was already sealed to disk by `createwallet`, so
+            // the only thing skipped is the off-machine copy. The dashboard
+            // unlocks so the operator can actually use the wallet they made.
+            if !ui.get_show_download_prompt() {
+                return;
+            }
+            ui.set_show_download_prompt(false);
+            ui.set_view_mode(1);
+            ui.set_status_message(
+                "Backup skipped — the wallet stays on this machine only. Export it later to keep a copy."
+                    .into(),
+            );
+            ui.set_status_is_error(false);
         }
     });
 }

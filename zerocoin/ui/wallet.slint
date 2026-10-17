@@ -317,6 +317,10 @@ export component WalletWindow inherits Window {
     // ---- state pushed by `zerocoin-gui` (polled from the node) ------------
     in-out property <string> network-name: "Devnet";
     in-out property <bool> node-online: false;
+    // True while the backend is reading the ledger from the chain. Distinguishes
+    // "we do not know yet" from "this wallet has never transacted", which the
+    // history sheet would otherwise conflate.
+    in-out property <bool> history-loading: false;
     in-out property <string> confirmed-balance: "0.00000000";
     in-out property <string> confirmed-balance-fah: "0 Fah";
     in-out property <string> spendable-balance: "0.00000000";
@@ -371,6 +375,11 @@ export component WalletWindow inherits Window {
     callback request-create-wallet();
     callback request-import-wallet();
     callback request-download-backup();
+    // Escape hatch out of the Download Shield. Saving a backup is a strong
+    // recommendation, not a gate: the keystore is already sealed on disk, and
+    // trapping the user in a modal because they dismissed the OS save dialog
+    // would lock them out of their own balance.
+    callback request-skip-backup();
 
     // Drives the flashing network indicator. Purely cosmetic; the backend
     // never sees this state.
@@ -822,7 +831,7 @@ export component WalletWindow inherits Window {
                                         }
 
                                         Text {
-                                            text: "No transactions yet";
+                                            text: root.history-loading ? "Loading history…" : "No transactions yet";
                                             color: #C9D8E6;
                                             font-size: 13px;
                                             font-weight: 600;
@@ -830,7 +839,9 @@ export component WalletWindow inherits Window {
                                         }
 
                                         Text {
-                                            text: "Your sent and received ZRO will appear here.";
+                                            text: root.history-loading
+                                                ? "Reading this wallet's ledger from the chain."
+                                                : "Your sent and received ZRO will appear here.";
                                             color: #5E7080;
                                             font-size: 11px;
                                             wrap: word-wrap;
@@ -1264,6 +1275,29 @@ export component WalletWindow inherits Window {
                         mouse-cursor: pointer;
                         accessible-role: button;
                         accessible-label: "Download the wallet backup file";
+                    }
+                }
+
+                // Secondary action: leave the shield without a backup. Muted
+                // text, not a filled button, so it never competes with the
+                // primary control above it.
+                skip-row := Rectangle {
+                    height: 32px;
+                    background: transparent;
+
+                    Text {
+                        text: skip-touch.has-hover ? "Continue without a backup" : "Skip for now";
+                        color: skip-touch.has-hover ? #EEF4F9 : #9FB4C7;
+                        font-size: 13px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    skip-touch := TouchArea {
+                        clicked => { root.request-skip-backup(); }
+                        mouse-cursor: pointer;
+                        accessible-role: button;
+                        accessible-label: "Continue without downloading a backup";
                     }
                 }
 
