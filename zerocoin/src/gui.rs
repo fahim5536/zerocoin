@@ -201,6 +201,51 @@ pub fn android_main(app: slint::android::AndroidApp) {
     }
 }
 
+/// The window platform this app asks for when the user has expressed no
+/// preference.
+///
+/// `ui/wallet.slint` is flat rectangles and text at 460×670, written to stay
+/// cheap on the CPU renderer. Slint's own default instead prefers OpenGL
+/// (femtovg), and on a machine without a usable GL driver — a virtual machine,
+/// an RDP session, a stale Intel driver — that renderer can take the window and
+/// then never present a frame. The failure is silent and confusing: the window
+/// exists with its title bar, the backend keeps answering RPC, stderr stays
+/// empty, and the client area is simply blank white forever. Asking for the
+/// software renderer up front removes that whole class of "invisible wallet".
+#[cfg(not(target_os = "android"))]
+const DEFAULT_BACKEND: &str = "winit";
+#[cfg(not(target_os = "android"))]
+const DEFAULT_RENDERER: &str = "software";
+
+/// The `(backend, renderer)` pair to request — or `None` when `SLINT_BACKEND`
+/// already names one, in which case the user's choice stands untouched.
+#[cfg(not(target_os = "android"))]
+fn renderer_choice(override_env: Option<&std::ffi::OsStr>) -> Option<(&'static str, &'static str)> {
+    if override_env.is_some_and(|value| !value.is_empty()) {
+        None
+    } else {
+        Some((DEFAULT_BACKEND, DEFAULT_RENDERER))
+    }
+}
+
+/// Install the window system and renderer; this must happen before the first
+/// window is created. A failure is not fatal — Slint then falls back to the
+/// default selector, exactly the behaviour this app had before.
+#[cfg(not(target_os = "android"))]
+fn select_renderer() {
+    let override_env = std::env::var_os("SLINT_BACKEND");
+    let Some((backend, renderer)) = renderer_choice(override_env.as_deref()) else {
+        return;
+    };
+    if let Err(error) = slint::BackendSelector::new()
+        .backend_name(backend.to_string())
+        .renderer_name(renderer.to_string())
+        .select()
+    {
+        eprintln!("zerocoin-gui: could not select the {renderer} renderer: {error}");
+    }
+}
+
 /// The wallet itself, shared by the desktop binary and `android_main`.
 pub fn run_wallet() -> Result<(), String> {
     // Platform setup: `(network, backend, data_dir)` — how this process
@@ -256,6 +301,12 @@ pub fn run_wallet() -> Result<(), String> {
             .map_err(|error| format!("opening the wallet session: {error}"))?;
         (network, Backend::Session(Arc::new(session)), data_dir)
     };
+
+    // Pick the window platform before any window exists (see
+    // `renderer_choice`): this is what keeps the wallet visible on machines
+    // where the OpenGL path never presents a frame.
+    #[cfg(not(target_os = "android"))]
+    select_renderer();
 
     let ui = WalletWindow::new().map_err(|error| error.to_string())?;
     ui.set_network_name(display_network(&network).into());
@@ -1562,6 +1613,22 @@ fn parse_addr(text: &str) -> Result<SocketAddr, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The window must not depend on a working GPU driver: the OpenGL renderer
+    /// can claim the window and never present a frame, which leaves the wallet
+    /// blank white with no error logged anywhere. The CPU renderer is the
+    /// default; only an explicit `SLINT_BACKEND` may override it.
+    #[cfg(not(target_os = "android"))]
+    #[test]
+    fn the_cpu_renderer_is_the_default_unless_the_user_asks_otherwise() {
+        use std::ffi::OsStr;
+
+        assert_eq!(renderer_choice(None), Some(("winit", "software")));
+        // An empty variable is not a choice, so the default still applies.
+        assert_eq!(renderer_choice(Some(OsStr::new(""))), Some(("winit", "software")));
+        // A real value is the user's call and must survive untouched.
+        assert_eq!(renderer_choice(Some(OsStr::new("winit-femtovg"))), None);
+    }
 
     #[test]
     fn parses_whole_and_fractional_amounts() {
