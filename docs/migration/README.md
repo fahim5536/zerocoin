@@ -37,8 +37,8 @@ observed code, not a design endorsement.
 | Branch | `main` |
 | Audited commit | `5248b10d69c12f4d0af332afb5e67c43605c220c` (`Update README.md`) |
 | Crate | `zerocoin` 0.1.0, Rust edition 2021, MSRV 1.75, MIT |
-| Rust source | 36 files, 13,649 lines under `zerocoin/src/` `[VERIFIED]` |
-| UI source | `zerocoin/ui/wallet.slint`, 1,157 lines `[VERIFIED]` |
+| Rust source | 36 files — 14,986 lines physical, 13,649 non-blank `[VERIFIED]` |
+| UI source | `zerocoin/ui/wallet.slint` — 1,314 lines physical, 1,157 non-blank `[VERIFIED]` |
 | Test functions | 235 `#[test]` functions in 28 modules `[VERIFIED]` |
 | Test result | `235 passed; 0 failed; 0 ignored` in 49.21 s `[VERIFIED]` |
 | CI | none — no `.github/` directory exists `[VERIFIED]` |

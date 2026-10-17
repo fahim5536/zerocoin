@@ -10,9 +10,10 @@ Labels: `[VERIFIED]` read from source or produced by a command quoted here;
 
 ## 1. Scope and method
 
-The audit covers every file in `zerocoin/src/` (36 files, 13,649 lines), the Slint
-UI (`ui/wallet.slint`, 1,157 lines), the manifest and build script, the two demo
-scripts, and the two Markdown guides. Method:
+The audit covers every file in `zerocoin/src/` (36 files, 14,986 physical lines,
+13,649 of them non-blank), the Slint UI (`ui/wallet.slint`, 1,314 physical lines,
+1,157 non-blank), the manifest and build script, the two demo scripts, and the two
+Markdown guides. Method:
 
 1. **Read** each module end to end, in dependency order (crypto → ledger →
    consensus → network → state → node), recording the exact byte layouts, numeric
@@ -38,13 +39,13 @@ zerocoin/
 ├── Cargo.toml            # single crate, three binaries, one optional UI feature
 ├── Cargo.lock            # tracked on purpose (binary crate, reproducible builds)
 ├── build.rs              # compiles ui/wallet.slint into the crate
-├── ui/wallet.slint       # 1,157 lines of Slint markup
+├── ui/wallet.slint       # 1,314 lines of Slint markup (1,157 non-blank)
 ├── demos/
 │   ├── regtest-maturity.ps1   # end-to-end zero-premine + maturity proof
 │   └── regtest-pool.ps1       # share-pool demo
 ├── DEVNET_GUIDE.md
 ├── MOBILE_BUILD.md
-└── src/                  # 36 files, 13,649 lines
+└── src/                  # 36 files, 14,986 lines (13,649 non-blank)
 ```
 
 At the repository root there is a hand-written `.gitignore` that blocks ledger
@@ -87,7 +88,11 @@ There is **no** `tests/` directory, **no** `benches/`, **no** `fuzz/`, and **no*
 
 ### 2.3 Source size by file `[VERIFIED]`
 
-| File | Lines | Class |
+Counts are **non-blank** lines, the `Measure-Object -Line` convention used for the
+whole audit; the physical total including blank lines is 14,986. The two numbers
+are both true, they just measure different things.
+
+| File | Non-blank lines | Class |
 |---|---:|---|
 | `src/lib.rs` | 40 | — |
 | `src/params.rs` | 227 | C |

@@ -267,7 +267,7 @@ Two deliberate divergences from Bitcoin Core's shape, recorded so they are not
 | Risk | Containment |
 |---|---|
 | "Bitcoin does it this way" arguments during review | The findings register in `01` §13 is the authority; a proposal that cites Bitcoin must also cite a ZeroCoin test that would still pass |
-| Structural copying drifting into code copying | `04` risk R3; review checklist in `05` §7 |
+| Structural copying drifting into code copying | `04` risk R4; review checklist in `05` §10 |
 | Feature envy: adding reorgs, RBF, segwit "while we are here" | Change freeze in `README.md` §5; each of those is a separate consensus-change proposal |
 | Adopting upstream build complexity wholesale | `03` specifies a minimal CMake surface; no `leveldb`, `zmq`, `qt`, or `minisketch` in the first milestone |
 
