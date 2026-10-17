@@ -2,7 +2,6 @@
 
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](#prerequisites)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
-[![Status: experimental](https://img.shields.io/badge/status-experimental-red.svg)](#project-status)
 
 ZeroCoin (ticker **ZRO**) is an experimental, from-scratch **UTXO blockchain written in
 Rust**. It is a *fair-launch* chain: there is **no premine and no owner**, and the only way
