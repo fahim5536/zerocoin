@@ -598,6 +598,41 @@ fn handle_message(
         }
         Message::Block { block } => {
             let block = *block;
+
+            // A block that does not hang off our tip is not necessarily invalid:
+            // most often it is a peer's newest block while our own chain is still
+            // behind. Dropping it used to strand the node for good, because the
+            // announcer only ever offers the tip of a mining run (see `generate`),
+            // so the blocks in between were never offered again and the node sat at
+            // its old height with a healthy peer count. Treat the gap as a sync
+            // hint instead: ask for the headers above our tip and let the ordinary
+            // catch-up path fetch the missing range in order — this block arrives
+            // again as part of it.
+            {
+                let chain = state.chain.lock().unwrap();
+                let id = block.id(state.params.build_engine().as_ref());
+                if chain.holds_block(&id) {
+                    return Ok(()); // duplicate or stale announcement
+                }
+                let extends_tip = block.header.height == chain.next_height()
+                    && block.header.previous_hash == chain.tip_hash();
+                if !extends_tip {
+                    // Throttled by the catch-up watermark, which records the
+                    // highest height already asked for: an unhelpful peer that
+                    // keeps serving the same unconnectable block cannot make this
+                    // node emit a header request per block forever.
+                    let already_requested = state
+                        .sync_requested_height
+                        .load(Ordering::SeqCst)
+                        >= block.header.height;
+                    drop(chain);
+                    if !already_requested {
+                        request_headers(state, out);
+                    }
+                    return Ok(());
+                }
+            }
+
             let outcome = {
                 let mut chain = state.chain.lock().unwrap();
                 let now = now_timestamp();
@@ -1581,6 +1616,65 @@ mod tests {
         let tip_a = rpc_call(rpc_a, "getinfo", json!({})).unwrap()["tip"].clone();
         let tip_b = rpc_call(rpc_b, "getinfo", json!({})).unwrap()["tip"].clone();
         assert_eq!(tip_a, tip_b, "the lagging node converged on the peer's tip");
+
+        node_a.stop();
+        node_b.stop();
+    }
+
+    /// A batch mined while the peer is already connected must reach it.
+    ///
+    /// This is the regression for a node that connected *before* the mining
+    /// run started: it announced nothing to us at handshake time (our heights
+    /// matched), and the miner then advertises only the tip of the whole run.
+    /// That single block cannot connect without its ancestors, so a reader that
+    /// simply dropped it left the chain frozen at genesis — a live peer, no
+    /// error, and no progress. The fix is to treat an unconnectable block as a
+    /// catch-up hint, which this test pins down.
+    #[test]
+    fn a_batch_mined_after_connecting_is_pulled_in_full() {
+        let dir_a = tempfile::tempdir().unwrap();
+        let dir_b = tempfile::tempdir().unwrap();
+
+        let config_a = regtest_config(dir_a.path(), true);
+        let node_a = Node::spawn(&config_a).expect("spawns A");
+        let rpc_a = node_a.rpc_addr.unwrap();
+
+        let mut config_b = regtest_config(dir_b.path(), true);
+        config_b.seeds = vec![node_a.p2p_addr];
+        let node_b = Node::spawn(&config_b).expect("spawns B");
+        let rpc_b = node_b.rpc_addr.unwrap();
+
+        // Both are at genesis: the handshake gives B no reason to ask for
+        // headers, so everything B learns from here has to come from the
+        // announcement of a block it cannot attach yet.
+        let connected = wait_until(Duration::from_secs(10), || {
+            rpc_call(rpc_b, "getpeercount", json!({}))
+                .map(|v| v["peers"].as_u64().unwrap_or(0) >= 1)
+                .unwrap_or(false)
+        });
+        assert!(connected, "B never established its session with A");
+        assert_eq!(
+            rpc_call(rpc_b, "getinfo", json!({})).unwrap()["height"].as_u64(),
+            Some(0),
+            "B must still be at genesis before A mines"
+        );
+
+        // One call, five blocks: the tip is announced once.
+        rpc_call(rpc_a, "generate", json!({ "blocks": 5 })).unwrap();
+
+        let caught_up = wait_until(Duration::from_secs(20), || {
+            rpc_call(rpc_b, "getinfo", json!({}))
+                .map(|v| v["height"].as_u64().unwrap_or(0) >= 5)
+                .unwrap_or(false)
+        });
+        assert!(
+            caught_up,
+            "B kept a peer but never pulled the batch; an unconnectable block must trigger a header sync"
+        );
+
+        let tip_a = rpc_call(rpc_a, "getinfo", json!({})).unwrap()["tip"].clone();
+        let tip_b = rpc_call(rpc_b, "getinfo", json!({})).unwrap()["tip"].clone();
+        assert_eq!(tip_a, tip_b, "the two nodes agree on the tip after the batch");
 
         node_a.stop();
         node_b.stop();
