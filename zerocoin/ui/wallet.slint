@@ -1163,7 +1163,11 @@ export component WalletWindow inherits Window {
             height: 32px;
             padding-left: 18px;
             padding-right: 18px;
-            alignment: center;
+            // No `alignment: center` here: a centred layout packs its children
+            // at their preferred width, which collapses the stretch spacer
+            // below and welds the two labels together ("Chain Height: 105Peers:
+            // 0"). The default start alignment lets the spacer do its job and
+            // keeps height on the left edge and peers on the right edge.
             cross-axis-alignment: center;
 
             Text {
