@@ -1,8 +1,13 @@
 # 06 — P0: deterministic baseline vectors
 
-> Evidence labels follow `README.md` §1. All commands quoted here were run on
-> 2026-10-18 against `main` = `2bc96d2acf9b3b73aea00a766514afb845cdb5e0` on
-> Windows 24H2 with `cargo`/`rustc` 1.99.1 and Python 3.15.0.
+> Evidence labels follow `README.md` §1. The original P0 run was made on
+> 2026-10-18 against `main` = `2bc96d2acf9b3b73aea00a766514afb845cdb5e0`; the
+> `source_commit` amendment in §3.1 was made the same day against `main` =
+> `2ede9f5e006c28b66bcb58bed2f0c766f5d9dc00`. Both used Windows 24H2 with
+> `cargo`/`rustc` 1.99.1 and Python 3.15.0. The version is toolchain-specific:
+> the default `stable-x86_64-pc-windows-msvc` toolchain on this machine reports
+> 1.99.0, while every command here names `+stable-x86_64-pc-windows-gnu`, which
+> is the 1.99.1 above — the same rule as `README.md` §2.
 
 P0 builds the artefact that `05-test-strategy.md` §2 calls the golden-vector
 corpus, and nothing else. It adds no C++, touches no consensus rule, and leaves
@@ -14,7 +19,7 @@ every tracked file in the Rust tree byte-identical to `2bc96d2`.
 
 | Item | Result | Evidence |
 |---|---|---|
-| Corpus files | 13 vector files + `manifest.json`, 114,455 B total | `test/vectors/` `[VERIFIED]` |
+| Corpus files | 13 vector files + `manifest.json`, 116,383 B total | `test/vectors/` `[VERIFIED]` |
 | Cases | 117 — 115 `rule`, 2 `oddity` | `manifest.json` `total_cases` `[VERIFIED]` |
 | Recomputed independently | 112 PASS | harness summary `[VERIFIED]` |
 | Pinned, not recomputable | 5 ANCHOR | harness summary `[VERIFIED]` |
@@ -22,6 +27,7 @@ every tracked file in the Rust tree byte-identical to `2bc96d2`.
 | Disagreements | 0 FAIL | harness summary `[VERIFIED]` |
 | Rust suite | 235 unit + 2 integration, 0 failed | `cargo test --all-targets` `[VERIFIED]` |
 | Corpus regenerable | `ZRO_VECTOR_WRITE=0` compare run passes | `[VERIFIED]` |
+| Provenance recorded | `source_commit` in every file and the manifest, cross-checked by the harness | §3.1 `[VERIFIED]` |
 | Byte-identical across two generations | yes, in one process | `corpus_generation_is_deterministic` `[VERIFIED]` |
 | Byte-identical on a **second machine** | not performed | `[UNVERIFIED]` |
 | Verifier is not vacuous | 116/116 injected mutations detected | §6 `[VERIFIED]` |
@@ -29,8 +35,9 @@ every tracked file in the Rust tree byte-identical to `2bc96d2`.
 
 Gate **G0** (`03` §4) asks for three things. Clause (b) — the Rust suite still
 reports 235 passing — holds. Clause (c) — every vector file names the exact
-command that produced it — holds literally: the envelope field is called
-`source` and carries the command. Clause (a) has two halves: the corpus must be
+command that produced it — holds literally: the envelope field `source` carries
+the command, and since §3.1 every file also names the commit whose code produced
+the values. Clause (a) has two halves: the corpus must be
 regenerable from the pinned commit (holds, and the comparison is enforced by a
 test), and byte-identical across two runs *on two machines* (only one machine was
 available, so this half is `[UNVERIFIED]`, see §5).
@@ -41,15 +48,21 @@ available, so this half is `[UNVERIFIED]`, see §5).
 
 | Path | Size | Role |
 |---|---|---|
-| `test/vectors/**` | 13 files + manifest, 114,455 B | the corpus itself |
+| `test/vectors/**` | 13 files + manifest, 116,383 B | the corpus itself |
 | `test/harness/zro_vectors.py` | 2,295 lines, 79,398 B | independent verifier — recomputes every expected value from the case's own `input` |
-| `test/harness/run_vectors.py` | 168 lines, 6,951 B | corpus structural checker and driver |
+| `test/harness/run_vectors.py` | 195 lines, 7,950 B | corpus structural checker and driver |
 | `test/.gitignore` | 2 lines | `__pycache__/`, `*.pyc` — the root ignore file does not cover them |
 | `.gitattributes` | 6 lines | pins LF on `test/vectors/**` so a clone with `core.autocrlf=true` cannot break the byte comparison |
-| `zerocoin/tests/export_baseline_vectors.rs` | 2,159 lines, 83,822 B | Rust emitter (`--test export_baseline_vectors`) |
+| `zerocoin/tests/export_baseline_vectors.rs` | 2,176 lines, 85,094 B | Rust emitter (`--test export_baseline_vectors`) |
 
 That is the whole of P0. The emitter is the crate's **first integration-test
 target** — finding F12 records that `tests/` did not exist before.
+
+The `source_commit` amendment (§3.1) touched the same code and corpus paths as
+the rest of P0 and nothing else:
+the emitter grew 17 lines, `run_vectors.py` 27, and each of the 14 corpus files
+gained a metadata line. No input or expected value moved — the parsed `cases`
+arrays of all 13 vector files are identical to `2ede9f5` `[VERIFIED]`.
 
 `git status --short` after the work shows exactly two documentation edits
 (`docs/migration/README.md` modified, `docs/migration/06-p0-baseline-vectors.md`
@@ -69,19 +82,19 @@ second, on a machine with no Rust toolchain installed.
 
 | File | Group | Cases | Bytes |
 |---|---|---|---|
-| `hash/primitives.json` | `hash` | 5 | 2,212 |
-| `encoding/varint.json` | `encoding.varint` | 9 | 3,172 |
-| `encoding/transaction.json` | `encoding.transaction` | 5 | 4,852 |
-| `ledger/script.json` | `ledger.script` | 15 | 35,313 |
-| `ledger/sighash.json` | `ledger.sighash` | 8 | 8,316 |
-| `ledger/state_root.json` | `ledger.state_root` | 13 | 8,257 |
-| `chain/header.json` | `chain.header` | 8 | 6,970 |
-| `chain/anchors.json` | `chain.anchors` | 6 | 7,583 |
-| `pow/engines.json` | `pow` | 11 | 6,918 |
-| `difficulty/retarget.json` | `difficulty` | 15 | 8,733 |
-| `reward/subsidy.json` | `reward.subsidy` | 6 | 7,608 |
-| `reward/coinbase.json` | `reward.coinbase` | 10 | 8,449 |
-| `crypto/addresses.json` | `crypto.address` | 6 | 3,481 |
+| `hash/primitives.json` | `hash` | 5 | 2,338 |
+| `encoding/varint.json` | `encoding.varint` | 9 | 3,298 |
+| `encoding/transaction.json` | `encoding.transaction` | 5 | 4,978 |
+| `ledger/script.json` | `ledger.script` | 15 | 35,439 |
+| `ledger/sighash.json` | `ledger.sighash` | 8 | 8,442 |
+| `ledger/state_root.json` | `ledger.state_root` | 13 | 8,383 |
+| `chain/header.json` | `chain.header` | 8 | 7,096 |
+| `chain/anchors.json` | `chain.anchors` | 6 | 7,709 |
+| `pow/engines.json` | `pow` | 11 | 7,044 |
+| `difficulty/retarget.json` | `difficulty` | 15 | 8,859 |
+| `reward/subsidy.json` | `reward.subsidy` | 6 | 7,734 |
+| `reward/coinbase.json` | `reward.coinbase` | 10 | 8,575 |
+| `crypto/addresses.json` | `crypto.address` | 6 | 3,607 |
 
 Every file is a self-describing envelope; every case carries its own inputs:
 
@@ -92,7 +105,8 @@ Every file is a self-describing envelope; every case carries its own inputs:
   "intent": "rule",
   "note": "...",
   "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
-  "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow <this file>`",
+  "source_commit": "7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c",
+  "provenance": "every expected value was produced by the shipping `zerocoin/` Rust code at `source_commit`; no value is transcribed from another implementation",
   "case_count": 5,
   "cases": [
     {
@@ -116,6 +130,39 @@ namespace guard is the first id segment, not the full group name.
 Byte order is the convention that bites ports (finding F3): `Hash256.0` holds
 the raw digest, published as `internal_hex`; `display_hex` is the same bytes
 reversed. Both directions appear in the corpus on purpose.
+
+### 3.1 Provenance: the `source_commit` field
+
+An earlier revision of the corpus said the commit responsible for the values was
+discoverable with `git log --follow <this file>`. That resolves to the commit
+that *added the corpus*, which is not the commit that *produced the values* — the
+two differ whenever the corpus lands after the code it describes. Every envelope
+and the manifest therefore carry `source_commit`.
+
+The value is a literal in the emitter, not a `git rev-parse` at run time:
+
+```rust
+const SOURCE_COMMIT: &str = "7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c";
+```
+
+Querying `git` during generation would make the corpus depend on the checkout —
+the class of nondeterminism the rest of P0 eliminates — and would fail the
+compare test for anyone whose HEAD differs. The update rule is published in the
+manifest as `source_commit_rule`: the newest commit touching `zerocoin/src`,
+`Cargo.toml`, `Cargo.lock` or `build.rs`, changed in the same commit that
+regenerates the corpus.
+
+`7cb9017c…` was verified rather than assumed: `git log -1 --format=%H` over those
+four paths returns it, and `git diff 7cb9017c… 2ede9f5 -- <the same paths>` is
+empty, so no build input moved between the recorded commit and the corpus commit
+`[VERIFIED]`.
+
+`run_vectors.py` enforces the field instead of trusting it. It rejects the
+corpus (exit 2) when the manifest lacks `source_commit`, when either the
+manifest's or a file's value is not 40 lowercase hex digits, or when a file's
+value differs from the manifest's. Three injected faults were each observed to
+be rejected: a one-nibble change inside `hash/primitives.json`, the field
+deleted from the manifest, and the manifest's value uppercased `[VERIFIED]`.
 
 ---
 
@@ -167,7 +214,13 @@ tests exist:
 
 Inputs are pinned by construction: fixed keys, fixed nonces and timestamps, no
 clock, no environment, no filesystem path, no iteration over a hash map. Output
-is JSON with sorted keys and a fixed indent, so ordering cannot drift.
+is JSON with sorted keys and a fixed indent, so ordering cannot drift. The
+provenance field is pinned the same way (§3.1): `SOURCE_COMMIT` is a `const`, so
+generation never reads `.git`.
+
+Determinism was also checked outside the process, which the in-process test
+cannot cover: SHA-256 of all 14 files, regenerate, SHA-256 again — 14/14
+identical `[VERIFIED]`.
 
 The emitter writes LF and the test compares raw bytes, which makes line endings
 part of the contract. The repository had no `.gitattributes`, and a clone with
@@ -284,7 +337,9 @@ recorded here rather than from a claim of compliance.
 |---|---|---|---|
 | Corpus structure + independent verification | `python test\harness\run_vectors.py --quiet` | `PASS 112 ANCHOR 5 SKIP 0 FAIL 0`, exit 0 | yes |
 | Corpus compare mode | `ZRO_VECTOR_WRITE=0 cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors` | `2 passed; 0 failed` in about 5 s | yes |
-| Whole Rust suite | `cargo +stable-x86_64-pc-windows-gnu test --all-targets` | `235 passed` in about 35 s, then `2 passed` in about 5 s; 0 failed | yes |
+| Corpus byte-for-byte across two generator runs | SHA-256 of all 14 files before and after a `ZRO_VECTOR_WRITE=1` run | 14/14 identical | yes |
+| Provenance enforcement | `run_vectors.py` after three injected faults | three `CORPUS …` rejections, exit 2 | yes |
+| Whole Rust suite | `cargo +stable-x86_64-pc-windows-gnu test --all-targets` | `235 passed` in about 42 s, then `2 passed` in about 5 s; 0 failed | yes |
 | Verifier mutation self-check | scratch script, see §6 | `detected 116/116`, no blind spots | yes |
 | Byte-identical corpus on a second machine | — | not performed | **no** |
 | `cargo test --doc` | — | not re-run in P0; `01` §12 records zero doctests | **no** |
@@ -336,7 +391,8 @@ The integration test lives in the crate, not at the repository root — running
 ## 10. Constraints honoured
 
 - **No Rust implementation change.** `git status` proves `zerocoin/src/` is
-  untouched; the only Rust file added is an integration test.
+  untouched; the only Rust file touched is the integration test that emits the
+  corpus.
 - **No C++.** Nothing was written beyond the files in §2.
 - **No consensus, wallet-format, or network change.** The corpus only observes.
 - **No invented values.** Every `expected` value was produced by the Rust
@@ -359,6 +415,7 @@ The integration test lives in the crate, not at the repository root — running
 | 3 | Register the sighash-type behaviour as a finding | see below |
 | 4 | Give `oddity` cases an optional `finding` key | `05` §2.3 shows `"finding": "F3"`; the corpus encodes F3 inside `independent_check` and the sighash oddity has no id at all |
 | 5 | Decide whether to promote the mutation self-check | it is currently a scratch tool; committed, it would guard the verifier itself |
+| 6 | Cross-check `source_commit` against `git` in CI | the harness checks the field's shape and internal consistency, not that it is still current; a CI job can compare it with `git log -1 --format=%H -- zerocoin/src zerocoin/Cargo.toml zerocoin/Cargo.lock zerocoin/build.rs` |
 
 Item 3 is a real gap in the audit register, discovered by publishing the vector:
 `01` §5.2 records that "only `SIGHASH_ALL = 0x01` exists" and that the preimage
@@ -386,3 +443,6 @@ sighash module is ported.
   than copied by eye.
 - A rejection taxonomy with a measured baseline (§7) instead of an assumption of
   completeness.
+- `source_commit` in every file (§3.1), so each expected value maps to the exact
+  Rust build that produced it and a port can cite that commit rather than a
+  directory.

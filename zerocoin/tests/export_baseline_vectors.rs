@@ -15,7 +15,9 @@
 //! Nothing here uses the wall clock, an RNG, a wallet, a data directory, or the
 //! network. Every input is a literal: fixed scalars, fixed timestamps, fixed nonces.
 //! No environment variable other than `ZRO_VECTOR_WRITE` is consulted, and that one
-//! only selects write-versus-compare, so the corpus never depends on git state.
+//! only selects write-versus-compare, so the corpus never depends on git state. The
+//! provenance commit recorded in every file is the pinned literal `SOURCE_COMMIT`,
+//! not a `git rev-parse` call, for the same reason.
 //!
 //! Run:
 //! ```text
@@ -59,6 +61,18 @@ use zerocoin::ledger::transaction::{
 };
 use zerocoin::ledger::utxo::{UtxoError, UtxoSet};
 use zerocoin::params::{ChainParams, REGTEST_CHAIN};
+
+/// The commit whose build inputs (`src/`, `Cargo.toml`, `Cargo.lock`, `build.rs`)
+/// produced every expected value in this corpus.
+///
+/// This is a literal like every other input: querying `git` here would make the
+/// corpus depend on the checkout and break the determinism gate. When an intended
+/// change to a build input lands, regenerate the corpus and set this to the output
+/// of `git log -1 --format=%H -- zerocoin/src zerocoin/Cargo.toml zerocoin/Cargo.lock
+/// zerocoin/build.rs` in the same commit. `test/harness/run_vectors.py` rejects a
+/// word that is not 40 lowercase hex digits, and rejects a file whose value differs
+/// from the manifest's.
+const SOURCE_COMMIT: &str = "7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c";
 
 // ---------------------------------------------------------------------------
 // Fixtures — every one is a literal so the corpus cannot drift with the clock
@@ -108,7 +122,8 @@ fn envelope(group: &str, intent: &str, note: &str, cases: Vec<Value>) -> String 
         "intent": intent,
         "note": note,
         "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
-        "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow <this file>`",
+        "source_commit": SOURCE_COMMIT,
+        "provenance": "every expected value was produced by the shipping `zerocoin/` Rust code at `source_commit`; no value is transcribed from another implementation",
         "case_count": cases.len(),
         "cases": cases,
     });
@@ -2072,9 +2087,11 @@ fn corpus() -> Vec<(String, String)> {
         "schema": "zro-baseline-vectors/1",
         "phase": "P0",
         "description": "Deterministic baseline vectors for the ZeroCoin Rust implementation.",
-        "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow test/vectors/manifest.json`",
+        "provenance": "every expected value was produced by the shipping `zerocoin/` Rust code at `source_commit`; no value is transcribed from another implementation",
         "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
-        "regenerate": "ZRO_VECTOR_WRITE=1 with the same command",
+        "source_commit": SOURCE_COMMIT,
+        "regenerate": "ZRO_VECTOR_WRITE=1 with the same command, then review the diff",
+        "source_commit_rule": "newest commit touching zerocoin/src, Cargo.toml, Cargo.lock or build.rs; update it in the same commit that regenerates the corpus",
         "independent_verifier": "python test/harness/run_vectors.py",
         "determinism": [
             "no wall clock, RNG, wallet, data directory or network is used",

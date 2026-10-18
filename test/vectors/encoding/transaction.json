@@ -130,7 +130,8 @@
   "group": "encoding.transaction",
   "intent": "rule",
   "note": "Canonical transaction serialization, txid derivation and minimal-varint rejection.",
-  "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow <this file>`",
+  "provenance": "every expected value was produced by the shipping `zerocoin/` Rust code at `source_commit`; no value is transcribed from another implementation",
   "schema": "zro-baseline-vectors/1",
-  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors"
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+  "source_commit": "7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c"
 }

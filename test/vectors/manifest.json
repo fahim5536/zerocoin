@@ -80,9 +80,11 @@
     "Private values in crypto/addresses.json are published test scalars, never wallet keys."
   ],
   "phase": "P0",
-  "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow test/vectors/manifest.json`",
-  "regenerate": "ZRO_VECTOR_WRITE=1 with the same command",
+  "provenance": "every expected value was produced by the shipping `zerocoin/` Rust code at `source_commit`; no value is transcribed from another implementation",
+  "regenerate": "ZRO_VECTOR_WRITE=1 with the same command, then review the diff",
   "schema": "zro-baseline-vectors/1",
   "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+  "source_commit": "7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c",
+  "source_commit_rule": "newest commit touching zerocoin/src, Cargo.toml, Cargo.lock or build.rs; update it in the same commit that regenerates the corpus",
   "total_cases": 117
 }

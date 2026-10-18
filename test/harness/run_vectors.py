@@ -21,12 +21,31 @@ import zro_vectors  # noqa: E402
 
 DEFAULT_ROOT = pathlib.Path(__file__).resolve().parents[1] / "vectors"
 SCHEMA = "zro-baseline-vectors/1"
-ENVELOPE_FIELDS = ("schema", "group", "intent", "note", "source", "provenance", "case_count", "cases")
+ENVELOPE_FIELDS = (
+    "schema",
+    "group",
+    "intent",
+    "note",
+    "source",
+    "source_commit",
+    "provenance",
+    "case_count",
+    "cases",
+)
 CASE_FIELDS = ("id", "intent", "input", "expected", "independent_check")
 
 
 class CorpusError(Exception):
     """The corpus envelope or manifest is malformed."""
+
+
+def check_commit_word(path, value, field="source_commit"):
+    """Reject anything that is not a 40-digit lowercase hex commit id."""
+    if not isinstance(value, str) or len(value) != 40:
+        raise CorpusError(f"{path}: {field} must be a 40-digit hex commit id, got {value!r}")
+    if any(character not in "0123456789abcdef" for character in value):
+        raise CorpusError(f"{path}: {field} must be lowercase hex, got {value!r}")
+    return value
 
 
 def load_document(path):
@@ -36,7 +55,7 @@ def load_document(path):
         raise CorpusError(f"{path}: not valid JSON ({error})")
 
 
-def check_envelope(path, document, entry):
+def check_envelope(path, document, entry, source_commit):
     for field in ENVELOPE_FIELDS:
         if field not in document:
             raise CorpusError(f"{path}: the envelope is missing {field!r}")
@@ -46,6 +65,11 @@ def check_envelope(path, document, entry):
         raise CorpusError(f"{path}: group is {document['group']!r}, manifest says {entry['group']!r}")
     if not str(document["provenance"]).strip():
         raise CorpusError(f"{path}: provenance is empty")
+    recorded = check_commit_word(path, document["source_commit"])
+    if recorded != source_commit:
+        raise CorpusError(
+            f"{path}: source_commit is {recorded}, the manifest says {source_commit}"
+        )
     cases = document["cases"]
     if document["case_count"] != len(cases):
         raise CorpusError(
@@ -65,6 +89,9 @@ def load_corpus(root):
         raise CorpusError(f"{manifest_path}: schema is {manifest.get('schema')!r}")
     if not str(manifest.get("provenance", "")).strip():
         raise CorpusError(f"{manifest_path}: provenance is empty")
+    if "source_commit" not in manifest:
+        raise CorpusError(f"{manifest_path}: the manifest is missing 'source_commit'")
+    source_commit = check_commit_word(manifest_path, manifest["source_commit"])
 
     listed = set()
     ordered = []
@@ -76,7 +103,7 @@ def load_corpus(root):
             raise CorpusError(f"{path}: listed in the manifest but absent")
         listed.add(path)
         document = load_document(path)
-        check_envelope(path, document, entry)
+        check_envelope(path, document, entry, source_commit)
         # A file may cover a whole namespace (`chain/header.json` holds both
         # `chain.header.*` and `chain.merkle.*`), so the guard is the top-level
         # namespace rather than the full group name. It still catches a case
