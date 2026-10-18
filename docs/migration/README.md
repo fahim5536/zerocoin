@@ -5,19 +5,24 @@ migration: a complete audit of the existing Rust implementation, a study of Bitc
 Core used strictly as an educational reference, and a phased plan to build an
 independent C++ implementation beside the Rust one.
 
-> **Status: documents 01–05 are documentation only; 06 records phase P0.**
-> No Rust source file was modified, moved, or deleted. No C++, C, Python, CMake, or
-> Shell file has been added to the build. The Rust crate remains the reference
-> implementation and the only thing that currently produces blocks.
+> **Status: documents 01–05 are documentation only; 06 records phase P0 and 07
+> records phase P1 (kernel primitives, gate G1).**
+> No Rust source file was modified, moved, or deleted. The Rust crate remains the
+> reference implementation and the only thing that currently produces blocks.
+> The C++ kernel is built by developers and CI only and is never shipped.
 >
 > P0 added one Rust integration-test target (`zerocoin/tests/export_baseline_vectors.rs`)
 > and a standard-library-only Python harness under `test/`. Neither is part of the
 > node build. `06` records what they prove and what is still missing.
 >
-> P1 added `docs/consensus/` — the audited consensus specification and the C++ port
-> requirements — plus one more integration-test target
-> (`zerocoin/tests/consensus_rules.rs`). No Rust source file was modified and the P0
-> corpus was not regenerated.
+> The consensus audit added `docs/consensus/` — the audited consensus
+> specification and the C++ port requirements — plus one more integration-test
+> target (`zerocoin/tests/consensus_rules.rs`). No Rust source file was modified
+> and the P0 corpus was not regenerated. It is not one of the numbered port
+> phases in `03` §4.
+>
+> P1 (`03` §4) added the dependency-free C++ kernel under `kernel/` and its gate,
+> `scripts/gate-g1.ps1`. `07` records what it proves and what it does not.
 
 ---
 
@@ -89,6 +94,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\demos\regtest-maturity.ps1
 Get-ChildItem -Recurse -Filter *.rs src |
   ForEach-Object { (Get-Content -LiteralPath $_.FullName | Measure-Object -Line).Lines } |
   Measure-Object -Sum
+
+# 5. Gate G1: build the C++ kernel and replay its corpus slice
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\gate-g1.ps1
 ```
 
 The observed output of step 3 is transcribed in `01-architecture-audit.md` §12 and
@@ -111,6 +119,7 @@ ever be mistaken for a source change; the crate's own `target/` is git-ignored.
 | 04 | [Risk register](04-risk-register.md) | What can go wrong, how would we notice, and what do we do about it? |
 | 05 | [Test strategy](05-test-strategy.md) | How do we prove the C++ implementation is equivalent before it is trusted? |
 | 06 | [P0 baseline vectors](06-p0-baseline-vectors.md) | Which values must a port reproduce byte for byte, how were they proven, and what is still missing? |
+| 07 | [P1 kernel primitives](07-kernel-primitives-g1.md) | Which C++ primitives exist, how is the P0 corpus replayed against them, and what did gate G1 measure? |
 | P1 | [Consensus rules](../consensus/CONSENSUS_RULES.md) · [C++ port requirements](../consensus/CPP_PORT_REQUIREMENTS.md) | What exactly does consensus require today, with which source references, and what must a C++ port match? |
 
 ---

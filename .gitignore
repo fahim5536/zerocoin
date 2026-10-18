@@ -70,3 +70,16 @@ target/
 Thumbs.db
 desktop.ini
 *.log
+
+# --- 6. C++ kernel build trees -----------------------------------------------
+# The kernel is configured out of tree by scripts/gate-g1.ps1 into ./.build.
+# CMake output is never a source artefact, so a stray in-tree configure (or an
+# IDE that drops its own cache beside the sources) stays out of history too.
+/.build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+build.ninja
+.ninja_deps
+.ninja_log
+compile_commands.json
