@@ -3,7 +3,9 @@
 > Evidence labels follow `README.md` §1. The original P0 run was made on
 > 2026-10-18 against `main` = `2bc96d2acf9b3b73aea00a766514afb845cdb5e0`; the
 > `source_commit` amendment in §3.1 was made the same day against `main` =
-> `2ede9f5e006c28b66bcb58bed2f0c766f5d9dc00`. Both used Windows 24H2 with
+> `2ede9f5e006c28b66bcb58bed2f0c766f5d9dc00`, then rebased onto
+> `101479892b020aec44458d3639f6ce21de368d35` — which only adds a workflow file —
+> and re-run in full before it was pushed. Both used Windows 24H2 with
 > `cargo`/`rustc` 1.99.1 and Python 3.15.0. The version is toolchain-specific:
 > the default `stable-x86_64-pc-windows-msvc` toolchain on this machine reports
 > 1.99.0, while every command here names `+stable-x86_64-pc-windows-gnu`, which
