@@ -13,6 +13,11 @@ independent C++ implementation beside the Rust one.
 > P0 added one Rust integration-test target (`zerocoin/tests/export_baseline_vectors.rs`)
 > and a standard-library-only Python harness under `test/`. Neither is part of the
 > node build. `06` records what they prove and what is still missing.
+>
+> P1 added `docs/consensus/` — the audited consensus specification and the C++ port
+> requirements — plus one more integration-test target
+> (`zerocoin/tests/consensus_rules.rs`). No Rust source file was modified and the P0
+> corpus was not regenerated.
 
 ---
 
@@ -106,6 +111,7 @@ ever be mistaken for a source change; the crate's own `target/` is git-ignored.
 | 04 | [Risk register](04-risk-register.md) | What can go wrong, how would we notice, and what do we do about it? |
 | 05 | [Test strategy](05-test-strategy.md) | How do we prove the C++ implementation is equivalent before it is trusted? |
 | 06 | [P0 baseline vectors](06-p0-baseline-vectors.md) | Which values must a port reproduce byte for byte, how were they proven, and what is still missing? |
+| P1 | [Consensus rules](../consensus/CONSENSUS_RULES.md) · [C++ port requirements](../consensus/CPP_PORT_REQUIREMENTS.md) | What exactly does consensus require today, with which source references, and what must a C++ port match? |
 
 ---
 
