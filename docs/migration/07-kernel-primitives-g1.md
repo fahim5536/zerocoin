@@ -34,8 +34,8 @@ node is still the Rust binary.
 | Build | clean for all three targets under `-Werror` | gate output `[VERIFIED]` |
 | Rust suite | 263 passed, 0 failed across 7 targets | `cargo test --all-targets` `[VERIFIED]` |
 | P0 verifier | `PASS 112 ANCHOR 5 SKIP 0 FAIL 0` | `run_vectors.py --quiet` `[VERIFIED]` |
-| Rust sources changed | none | `git status --short` `[VERIFIED]` |
-| Corpus changed | none — `test/vectors/` is read-only to this phase | `git status --short` `[VERIFIED]` |
+| Rust sources changed | none | phase diff `[VERIFIED]` |
+| Corpus changed | none — `test/vectors/` is read-only to this phase | phase diff `[VERIFIED]` |
 | MSVC build | not attempted | `[UNVERIFIED]` |
 | Second host or compiler | not attempted | `[UNVERIFIED]` |
 
@@ -384,9 +384,10 @@ test.
 
 ## 10. Constraints honoured
 
-- **No Rust implementation change.** `git status --short` after the phase shows
-  `M .gitignore`, `?? kernel/`, `?? scripts/` — nothing under `zerocoin/src`,
-  `zerocoin/tests` or `test/vectors`.
+- **No Rust implementation change.** The phase's diff against the commit it was
+  built on touches only `.gitignore`, `docs/migration/`, `kernel/` and
+  `scripts/` — nothing under `zerocoin/src`, `zerocoin/tests` or `test/vectors`.
+  `git diff --stat 76545d6..HEAD` reproduces that at any later checkout.
 - **Nothing is shipped.** `kernel/` is a developer and CI artefact; the CMake
   project is not referenced by `Cargo.toml`, `build.rs` or any binary target.
 - **No consensus change.** The kernel reproduces the reference; the corpus is
