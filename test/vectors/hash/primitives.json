@@ -1,0 +1,69 @@
+{
+  "case_count": 5,
+  "cases": [
+    {
+      "expected": {
+        "sha256_hex": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+      },
+      "id": "hash.sha256.abc",
+      "independent_check": "NIST FIPS 180-4 published vector",
+      "input": {
+        "data_utf8": "abc"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "sha256_hex": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "id": "hash.sha256.empty",
+      "independent_check": "NIST FIPS 180-4 published vector",
+      "input": {
+        "data_utf8": ""
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "hash256": {
+          "display_hex": "f4c5fe869e4b618dc11726779a62b7ce8d9e1f4ca035dbd1d048431d7cc2ad67",
+          "internal_hex": "67adc27c1d4348d0d1db35a04c1f9e8dceb7629a772617c18d614b9e86fec5f4"
+        }
+      },
+      "id": "hash.sha256d.zerocoin",
+      "independent_check": "sha256d(x) == sha256(sha256(x))",
+      "input": {
+        "data_utf8": "zerocoin"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "hash160_hex": "751e76e8199196d454941c45d1b3a323f1433bd6"
+      },
+      "id": "hash.hash160.pubkey_scalar_1",
+      "independent_check": "RIPEMD160(SHA256(pubkey)) — Bitcoin's privkey-1 P2PKH vector",
+      "input": {
+        "pubkey_sec1_hex": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "display_hex": "00000000000000000000000000000000000000000000000000000000000000ab"
+      },
+      "id": "hash.display_reversal",
+      "independent_check": "F3: Display/explorer form reverses the internal big-endian bytes",
+      "input": {
+        "internal_hex": "ab00000000000000000000000000000000000000000000000000000000000000"
+      },
+      "intent": "oddity"
+    }
+  ],
+  "group": "hash",
+  "intent": "rule",
+  "note": "SHA-256, SHA-256d, HASH160 and the display byte-order rule.",
+  "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow <this file>`",
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors"
+}

@@ -1,0 +1,6 @@
+# The golden-vector corpus is compared byte for byte by
+# `cargo test --test export_baseline_vectors`. On a clone with
+# `core.autocrlf=true` an untranslated checkout would add CR bytes and the
+# comparison would fail, so line endings are pinned here. Every vector file is
+# generated with LF only.
+test/vectors/** text eol=lf

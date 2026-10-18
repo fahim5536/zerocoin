@@ -1,0 +1,290 @@
+{
+  "case_count": 10,
+  "cases": [
+    {
+      "expected": {
+        "rows": [
+          {
+            "committed_height": 0,
+            "height": 0,
+            "script_sig_hex": "00085a65726f436f696e",
+            "txid_internal_hex": "26dffb5b3e893e003984dcf8b1f312654c8a2d12bb387687ceab67436cc4fb36"
+          },
+          {
+            "committed_height": 1,
+            "height": 1,
+            "script_sig_hex": "0101085a65726f436f696e",
+            "txid_internal_hex": "5120d76fc164e7ad61abc0bba561bb19b4d87206da53fa2718b59058d1f77ea6"
+          },
+          {
+            "committed_height": 16,
+            "height": 16,
+            "script_sig_hex": "0110085a65726f436f696e",
+            "txid_internal_hex": "df79fb2e727b8fc1187daef39260730c6f3c40d76678ced93f10213bdbb0bb6c"
+          },
+          {
+            "committed_height": 127,
+            "height": 127,
+            "script_sig_hex": "017f085a65726f436f696e",
+            "txid_internal_hex": "9700c17b7493f5b1a80b22c1a26f8a2cfded9800fd2ba1702cfcbaafeaa48e14"
+          },
+          {
+            "committed_height": 128,
+            "height": 128,
+            "script_sig_hex": "028000085a65726f436f696e",
+            "txid_internal_hex": "f74221be0d84e3fde407921b6e33d3d90070c82c3441a29566aeaa7045212a2a"
+          },
+          {
+            "committed_height": 255,
+            "height": 255,
+            "script_sig_hex": "02ff00085a65726f436f696e",
+            "txid_internal_hex": "c4f43c719ba069a4fd671f0c13ac619d90ba3d296255052009c69983f423af9e"
+          },
+          {
+            "committed_height": 256,
+            "height": 256,
+            "script_sig_hex": "020001085a65726f436f696e",
+            "txid_internal_hex": "14d5329a33f5f8ec8b4372dbc2885ca80a8cdd5ca519706d1bc9a642f7226c64"
+          },
+          {
+            "committed_height": 65535,
+            "height": 65535,
+            "script_sig_hex": "03ffff00085a65726f436f696e",
+            "txid_internal_hex": "9c39a4cda3b101514217de77c5ffc02ed235b21e49111b7e96cac0ce15cbbbfe"
+          },
+          {
+            "committed_height": 1000000,
+            "height": 1000000,
+            "script_sig_hex": "0340420f085a65726f436f696e",
+            "txid_internal_hex": "7da1858f5bea38ea12bde7bae8d51762cb841da158f1f84595a804fd439b4de1"
+          },
+          {
+            "committed_height": 4294967295,
+            "height": 4294967295,
+            "script_sig_hex": "05ffffffff00085a65726f436f696e",
+            "txid_internal_hex": "ee0177c195ec7ba217546baa2d594ea75eb73db5c72c4d15f2ebed390fc9128b"
+          }
+        ]
+      },
+      "id": "reward.coinbase.height_commitment",
+      "independent_check": "script_num(height) pushed minimally, then the \"ZeroCoin\" tag",
+      "input": {
+        "payout_scalar": 1,
+        "rows": [
+          {
+            "height": 0,
+            "reward_fah": 0
+          },
+          {
+            "height": 1,
+            "reward_fah": 5000000000
+          },
+          {
+            "height": 16,
+            "reward_fah": 5000000000
+          },
+          {
+            "height": 127,
+            "reward_fah": 5000000000
+          },
+          {
+            "height": 128,
+            "reward_fah": 5000000000
+          },
+          {
+            "height": 255,
+            "reward_fah": 5000000000
+          },
+          {
+            "height": 256,
+            "reward_fah": 5000000000
+          },
+          {
+            "height": 65535,
+            "reward_fah": 5000000000
+          },
+          {
+            "height": 1000000,
+            "reward_fah": 312500000
+          },
+          {
+            "height": 4294967295,
+            "reward_fah": 0
+          }
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "claimed": 5000000000,
+        "error_kind": null,
+        "ok": true
+      },
+      "id": "reward.coinbase.valid_at_147",
+      "independent_check": "a coinbase claiming exactly the subsidy is accepted",
+      "input": {
+        "claimed": 5000000000,
+        "fees": 0,
+        "height": 147,
+        "subsidy_issued": 0
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "exact": {
+          "claimed": 5000000000,
+          "error_kind": null,
+          "ok": true
+        },
+        "underclaim": {
+          "claimed": 4999999999,
+          "error_kind": null,
+          "ok": true
+        },
+        "with_fee_expectation": {
+          "claimed": 5000000000,
+          "error_kind": null,
+          "ok": true
+        }
+      },
+      "id": "reward.coinbase.accepts_fees_and_underclaim",
+      "independent_check": "claiming less than subsidy+fees is legal; claiming less than fees is not",
+      "input": {
+        "rows": [
+          {
+            "claimed": 5000000000,
+            "fees": 0,
+            "height": 147,
+            "key": "exact"
+          },
+          {
+            "claimed": 4999999999,
+            "fees": 0,
+            "height": 147,
+            "key": "underclaim"
+          },
+          {
+            "claimed": 5000000000,
+            "fees": 250,
+            "height": 147,
+            "key": "with_fee_expectation"
+          }
+        ],
+        "subsidy_issued": 0
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "claimed": null,
+        "error_kind": "GenesisPremine",
+        "ok": false
+      },
+      "id": "reward.coinbase.reject_genesis_premine",
+      "independent_check": "frozen rule: the height-0 coinbase may claim exactly zero",
+      "input": {
+        "claimed": 1,
+        "fees": 0,
+        "height": 0
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "claimed": null,
+        "error_kind": "BadCoinbaseHeight",
+        "ok": false
+      },
+      "id": "reward.coinbase.reject_wrong_height",
+      "independent_check": "BIP-34 height commitment must match the block being validated",
+      "input": {
+        "block_height": 147,
+        "claimed": 5000000000,
+        "committed_height": 148
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "claimed": null,
+        "error_kind": "TooMuchReward",
+        "ok": false
+      },
+      "id": "reward.coinbase.reject_overclaim",
+      "independent_check": "one Fah above subsidy+fees is inflation",
+      "input": {
+        "claimed": 5000000001,
+        "height": 147
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "claimed": null,
+        "error_kind": "BelowFees",
+        "ok": false
+      },
+      "id": "reward.coinbase.reject_below_fees",
+      "independent_check": "a coinbase must carry at least the fees it collects",
+      "input": {
+        "claimed": 0,
+        "fees": 1,
+        "height": 147
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "claimed": null,
+        "error_kind": "SupplyCapExceeded",
+        "ok": false
+      },
+      "id": "reward.coinbase.reject_supply_cap",
+      "independent_check": "the running subsidy may never pass 21,000,000 ZRO",
+      "input": {
+        "claimed": 5000000000,
+        "fees": 0,
+        "height": 1,
+        "subsidy_issued": 2100000000000000
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "claimed": null,
+        "error_kind": "NotCoinbase",
+        "ok": false
+      },
+      "id": "reward.coinbase.reject_not_coinbase",
+      "independent_check": "the first transaction of a block must spend the null outpoint",
+      "input": {
+        "tx_hex": "010000000222222222222222222222222222222222222222222222222222222222222222220100000000feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "pool_total": 5000000000,
+        "solo_total": 5000000000
+      },
+      "id": "reward.coinbase.pool_invariance",
+      "independent_check": "a pool coinbase redistributes the same total, never enlarges it",
+      "input": {
+        "height": 147,
+        "weights": [
+          2500000000,
+          2500000000
+        ]
+      },
+      "intent": "rule"
+    }
+  ],
+  "group": "reward.coinbase",
+  "intent": "rule",
+  "note": "BIP-34 height commitment and every coinbase acceptance rule.",
+  "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow <this file>`",
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors"
+}

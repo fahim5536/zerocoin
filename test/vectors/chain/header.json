@@ -1,0 +1,170 @@
+{
+  "case_count": 8,
+  "cases": [
+    {
+      "expected": {
+        "pow_hash": {
+          "display_hex": "a399589f27621a107bc9bd4b0f98e0311a369d5e9ae4fc059874dc8bb894eeb4",
+          "internal_hex": "b4ee94b88bdc749805fce49a5e9d361a31e0980f4bbdc97b101a62279f5899a3"
+        },
+        "preimage_hex": "5a524f2f6865616465722f76310001000000004f525a01000000000000003333333333333333333333333333333333333333333333333333333333333333444444444444444444444444444444444444444444444444444444444444444401f1536500000000ffff7f2000",
+        "preimage_len": 107
+      },
+      "id": "chain.header.preimage_regtest_h1",
+      "independent_check": "ZRO/header/v1\\0 || version || chain || height || prev || merkle || time || bits || engine",
+      "input": {
+        "chain": 1515343616,
+        "difficulty_bits": 545259519,
+        "engine_id": 0,
+        "height": 1,
+        "merkle_root_hex": "4444444444444444444444444444444444444444444444444444444444444444",
+        "nonce": 0,
+        "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+        "timestamp": 1700000001,
+        "version": 1
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "pow_hash": {
+          "display_hex": "3934a506d2322705245b156dc351fd70e3f61d6295a2c717d15bfb397085c8c7",
+          "internal_hex": "c7c8857039fb5bd117c7a295621df6e370fd51c36d155b24052732d206a53439"
+        },
+        "preimage_hex": "5a524f2f6865616465722f76310001000000004f525a01000000000000003333333333333333333333333333333333333333333333333333333333333333444444444444444444444444444444444444444444444444444444444444444401f1536500000000ffff7f2000"
+      },
+      "id": "chain.header.preimage_regtest_h1_nonce_42",
+      "independent_check": "the nonce is outside the preimage and is appended by the engine",
+      "input": {
+        "chain": 1515343616,
+        "difficulty_bits": 545259519,
+        "engine_id": 0,
+        "height": 1,
+        "merkle_root_hex": "4444444444444444444444444444444444444444444444444444444444444444",
+        "nonce": 42,
+        "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+        "timestamp": 1700000001,
+        "version": 1
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "pinned_anchor": {
+          "display_hex": "63a2ab2e0016b1243ff9f62931072078f62a482c9a0ddaa390a4c355e3f6f7a3",
+          "internal_hex": "a3f7f6e355c3a490a3da0d9a2c482af67820073129f6f93f24b116002eaba263"
+        },
+        "preimage_digest": {
+          "display_hex": "63a2ab2e0016b1243ff9f62931072078f62a482c9a0ddaa390a4c355e3f6f7a3",
+          "internal_hex": "a3f7f6e355c3a490a3da0d9a2c482af67820073129f6f93f24b116002eaba263"
+        },
+        "preimage_hex": "5a524f2f6865616465722f76310001000000014f525a00000000000000000000000000000000000000000000000000000000000000000000000000000000e94d9c36f8d96364c3404380d0d5dd132a4b0eea7c33af144ef51c163d5a41898085746700000000ffff001e01"
+      },
+      "id": "chain.header.mainnet_genesis_preimage_digest",
+      "independent_check": "cross-check against immutability::GENESIS_PREIMAGE_DIGEST_MAINNET",
+      "input": {
+        "chain": 1515343617,
+        "difficulty_bits": 503382015,
+        "engine_id": 1,
+        "height": 0,
+        "merkle_root_hex": "e94d9c36f8d96364c3404380d0d5dd132a4b0eea7c33af144ef51c163d5a4189",
+        "nonce": 0,
+        "previous_hash_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+        "timestamp": 1735689600,
+        "version": 1
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "ebbcf2fd9a0d55c5bb840db45530046692a16cd2d6588b932ce23d954ffadfde",
+          "internal_hex": "dedffa4f953de22c938b58d6d26ca19266043055b40d84bbc5550d9afdf2bceb"
+        }
+      },
+      "id": "chain.merkle.empty",
+      "independent_check": "sha256d(\"ZRO/merkle:empty\\0\") — a domain tag, not sha256d(\"\")",
+      "input": {
+        "leaves": 0
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+          "internal_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      },
+      "id": "chain.merkle.single",
+      "independent_check": "one leaf is its own root",
+      "input": {
+        "leaves_hex": [
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "ba982c0808a9a03c4e958ae612516f85faac3780dcb34d9ab83ceeaf74b54011",
+          "internal_hex": "1140b574afee3cb89a4db3dc8037acfa856f5112e68a954e3ca0a908082c98ba"
+        }
+      },
+      "id": "chain.merkle.two",
+      "independent_check": "sha256d(left || right)",
+      "input": {
+        "leaves_hex": [
+          "1111111111111111111111111111111111111111111111111111111111111111",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "e6f5f3a082e7117eca9f5b077b5f9e08a64c213c92f4b6377af3825e5c89cdca",
+          "internal_hex": "cacd895c5e82f37a37b6f4923c214ca6089e5f7b075b9fca7e11e782a0f3f5e6"
+        }
+      },
+      "id": "chain.merkle.three",
+      "independent_check": "odd trailing leaf is duplicated, never promoted",
+      "input": {
+        "leaves_hex": [
+          "1111111111111111111111111111111111111111111111111111111111111111",
+          "2222222222222222222222222222222222222222222222222222222222222222",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "b0f4d75306a0fe052cbbd283dbb8d35b8881f0693d94a7b1d7520d558d147dce",
+          "internal_hex": "ce7d148d550d52d7b1a7943d69f081885bd3b8db83d2bb2c05fea00653d7f4b0"
+        }
+      },
+      "id": "chain.merkle.five",
+      "independent_check": "two duplication rounds: 5 -> 3 -> 2 -> 1",
+      "input": {
+        "leaves_hex": [
+          "1111111111111111111111111111111111111111111111111111111111111111",
+          "2222222222222222222222222222222222222222222222222222222222222222",
+          "3333333333333333333333333333333333333333333333333333333333333333",
+          "4444444444444444444444444444444444444444444444444444444444444444",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ]
+      },
+      "intent": "rule"
+    }
+  ],
+  "group": "chain.header",
+  "intent": "rule",
+  "note": "Block-header preimage (107 bytes) and the Merkle folding rule.",
+  "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow <this file>`",
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors"
+}

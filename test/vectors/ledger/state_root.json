@@ -1,0 +1,259 @@
+{
+  "case_count": 13,
+  "cases": [
+    {
+      "expected": {
+        "pinned_anchor": {
+          "display_hex": "56944c5d3f98413ef45cf54545538103cc9f298e0575820ad3591376e2e0f65d",
+          "internal_hex": "5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456"
+        },
+        "root": {
+          "display_hex": "56944c5d3f98413ef45cf54545538103cc9f298e0575820ad3591376e2e0f65d",
+          "internal_hex": "5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456"
+        }
+      },
+      "id": "ledger.state_root.empty",
+      "independent_check": "cross-check against immutability::EMPTY_STATE_ROOT",
+      "input": {
+        "entries": 0
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "pinned_anchor": {
+          "display_hex": "e23934ca69eb2d686cb5f398a7bb924ee98d3869981a45182aad8cf8348421ca",
+          "internal_hex": "ca218434f88cad2a18451a9869388de94e92bba798f3b56c682deb69ca3439e2"
+        },
+        "root": {
+          "display_hex": "e23934ca69eb2d686cb5f398a7bb924ee98d3869981a45182aad8cf8348421ca",
+          "internal_hex": "ca218434f88cad2a18451a9869388de94e92bba798f3b56c682deb69ca3439e2"
+        }
+      },
+      "id": "ledger.state_root.layout_probe",
+      "independent_check": "cross-check against immutability::STATE_ROOT_LAYOUT_PROBE",
+      "input": {
+        "entry_0": {
+          "height": 3,
+          "is_coinbase": true,
+          "script_hex": "76a914abcd88ac",
+          "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+          "value": 1234567890123,
+          "vout": 513
+        },
+        "entry_1": {
+          "height": 42,
+          "is_coinbase": false,
+          "script_hex": "",
+          "txid_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+          "value": 1,
+          "vout": 7
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "ascending": {
+          "display_hex": "4771c2b3e5c2932877704a3c5877cb157acc828f1a0ed6bd3a8bfe7bf8631591",
+          "internal_hex": "911563f87bfe8b3abdd60e1a8f82cc7a15cb77583c4a70772893c2e5b3c27147"
+        },
+        "descending": {
+          "display_hex": "4771c2b3e5c2932877704a3c5877cb157acc828f1a0ed6bd3a8bfe7bf8631591",
+          "internal_hex": "911563f87bfe8b3abdd60e1a8f82cc7a15cb77583c4a70772893c2e5b3c27147"
+        },
+        "equal": true
+      },
+      "id": "ledger.state_root.order_independence",
+      "independent_check": "entries iterate in outpoint order (BTreeMap), so insertion order cannot leak",
+      "input": {
+        "entries": [
+          {
+            "height": 7,
+            "is_coinbase": false,
+            "script_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+            "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+            "value": 1,
+            "vout": 9
+          },
+          {
+            "height": 7,
+            "is_coinbase": false,
+            "script_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+            "txid_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+            "value": 2,
+            "vout": 0
+          },
+          {
+            "height": 7,
+            "is_coinbase": false,
+            "script_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+            "txid_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+            "value": 3,
+            "vout": 1
+          }
+        ],
+        "insertion_orders": [
+          "ascending",
+          "descending"
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "balance_of_payout_script": 5000000000,
+        "entries": 1,
+        "root": {
+          "display_hex": "bd15be822cde287cf2a02d796420c5d1fd8900a057cd3f3348e4cba8c5d6040f",
+          "internal_hex": "0f04d6c5a8cbe448333fcd57a00089fdd1c52064792da0f27c28de2c82be15bd"
+        },
+        "txid": {
+          "display_hex": "a67ef7d15890b51827fa53da0672d8b419bb61a5bbc0ab61ade764c16fd72051",
+          "internal_hex": "5120d76fc164e7ad61abc0bba561bb19b4d87206da53fa2718b59058d1f77ea6"
+        }
+      },
+      "id": "ledger.state_root.funded_coinbase",
+      "independent_check": "a coinbase output is inserted with is_coinbase = 1",
+      "input": {
+        "height": 1,
+        "payout_scalar": 1,
+        "subsidy_fah": 5000000000
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "entries": 1,
+        "fee": 1000,
+        "payout_balance": 0,
+        "receiver_balance": 4999999000,
+        "root": {
+          "display_hex": "c8398b10aca05be2674ca941cb6bf70ffd64fe78996c2a0902bab57fe6e99a4b",
+          "internal_hex": "4b9ae9e67fb5ba02092a6c9978fe64fd0ff76bcb41a94c67e25ba0ac108b39c8"
+        },
+        "txid": {
+          "display_hex": "86c9b89b8f100dfaa0b8e046fde0e20d0dfb138faa84461def7b81d844b2444d",
+          "internal_hex": "4d44b244d8817bef1d4684aa8f13fb0d0de2e0fd46e0b8a0fa0d108f9bb8c986"
+        }
+      },
+      "id": "ledger.state_root.after_signed_spend",
+      "independent_check": "spend at exactly height+100 succeeds; the set then holds one ordinary output",
+      "input": {
+        "fee_fah": 1000,
+        "funded_height": 1,
+        "payout_scalar": 1,
+        "receiver_scalar": 2,
+        "spend_height": 101
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "kind": "ImmatureCoinbase"
+      },
+      "id": "ledger.state_root.immature_coinbase",
+      "independent_check": "off-by-one at the maturity boundary must reject, not clamp",
+      "input": {
+        "matures_at": 101,
+        "mined_at": 1,
+        "spend_height": 100
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "kind": "DoubleSpend"
+      },
+      "id": "ledger.state_root.double_spend",
+      "independent_check": "phase 0 detects the duplicate before any script work",
+      "input": {
+        "occurrences": 2,
+        "outpoint": "coinbase:0"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "kind": "MissingInput"
+      },
+      "id": "ledger.state_root.missing_input",
+      "independent_check": "a removed outpoint surfaces as MissingInput, not as a second spend",
+      "input": {
+        "outpoint": "coinbase:0",
+        "retried_at": 102,
+        "spent_at": 101
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "kind": "NegativeFee"
+      },
+      "id": "ledger.state_root.negative_fee",
+      "independent_check": "outputs may never exceed inputs",
+      "input": {
+        "inputs": 5000000000,
+        "outputs": 5000000001
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "kind": "NoInputs"
+      },
+      "id": "ledger.state_root.no_inputs",
+      "independent_check": "checked before any outpoint lookup",
+      "input": {
+        "inputs": 0
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "kind": "ScriptInvalid"
+      },
+      "id": "ledger.state_root.script_invalid",
+      "independent_check": "a well-formed signature by the wrong key is a ScriptInvalid",
+      "input": {
+        "payout_script_from": 1,
+        "signer": 2
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "kind": "InputOverflow"
+      },
+      "id": "ledger.state_root.input_overflow",
+      "independent_check": "the input sum is checked, not wrapping",
+      "input": {
+        "entry_values": [
+          18446744073709551615,
+          18446744073709551615
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "kind": "OutputOverflow"
+      },
+      "id": "ledger.state_root.output_overflow",
+      "independent_check": "the output sum is checked before the fee comparison",
+      "input": {
+        "output_values": [
+          18446744073709551615,
+          2
+        ]
+      },
+      "intent": "rule"
+    }
+  ],
+  "group": "ledger.state_root",
+  "intent": "rule",
+  "note": "UTXO state commitment: the empty set, the layout probe, and a funded spend.",
+  "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow <this file>`",
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors"
+}

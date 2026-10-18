@@ -1,0 +1,136 @@
+{
+  "case_count": 5,
+  "cases": [
+    {
+      "expected": {
+        "is_coinbase": false,
+        "output_value": 5000000000,
+        "roundtrip": true,
+        "serialized_hex": "010000000111111111111111111111111111111111111111111111111111111111111111110000000003010203ffffffff0100f2052a010000000376a91400000000",
+        "serialized_len": 66,
+        "txid": {
+          "display_hex": "81fcbe67eaea8241646540b55678284eda3e249fcd72e42d4d01bdbe7d5681f0",
+          "internal_hex": "f081567dbebd014d2de472cd9f243eda4e287856b54065644182eaea67befc81"
+        }
+      },
+      "id": "encoding.transaction.sample",
+      "independent_check": "version LE || varint(in) || inputs || varint(out) || outputs || lock_time LE",
+      "input": {
+        "inputs": [
+          {
+            "script_sig_hex": "010203",
+            "sequence": 4294967295,
+            "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+            "vout": 0
+          }
+        ],
+        "lock_time": 0,
+        "outputs": [
+          {
+            "script_pubkey_hex": "76a914",
+            "value": 5000000000
+          }
+        ],
+        "version": 1
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "serialized_hex": "02000000000000000000",
+        "txid": {
+          "display_hex": "4ebd325a4b394cff8c57e8317ccf5a8d0e2bdf1b8526f8aad6c8e43d8240621a",
+          "internal_hex": "1a6240823de4c8d6aaf826851bdf2b0e8d5acf7c31e8578cff4c394b5a32bd4e"
+        }
+      },
+      "id": "encoding.transaction.empty",
+      "independent_check": "degenerate encoding: no inputs, no outputs, lock time only",
+      "input": {
+        "inputs": 0,
+        "lock_time": 0,
+        "outputs": 0,
+        "version": 2
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "output_value": 2100000000000001,
+        "serialized_hex": "010000000222222222222222222222222222222222222222222222222222222222222222220100000000feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700",
+        "txid": {
+          "display_hex": "35bd8c8b65be3b3e69dbc1bf3d037696d692944d8255e18f56734bbbd95bcd63",
+          "internal_hex": "63cd5bd9bb4b73568fe155824d9492d69676033dbfc1db693e3bbe658b8cbd35"
+        }
+      },
+      "id": "encoding.transaction.payment",
+      "independent_check": "multi-input ordering and the 0x6a single-byte output script",
+      "input": {
+        "inputs": [
+          {
+            "script_sig_hex": "",
+            "sequence": 4294967294,
+            "txid_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+            "vout": 1
+          },
+          {
+            "script_sig_hex": "",
+            "sequence": 0,
+            "txid_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+            "vout": 7
+          }
+        ],
+        "lock_time": 500000,
+        "outputs": [
+          {
+            "script_pubkey_hex": "",
+            "value": 1
+          },
+          {
+            "script_pubkey_hex": "6a",
+            "value": 2100000000000000
+          }
+        ],
+        "version": 1
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "committed_height": 147,
+        "is_coinbase": true,
+        "output_value": 5000000000,
+        "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+        "script_sig_hex": "029300085a65726f436f696e",
+        "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0c029300085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+        "txid": {
+          "display_hex": "94da684a4970e8b8b59fd8a7adbb3dcfeb1493b91838d0766d2da5d97dfa03a9",
+          "internal_hex": "a903fa7dd9a52d6d76d03818b99314ebcf3dbbada7d89fb5b8e870494a68da94"
+        }
+      },
+      "id": "encoding.transaction.coinbase_147",
+      "independent_check": "BIP-34 height push + \"ZeroCoin\" tag in the scriptSig",
+      "input": {
+        "height": 147,
+        "payout_scalar": 1
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "kind": "NonMinimalVarInt"
+      },
+      "id": "encoding.transaction.decode_nonminimal_varint",
+      "independent_check": "0xfd 0x01 0x00 encodes 1 non-minimally and must be refused",
+      "input": {
+        "bytes_hex": "01000000fd0100"
+      },
+      "intent": "rule"
+    }
+  ],
+  "group": "encoding.transaction",
+  "intent": "rule",
+  "note": "Canonical transaction serialization, txid derivation and minimal-varint rejection.",
+  "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow <this file>`",
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors"
+}

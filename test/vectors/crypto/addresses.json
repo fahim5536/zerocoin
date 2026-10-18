@@ -1,0 +1,94 @@
+{
+  "case_count": 6,
+  "cases": [
+    {
+      "expected": {
+        "address_mainnet": "1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH",
+        "address_regtest": "mrCDrCybB6J1vRfbwM5hemdJz73FwDBC8r",
+        "hash160_hex": "751e76e8199196d454941c45d1b3a323f1433bd6",
+        "label": "secp256k1 scalar 1",
+        "pubkey_sec1_hex": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "roundtrip": true
+      },
+      "id": "crypto.address.published_scalar_1",
+      "independent_check": "Bitcoin's privkey-1 vector: 0279be66... / hash160 751e76e8...",
+      "input": {
+        "scalar_hex": "0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "address_mainnet": "1cMh228HTCiwS8ZsaakH8A8wze1JR5ZsP",
+        "address_regtest": "mg8Jz5776UdyiYcBb9Z873NTozEiADRW5H",
+        "hash160_hex": "06afd46bcdfd22ef94ac122aa11f241244a37ecc",
+        "label": "secp256k1 scalar 2",
+        "pubkey_sec1_hex": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+        "roundtrip": true
+      },
+      "id": "crypto.address.published_scalar_2",
+      "independent_check": "hash160 06afd46b... is the published privkey-2 vector",
+      "input": {
+        "scalar_hex": "0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "address_mainnet": "1APsmoXnWHByUVEdjiyGEMaXwJxaGsdEJn",
+        "address_regtest": "mpuq4rcmKJdEFbiFTHwe4GnroJZHEWf8Fq",
+        "hash160_hex": "670caa79e51d78ed0c583b89ff39d9c49b7199e7",
+        "label": "the [9u8; 32] key used by the crate's own tests",
+        "pubkey_sec1_hex": "0256b328b30c8bf5839e24058747879408bdb36241dc9c2e7c619faa12b2920967",
+        "roundtrip": true
+      },
+      "id": "crypto.address.repo_key_09",
+      "independent_check": "present only to mirror in-repo fixtures; no external anchor",
+      "input": {
+        "scalar_hex": "0909090909090909090909090909090909090909090909090909090909090909"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "kind": "WrongNetwork"
+      },
+      "id": "crypto.address.reject_wrong_network",
+      "independent_check": "the version byte ties an address to one network",
+      "input": {
+        "address": "1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH",
+        "expected_version": 111
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "kind": "BadChecksum"
+      },
+      "id": "crypto.address.reject_typo",
+      "independent_check": "a single mistyped character must fail the 4-byte checksum",
+      "input": {
+        "address": "mrCDrCybB6J1vRfbwM5hemdJz73FwDBC8r",
+        "corrupted": "mrCDrCybB6J1vRfbwM5hemdJz73FwDBC81"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "kind": "InvalidSecret"
+      },
+      "id": "crypto.address.reject_zero_scalar",
+      "independent_check": "0 is not a valid secp256k1 scalar",
+      "input": {
+        "scalar_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "intent": "rule"
+    }
+  ],
+  "group": "crypto.address",
+  "intent": "rule",
+  "note": "Base58Check P2PKH addresses built from published secp256k1 test scalars.",
+  "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow <this file>`",
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors"
+}

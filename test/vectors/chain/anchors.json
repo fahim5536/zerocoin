@@ -1,0 +1,188 @@
+{
+  "case_count": 6,
+  "cases": [
+    {
+      "expected": {
+        "empty_state_root": {
+          "display_hex": "56944c5d3f98413ef45cf54545538103cc9f298e0575820ad3591376e2e0f65d",
+          "internal_hex": "5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456"
+        },
+        "genesis_coinbase_txid": {
+          "display_hex": "89415a3d161cf54e14af337cea0e4b2a13ddd5d0804340c36463d9f8369c4de9",
+          "internal_hex": "e94d9c36f8d96364c3404380d0d5dd132a4b0eea7c33af144ef51c163d5a4189"
+        },
+        "genesis_hash_devnet": {
+          "display_hex": "764b310525f98e1158dfac10c9f831e8ce0b6be8ec6086811f84dc6493e42e7f",
+          "internal_hex": "7f2ee49364dc841f818660ece86b0bcee831f8c910acdf58118ef92505314b76"
+        },
+        "genesis_hash_regtest": {
+          "display_hex": "48910e1ffe15070a403bb2d89e0d7fc96c69a63c8b06e21da9fd404440df0a3f",
+          "internal_hex": "3f0adf404440fda91de2068b3ca6696cc97f0d9ed8b23b400a0715fe1f0e9148"
+        },
+        "genesis_merkle_root": {
+          "display_hex": "89415a3d161cf54e14af337cea0e4b2a13ddd5d0804340c36463d9f8369c4de9",
+          "internal_hex": "e94d9c36f8d96364c3404380d0d5dd132a4b0eea7c33af144ef51c163d5a4189"
+        },
+        "genesis_preimage_digest_mainnet": {
+          "display_hex": "63a2ab2e0016b1243ff9f62931072078f62a482c9a0ddaa390a4c355e3f6f7a3",
+          "internal_hex": "a3f7f6e355c3a490a3da0d9a2c482af67820073129f6f93f24b116002eaba263"
+        },
+        "state_root_layout_probe": {
+          "display_hex": "e23934ca69eb2d686cb5f398a7bb924ee98d3869981a45182aad8cf8348421ca",
+          "internal_hex": "ca218434f88cad2a18451a9869388de94e92bba798f3b56c682deb69ca3439e2"
+        }
+      },
+      "id": "chain.anchors.pinned_constants",
+      "independent_check": "the seven boot-time anchors; a C++ node must boot on exactly these",
+      "input": {
+        "source": "consensus/immutability.rs"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "committed_height": 0,
+        "is_coinbase": true,
+        "merkle_root": {
+          "display_hex": "89415a3d161cf54e14af337cea0e4b2a13ddd5d0804340c36463d9f8369c4de9",
+          "internal_hex": "e94d9c36f8d96364c3404380d0d5dd132a4b0eea7c33af144ef51c163d5a4189"
+        },
+        "output_value": 0,
+        "outputs": 0,
+        "script_sig_hex": "003e4e6f207072656d696e652c206e6f206f776e65723a205a65726f436f696e20697320697373756564206f6e6c792062792070726f6f66206f6620776f726b",
+        "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff40003e4e6f207072656d696e652c206e6f206f776e65723a205a65726f436f696e20697320697373756564206f6e6c792062792070726f6f66206f6620776f726bffffffff0000000000",
+        "txid": {
+          "display_hex": "89415a3d161cf54e14af337cea0e4b2a13ddd5d0804340c36463d9f8369c4de9",
+          "internal_hex": "e94d9c36f8d96364c3404380d0d5dd132a4b0eea7c33af144ef51c163d5a4189"
+        }
+      },
+      "id": "chain.anchors.genesis_coinbase",
+      "independent_check": "block 0 mints nothing: the anti-premine rule as one empty output vector",
+      "input": {
+        "message_utf8": "No premine, no owner: ZeroCoin is issued only by proof of work"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "hash": {
+          "display_hex": "48910e1ffe15070a403bb2d89e0d7fc96c69a63c8b06e21da9fd404440df0a3f",
+          "internal_hex": "3f0adf404440fda91de2068b3ca6696cc97f0d9ed8b23b400a0715fe1f0e9148"
+        },
+        "nonce": 0,
+        "pinned_anchor": {
+          "display_hex": "48910e1ffe15070a403bb2d89e0d7fc96c69a63c8b06e21da9fd404440df0a3f",
+          "internal_hex": "3f0adf404440fda91de2068b3ca6696cc97f0d9ed8b23b400a0715fe1f0e9148"
+        },
+        "preimage_hex": "5a524f2f6865616465722f76310001000000004f525a00000000000000000000000000000000000000000000000000000000000000000000000000000000e94d9c36f8d96364c3404380d0d5dd132a4b0eea7c33af144ef51c163d5a41898085746700000000ffff7f2000",
+        "transactions": 1
+      },
+      "id": "chain.anchors.regtest_genesis",
+      "independent_check": "mining searches nonces upward from zero, so the nonce is reproducible",
+      "input": {
+        "allow_pow_retarget": false,
+        "base58_pubkey_prefix": 111,
+        "chain_id": 1515343616,
+        "default_p2p_port": 18444,
+        "default_rpc_port": 18443,
+        "engine_id": 0,
+        "engine_name": "sha256d-trivial",
+        "genesis_bits": 545259519,
+        "name": "regtest"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "hash": {
+          "display_hex": "764b310525f98e1158dfac10c9f831e8ce0b6be8ec6086811f84dc6493e42e7f",
+          "internal_hex": "7f2ee49364dc841f818660ece86b0bcee831f8c910acdf58118ef92505314b76"
+        },
+        "nonce": 0,
+        "pinned_anchor": {
+          "display_hex": "764b310525f98e1158dfac10c9f831e8ce0b6be8ec6086811f84dc6493e42e7f",
+          "internal_hex": "7f2ee49364dc841f818660ece86b0bcee831f8c910acdf58118ef92505314b76"
+        }
+      },
+      "id": "chain.anchors.devnet_genesis",
+      "independent_check": "the devnet engine is scratchpad-based, so this also pins its genesis path",
+      "input": {
+        "allow_pow_retarget": true,
+        "base58_pubkey_prefix": 111,
+        "chain_id": 1515343618,
+        "default_p2p_port": 18233,
+        "default_rpc_port": 18232,
+        "engine_id": 1,
+        "engine_name": "scratchpad-memory-hard",
+        "genesis_bits": 545259519,
+        "name": "devnet"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "ok": true
+      },
+      "id": "chain.anchors.boot_invariants",
+      "independent_check": "every anchor re-derived at boot; a mismatch refuses to start",
+      "input": {
+        "call": "verify_boot_invariants()"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "devnet": {
+          "allow_pow_retarget": true,
+          "base58_pubkey_prefix": 111,
+          "chain_id": 1515343618,
+          "default_p2p_port": 18233,
+          "default_rpc_port": 18232,
+          "engine_id": 1,
+          "engine_name": "scratchpad-memory-hard",
+          "genesis_bits": 545259519,
+          "name": "devnet"
+        },
+        "genesis_timestamp": 1735689600,
+        "mainnet": {
+          "allow_pow_retarget": true,
+          "base58_pubkey_prefix": 0,
+          "chain_id": 1515343617,
+          "default_p2p_port": 8233,
+          "default_rpc_port": 8232,
+          "engine_id": 1,
+          "engine_name": "scratchpad-memory-hard",
+          "genesis_bits": 503382015,
+          "name": "mainnet"
+        },
+        "regtest": {
+          "allow_pow_retarget": false,
+          "base58_pubkey_prefix": 111,
+          "chain_id": 1515343616,
+          "default_p2p_port": 18444,
+          "default_rpc_port": 18443,
+          "engine_id": 0,
+          "engine_name": "sha256d-trivial",
+          "genesis_bits": 545259519,
+          "name": "regtest"
+        }
+      },
+      "id": "chain.anchors.network_params",
+      "independent_check": "chain ids, ports, address prefixes and engine ids per network",
+      "input": {
+        "networks": [
+          "mainnet",
+          "devnet",
+          "regtest"
+        ]
+      },
+      "intent": "rule"
+    }
+  ],
+  "group": "chain.anchors",
+  "intent": "rule",
+  "note": "The pinned consensus anchors, the genesis block, and per-network parameters.",
+  "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow <this file>`",
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors"
+}

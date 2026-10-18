@@ -1,0 +1,275 @@
+{
+  "case_count": 15,
+  "cases": [
+    {
+      "expected": {
+        "max_adjustment_factor": 4,
+        "pow_limit_bits": 503382015,
+        "retarget_interval": 1440,
+        "target_spacing_seconds": 60,
+        "target_window_seconds": 86400
+      },
+      "id": "difficulty.params",
+      "independent_check": "1,440 blocks x 60 s = 86,400 s = 24 h",
+      "input": {
+        "network": "all three share one schedule"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "above_floor": {
+          "bits": 553713663,
+          "error_kind": "TargetAbovePowLimit",
+          "ok": false
+        },
+        "at_floor": {
+          "bits": 503382015,
+          "error_kind": null,
+          "ok": true
+        },
+        "difficulty_one": {
+          "bits": 486604799,
+          "error_kind": null,
+          "ok": true
+        },
+        "zero": {
+          "bits": 0,
+          "error_kind": "ZeroTarget",
+          "ok": false
+        }
+      },
+      "id": "difficulty.validate_bits",
+      "independent_check": "a block's own bits must be non-zero and no easier than the floor",
+      "input": {
+        "bits": {
+          "above_floor": 553713663,
+          "at_floor": 503382015,
+          "difficulty_one": 486604799,
+          "zero": 0
+        },
+        "pow_limit_bits": 503382015
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "all_ones_hash": false,
+        "equal_to_target": true,
+        "zero_hash": true
+      },
+      "id": "difficulty.hash_meets_target",
+      "independent_check": "comparison is on the big-endian byte value and is inclusive",
+      "input": {
+        "bits": 486604799
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "difficulty_one": "0000000000000000000000000000000000000000000000000000000100010001",
+        "floor": "0000000000000000000000000000000000000000000000000000000001000100",
+        "trivial": "0000000000000000000000000000000000000000000000000000000000000002",
+        "zero_target": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "id": "difficulty.required_work",
+      "independent_check": "(~target) / (target + 1) + 1",
+      "input": {
+        "bits": {
+          "difficulty_one": 486604799,
+          "floor": 503382015,
+          "trivial": 545259519,
+          "zero_target": 0
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "double_window": {
+          "actual_window_seconds": 172800,
+          "next_bits": 469893118,
+          "next_target_be_hex": "0000000001fffe00000000000000000000000000000000000000000000000000",
+          "prev_bits": 469827583
+        },
+        "half_window": {
+          "actual_window_seconds": 43200,
+          "next_bits": 461373312,
+          "next_target_be_hex": "00000000007fff80000000000000000000000000000000000000000000000000",
+          "prev_bits": 469827583
+        },
+        "max_u64": {
+          "actual_window_seconds": 18446744073709551615,
+          "next_bits": 470024188,
+          "next_target_be_hex": "0000000003fffc00000000000000000000000000000000000000000000000000",
+          "prev_bits": 469827583
+        },
+        "on_schedule": {
+          "actual_window_seconds": 86400,
+          "next_bits": 469827583,
+          "next_target_be_hex": "0000000000ffff00000000000000000000000000000000000000000000000000",
+          "prev_bits": 469827583
+        },
+        "one_second": {
+          "actual_window_seconds": 1,
+          "next_bits": 457179072,
+          "next_target_be_hex": "00000000003fffc0000000000000000000000000000000000000000000000000",
+          "prev_bits": 469827583
+        },
+        "quadruple_window": {
+          "actual_window_seconds": 345600,
+          "next_bits": 470024188,
+          "next_target_be_hex": "0000000003fffc00000000000000000000000000000000000000000000000000",
+          "prev_bits": 469827583
+        },
+        "quarter_window": {
+          "actual_window_seconds": 21600,
+          "next_bits": 457179072,
+          "next_target_be_hex": "00000000003fffc0000000000000000000000000000000000000000000000000",
+          "prev_bits": 469827583
+        }
+      },
+      "id": "difficulty.retarget.clamps",
+      "independent_check": "actual clamped to [expected/4, expected*4]; target capped at pow_limit",
+      "input": {
+        "prev_bits": 469827583
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "next_bits": 503382015
+      },
+      "id": "difficulty.retarget.at_floor",
+      "independent_check": "difficulty can never fall below the network floor",
+      "input": {
+        "actual_window_seconds": 18446744073709551615,
+        "prev_bits": 503382015
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "is_zero": true,
+        "roundtrip_bits": 0,
+        "target_be_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "id": "difficulty.compact.00000000",
+      "independent_check": "target = mantissa * 256^(exponent-3); a set sign bit means zero",
+      "input": {
+        "bits": 0
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "is_zero": false,
+        "roundtrip_bits": 16842752,
+        "target_be_hex": "0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      "id": "difficulty.compact.03000001",
+      "independent_check": "target = mantissa * 256^(exponent-3); a set sign bit means zero",
+      "input": {
+        "bits": 50331649
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "is_zero": true,
+        "roundtrip_bits": 0,
+        "target_be_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "id": "difficulty.compact.01003456",
+      "independent_check": "target = mantissa * 256^(exponent-3); a set sign bit means zero",
+      "input": {
+        "bits": 16790614
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "is_zero": false,
+        "roundtrip_bits": 469827583,
+        "target_be_hex": "0000000000ffff00000000000000000000000000000000000000000000000000"
+      },
+      "id": "difficulty.compact.1c00ffff",
+      "independent_check": "target = mantissa * 256^(exponent-3); a set sign bit means zero",
+      "input": {
+        "bits": 469827583
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "is_zero": false,
+        "roundtrip_bits": 486604799,
+        "target_be_hex": "00000000ffff0000000000000000000000000000000000000000000000000000"
+      },
+      "id": "difficulty.compact.1d00ffff",
+      "independent_check": "target = mantissa * 256^(exponent-3); a set sign bit means zero",
+      "input": {
+        "bits": 486604799
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "is_zero": false,
+        "roundtrip_bits": 503382015,
+        "target_be_hex": "000000ffff000000000000000000000000000000000000000000000000000000"
+      },
+      "id": "difficulty.compact.1e00ffff",
+      "independent_check": "target = mantissa * 256^(exponent-3); a set sign bit means zero",
+      "input": {
+        "bits": 503382015
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "is_zero": false,
+        "roundtrip_bits": 545259519,
+        "target_be_hex": "7fffff0000000000000000000000000000000000000000000000000000000000"
+      },
+      "id": "difficulty.compact.207fffff",
+      "independent_check": "target = mantissa * 256^(exponent-3); a set sign bit means zero",
+      "input": {
+        "bits": 545259519
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "is_zero": false,
+        "roundtrip_bits": 553713663,
+        "target_be_hex": "ffff000000000000000000000000000000000000000000000000000000000000"
+      },
+      "id": "difficulty.compact.2100ffff",
+      "independent_check": "target = mantissa * 256^(exponent-3); a set sign bit means zero",
+      "input": {
+        "bits": 553713663
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "is_zero": true,
+        "roundtrip_bits": 0,
+        "target_be_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "id": "difficulty.compact.1d800000",
+      "independent_check": "target = mantissa * 256^(exponent-3); a set sign bit means zero",
+      "input": {
+        "bits": 494927872
+      },
+      "intent": "rule"
+    }
+  ],
+  "group": "difficulty",
+  "intent": "rule",
+  "note": "Compact target encoding, the 4x clamp, the pow floor, and required work.",
+  "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow <this file>`",
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors"
+}

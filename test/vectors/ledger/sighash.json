@@ -1,0 +1,154 @@
+{
+  "case_count": 8,
+  "cases": [
+    {
+      "expected": {
+        "digest": {
+          "display_hex": "37a2e69cde7c5b89a11fb589c2ab023ec2ae2b689f29787307a82a6c17cee7e0",
+          "internal_hex": "e0e7ce176c2aa8077378299f682baec23e02abc289b51fa1895b7cde9ce6a237"
+        },
+        "preimage_hex": "5a524f2f736967686173682f763100004f525a01000000022222222222222222222222222222222222222222222222222222222222222222010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688acfeffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a1070001000000"
+      },
+      "id": "ledger.sighash.regtest_index_0",
+      "independent_check": "SIGHASH_TAG || chain || version || ins || outs || lock_time || type",
+      "input": {
+        "chain_id": 1515343616,
+        "input_index": 0,
+        "script_code_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+        "sighash_type": 1,
+        "tx_hex": "010000000222222222222222222222222222222222222222222222222222222222222222220100000000feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700",
+        "txid": "63cd5bd9bb4b73568fe155824d9492d69676033dbfc1db693e3bbe658b8cbd35"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "digest": {
+          "display_hex": "6183443e4285399a002f405a9391b7ab2ee433cebd62ff88332795aa60a921c8",
+          "internal_hex": "c821a960aa95273388ff62bdce33e42eabb791935a402f009a3985423e448361"
+        },
+        "preimage_hex": "5a524f2f736967686173682f763100004f525a010000000222222222222222222222222222222222222222222222222222222222222222220100000000feffffff3333333333333333333333333333333333333333333333333333333333333333070000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000020100000000000000000040075af0750700016a20a1070001000000"
+      },
+      "id": "ledger.sighash.regtest_index_1",
+      "independent_check": "SIGHASH_TAG || chain || version || ins || outs || lock_time || type",
+      "input": {
+        "chain_id": 1515343616,
+        "input_index": 1,
+        "script_code_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+        "sighash_type": 1,
+        "tx_hex": "010000000222222222222222222222222222222222222222222222222222222222222222220100000000feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700",
+        "txid": "63cd5bd9bb4b73568fe155824d9492d69676033dbfc1db693e3bbe658b8cbd35"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "digest": {
+          "display_hex": "386710a9b6921ffd80222132eb1c24b777896c884e50b2b713d028512d1764e3",
+          "internal_hex": "e364172d5128d013b7b2504e886c8977b7241ceb32212280fd1f92b6a9106738"
+        },
+        "preimage_hex": "5a524f2f736967686173682f763100014f525a01000000022222222222222222222222222222222222222222222222222222222222222222010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688acfeffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a1070001000000"
+      },
+      "id": "ledger.sighash.mainnet_chain_binding",
+      "independent_check": "SIGHASH_TAG || chain || version || ins || outs || lock_time || type",
+      "input": {
+        "chain_id": 1515343617,
+        "input_index": 0,
+        "script_code_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+        "sighash_type": 1,
+        "tx_hex": "010000000222222222222222222222222222222222222222222222222222222222222222220100000000feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700",
+        "txid": "63cd5bd9bb4b73568fe155824d9492d69676033dbfc1db693e3bbe658b8cbd35"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "digest": {
+          "display_hex": "9dfb1e18ab9cdbcbe08dfe7c52cbbc0e047301e17883803d10f414b79aee5f84",
+          "internal_hex": "845fee9ab714f4103d808378e10173040ebccb527cfe8de0cbdb9cab181efb9d"
+        },
+        "preimage_hex": "5a524f2f736967686173682f763100004f525a01000000022222222222222222222222222222222222222222222222222222222222222222010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688acfeffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a1070002000000"
+      },
+      "id": "ledger.sighash.type_02_is_folded_in",
+      "independent_check": "SIGHASH_TAG || chain || version || ins || outs || lock_time || type",
+      "input": {
+        "chain_id": 1515343616,
+        "input_index": 0,
+        "script_code_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+        "sighash_type": 2,
+        "tx_hex": "010000000222222222222222222222222222222222222222222222222222222222222222220100000000feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700",
+        "txid": "63cd5bd9bb4b73568fe155824d9492d69676033dbfc1db693e3bbe658b8cbd35"
+      },
+      "intent": "oddity"
+    },
+    {
+      "expected": {
+        "digest": {
+          "display_hex": "37a2e69cde7c5b89a11fb589c2ab023ec2ae2b689f29787307a82a6c17cee7e0",
+          "internal_hex": "e0e7ce176c2aa8077378299f682baec23e02abc289b51fa1895b7cde9ce6a237"
+        },
+        "preimage_hex": "5a524f2f736967686173682f763100004f525a01000000022222222222222222222222222222222222222222222222222222222222222222010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688acfeffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a1070001000000"
+      },
+      "id": "ledger.sighash.regtest_index_repeat",
+      "independent_check": "SIGHASH_TAG || chain || version || ins || outs || lock_time || type",
+      "input": {
+        "chain_id": 1515343616,
+        "input_index": 0,
+        "script_code_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+        "sighash_type": 1,
+        "tx_hex": "010000000222222222222222222222222222222222222222222222222222222222222222220100000000feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700",
+        "txid": "63cd5bd9bb4b73568fe155824d9492d69676033dbfc1db693e3bbe658b8cbd35"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "digest": null
+      },
+      "id": "ledger.sighash.out_of_range_index",
+      "independent_check": "an index past the end yields None rather than a digest",
+      "input": {
+        "input_count": 2,
+        "input_index": 2
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "index_0_equals_index_1": false,
+        "regtest_equals_mainnet": false,
+        "type_all_equals_type_02": false
+      },
+      "id": "ledger.sighash.digest_stability",
+      "independent_check": "chain and index are domain-separated; the type byte is not validated",
+      "input": {
+        "note": "the three cases above must be pairwise distinct"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "der_hex": "304502210096b22dddb2b93b4eb6a4a649ee126c4493a81855257b03758c5735a052ffee890220199b56aa206063c815ca731c2193c1a66d0da05f8045d7242145dba365dc3a4f",
+        "der_len": 71,
+        "verified": true,
+        "verified_under_other_key": false
+      },
+      "id": "ledger.sighash.signature_der",
+      "independent_check": "RFC 6979 deterministic ECDSA over secp256k1; DER, low-S",
+      "input": {
+        "digest": {
+          "display_hex": "37a2e69cde7c5b89a11fb589c2ab023ec2ae2b689f29787307a82a6c17cee7e0",
+          "internal_hex": "e0e7ce176c2aa8077378299f682baec23e02abc289b51fa1895b7cde9ce6a237"
+        },
+        "scalar": 1
+      },
+      "intent": "rule"
+    }
+  ],
+  "group": "ledger.sighash",
+  "intent": "rule",
+  "note": "Chain-bound signature digest, preimage bytes, and one deterministic DER signature.",
+  "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow <this file>`",
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors"
+}

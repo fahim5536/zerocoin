@@ -1,0 +1,88 @@
+{
+  "description": "Deterministic baseline vectors for the ZeroCoin Rust implementation.",
+  "determinism": [
+    "no wall clock, RNG, wallet, data directory or network is used",
+    "keys are the published scalars 1 and 2, plus the crate's repeated-byte [9u8; 32]",
+    "block timestamps are the literals 1700000000 + height and GENESIS_TIMESTAMP",
+    "ECDSA signatures are RFC 6979 deterministic",
+    "JSON object keys are emitted in sorted order by serde_json"
+  ],
+  "files": [
+    {
+      "cases": 5,
+      "group": "hash",
+      "path": "hash/primitives.json"
+    },
+    {
+      "cases": 9,
+      "group": "encoding.varint",
+      "path": "encoding/varint.json"
+    },
+    {
+      "cases": 5,
+      "group": "encoding.transaction",
+      "path": "encoding/transaction.json"
+    },
+    {
+      "cases": 15,
+      "group": "ledger.script",
+      "path": "ledger/script.json"
+    },
+    {
+      "cases": 8,
+      "group": "ledger.sighash",
+      "path": "ledger/sighash.json"
+    },
+    {
+      "cases": 13,
+      "group": "ledger.state_root",
+      "path": "ledger/state_root.json"
+    },
+    {
+      "cases": 8,
+      "group": "chain.header",
+      "path": "chain/header.json"
+    },
+    {
+      "cases": 6,
+      "group": "chain.anchors",
+      "path": "chain/anchors.json"
+    },
+    {
+      "cases": 11,
+      "group": "pow",
+      "path": "pow/engines.json"
+    },
+    {
+      "cases": 15,
+      "group": "difficulty",
+      "path": "difficulty/retarget.json"
+    },
+    {
+      "cases": 6,
+      "group": "reward.subsidy",
+      "path": "reward/subsidy.json"
+    },
+    {
+      "cases": 10,
+      "group": "reward.coinbase",
+      "path": "reward/coinbase.json"
+    },
+    {
+      "cases": 6,
+      "group": "crypto.address",
+      "path": "crypto/addresses.json"
+    }
+  ],
+  "independent_verifier": "python test/harness/run_vectors.py",
+  "notes": [
+    "Every case except the pinned constants in chain/anchors.json and the `difficulty.params`, `pow.engine_ids` and `reward.constants` cases is recomputed from its inputs by test/harness/zro_vectors.py; those five cannot be recomputed from an input and are reported as ANCHOR, not PASS.",
+    "Private values in crypto/addresses.json are published test scalars, never wallet keys."
+  ],
+  "phase": "P0",
+  "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow test/vectors/manifest.json`",
+  "regenerate": "ZRO_VECTOR_WRITE=1 with the same command",
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+  "total_cases": 117
+}

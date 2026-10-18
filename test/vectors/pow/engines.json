@@ -1,0 +1,195 @@
+{
+  "case_count": 11,
+  "cases": [
+    {
+      "expected": {
+        "scratchpad_id": 1,
+        "scratchpad_name": "scratchpad-memory-hard",
+        "trivial_id": 0,
+        "trivial_name": "sha256d-trivial"
+      },
+      "id": "pow.engine_ids",
+      "independent_check": "engine_id is committed in the header and is consensus-visible",
+      "input": {
+        "engines": [
+          "trivial",
+          "scratchpad"
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "hash": {
+          "display_hex": "eb0d35e2e8e94102d4b977eed99ea88bd7e63981397b6946e7d38bf3adcc2bd5",
+          "internal_hex": "d52bccadf38bd3e746697b398139e6d78ba89ed9ee77b9d40241e9e8e2350deb"
+        }
+      },
+      "id": "pow.trivial.raw_nonce_0",
+      "independent_check": "sha256d(preimage || nonce_le64)",
+      "input": {
+        "nonce": 0,
+        "preimage_hex": "7a65726f636f696e2d706f77"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "hash": {
+          "display_hex": "c689dff0b367b5433b336e1a08678a2038c31a789970c6745909c3203da3ac52",
+          "internal_hex": "52aca33d20c3095974c67099781ac338208a67081a6e333b43b567b3f0df89c6"
+        }
+      },
+      "id": "pow.trivial.raw_nonce_1",
+      "independent_check": "sha256d(preimage || nonce_le64)",
+      "input": {
+        "nonce": 1,
+        "preimage_hex": "7a65726f636f696e2d706f77"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "hash": {
+          "display_hex": "a399589f27621a107bc9bd4b0f98e0311a369d5e9ae4fc059874dc8bb894eeb4",
+          "internal_hex": "b4ee94b88bdc749805fce49a5e9d361a31e0980f4bbdc97b101a62279f5899a3"
+        }
+      },
+      "id": "pow.trivial.header_nonce_0",
+      "independent_check": "sha256d(preimage || nonce_le64)",
+      "input": {
+        "nonce": 0,
+        "preimage_hex": "5a524f2f6865616465722f76310001000000004f525a01000000000000003333333333333333333333333333333333333333333333333333333333333333444444444444444444444444444444444444444444444444444444444444444401f1536500000000ffff7f2000"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "hash": {
+          "display_hex": "3934a506d2322705245b156dc351fd70e3f61d6295a2c717d15bfb397085c8c7",
+          "internal_hex": "c7c8857039fb5bd117c7a295621df6e370fd51c36d155b24052732d206a53439"
+        }
+      },
+      "id": "pow.trivial.header_nonce_42",
+      "independent_check": "sha256d(preimage || nonce_le64)",
+      "input": {
+        "nonce": 42,
+        "preimage_hex": "5a524f2f6865616465722f76310001000000004f525a01000000000000003333333333333333333333333333333333333333333333333333333333333333444444444444444444444444444444444444444444444444444444444444444401f1536500000000ffff7f2000"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "hash": {
+          "display_hex": "ca9fcec6a658863d9dfc6d36a70ae7304434eccde60f2afd30ec4fe63eb27e76",
+          "internal_hex": "767eb23ee64fec30fd2a0fe6cdec344430e70aa7366dfc9d3d8658a6c6ce9fca"
+        }
+      },
+      "id": "pow.scratchpad.devnet_nonce_0",
+      "independent_check": "Rust-produced anchor: the C++ engine must reproduce this byte for byte",
+      "input": {
+        "engine_id": 1,
+        "engine_name": "scratchpad-memory-hard",
+        "memory_bytes": 65536,
+        "nonce": 0,
+        "preimage_hex": "7a65726f636f696e2d706f77",
+        "rounds": 1024
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "hash": {
+          "display_hex": "1a7d9959d14feeec42a0ee140ae201d15d3a42de42b9d7e3a0fe20196d39fa3e",
+          "internal_hex": "3efa396d1920fea0e3d7b942de423a5dd101e20a14eea042ecee4fd159997d1a"
+        }
+      },
+      "id": "pow.scratchpad.devnet_nonce_1",
+      "independent_check": "Rust-produced anchor: the C++ engine must reproduce this byte for byte",
+      "input": {
+        "engine_id": 1,
+        "engine_name": "scratchpad-memory-hard",
+        "memory_bytes": 65536,
+        "nonce": 1,
+        "preimage_hex": "7a65726f636f696e2d706f77",
+        "rounds": 1024
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "hash": {
+          "display_hex": "ff5353ef9a02512a63f73f3dbcb5f4bade6790c120ce17e5c6301eedc780c3a6",
+          "internal_hex": "a6c380c7ed1e30c6e517ce20c19067debaf4b5bc3d3ff7632a51029aef5353ff"
+        }
+      },
+      "id": "pow.scratchpad.devnet_nonce_42",
+      "independent_check": "Rust-produced anchor: the C++ engine must reproduce this byte for byte",
+      "input": {
+        "engine_id": 1,
+        "engine_name": "scratchpad-memory-hard",
+        "memory_bytes": 65536,
+        "nonce": 42,
+        "preimage_hex": "7a65726f636f696e2d706f77",
+        "rounds": 1024
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "hash": {
+          "display_hex": "5aa5aacdae057276775ab3da77fa5b37f73b55023b2d168a01a774e0514a32da",
+          "internal_hex": "da324a51e074a7018a162d3b02553bf7375bfa77dab35a77767205aecdaaa55a"
+        }
+      },
+      "id": "pow.scratchpad.mainnet_nonce_0",
+      "independent_check": "Rust-produced anchor: the C++ engine must reproduce this byte for byte",
+      "input": {
+        "engine_id": 1,
+        "engine_name": "scratchpad-memory-hard",
+        "memory_bytes": 2097152,
+        "nonce": 0,
+        "preimage_hex": "7a65726f636f696e2d706f77",
+        "rounds": 4096
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "hash": {
+          "display_hex": "ecd96fdacba8847c6beb709ceb7658e53d58252f17a58052cb3b81509792c6b0",
+          "internal_hex": "b0c6929750813bcb5280a5172f25583de55876eb9c70eb6b7c84a8cbda6fd9ec"
+        }
+      },
+      "id": "pow.scratchpad.mainnet_nonce_1",
+      "independent_check": "Rust-produced anchor: the C++ engine must reproduce this byte for byte",
+      "input": {
+        "engine_id": 1,
+        "engine_name": "scratchpad-memory-hard",
+        "memory_bytes": 2097152,
+        "nonce": 1,
+        "preimage_hex": "7a65726f636f696e2d706f77",
+        "rounds": 4096
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "nonce": 1
+      },
+      "id": "pow.trivial.mine_from_zero",
+      "independent_check": "mining searches nonces upward from the given start, deterministically",
+      "input": {
+        "preimage_hex": "5a524f2f6865616465722f76310001000000004f525a01000000000000003333333333333333333333333333333333333333333333333333333333333333444444444444444444444444444444444444444444444444444444444444444401f1536500000000ffff7f2000",
+        "target_bits": 545259519
+      },
+      "intent": "rule"
+    }
+  ],
+  "group": "pow",
+  "intent": "rule",
+  "note": "Trivial SHA-256d and both scratchpad profiles; the scratchpad rows are Rust anchors.",
+  "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow <this file>`",
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors"
+}

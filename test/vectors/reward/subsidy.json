@@ -1,0 +1,338 @@
+{
+  "case_count": 6,
+  "cases": [
+    {
+      "expected": {
+        "coinbase_maturity": 100,
+        "fah_per_zro": 100000000,
+        "halving_interval": 210000,
+        "initial_subsidy_fah": 5000000000,
+        "max_halvings": 64,
+        "max_supply_fah": 2100000000000000,
+        "total_supply_ceiling_fah": 2099999997690000
+      },
+      "id": "reward.constants",
+      "independent_check": "frozen economics, also pinned by compile-time asserts",
+      "input": {
+        "source": "consensus/reward.rs"
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "rows": [
+          {
+            "height": 0,
+            "subsidy_fah": 0
+          },
+          {
+            "height": 1,
+            "subsidy_fah": 5000000000
+          },
+          {
+            "height": 209999,
+            "subsidy_fah": 5000000000
+          },
+          {
+            "height": 210000,
+            "subsidy_fah": 2500000000
+          },
+          {
+            "height": 419999,
+            "subsidy_fah": 2500000000
+          },
+          {
+            "height": 420000,
+            "subsidy_fah": 1250000000
+          },
+          {
+            "height": 629999,
+            "subsidy_fah": 1250000000
+          },
+          {
+            "height": 630000,
+            "subsidy_fah": 625000000
+          },
+          {
+            "height": 2100000,
+            "subsidy_fah": 4882812
+          },
+          {
+            "height": 13230000,
+            "subsidy_fah": 0
+          },
+          {
+            "height": 13440000,
+            "subsidy_fah": 0
+          },
+          {
+            "height": 13440001,
+            "subsidy_fah": 0
+          },
+          {
+            "height": 18446744073709551615,
+            "subsidy_fah": 0
+          }
+        ]
+      },
+      "id": "reward.subsidy.table",
+      "independent_check": "INITIAL_SUBSIDY >> (height / 210000), zero at height 0 and past 64 halvings",
+      "input": {
+        "heights": [
+          0,
+          1,
+          209999,
+          210000,
+          419999,
+          420000,
+          629999,
+          630000,
+          2100000,
+          13230000,
+          13440000,
+          13440001,
+          18446744073709551615
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "rows": [
+          {
+            "height": 0,
+            "maturity_height": 100
+          },
+          {
+            "height": 1,
+            "maturity_height": 101
+          },
+          {
+            "height": 99,
+            "maturity_height": 199
+          },
+          {
+            "height": 100,
+            "maturity_height": 200
+          },
+          {
+            "height": 101,
+            "maturity_height": 201
+          },
+          {
+            "height": 18446744073709551615,
+            "maturity_height": 18446744073709551615
+          }
+        ]
+      },
+      "id": "reward.maturity.table",
+      "independent_check": "height + 100, saturating",
+      "input": {
+        "heights": [
+          0,
+          1,
+          99,
+          100,
+          101,
+          18446744073709551615
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "height_1": 5000000000,
+        "height_1_with_fees": 5000001000,
+        "max_height_max_fees": 18446744073709551615,
+        "overflow_is_none": null
+      },
+      "id": "reward.block_reward",
+      "independent_check": "subsidy + fees; None when the sum overflows, encoded as JSON null",
+      "input": {
+        "rows": [
+          {
+            "fees": 0,
+            "height": 1,
+            "key": "height_1"
+          },
+          {
+            "fees": 1000,
+            "height": 1,
+            "key": "height_1_with_fees"
+          },
+          {
+            "fees": 18446744073709551615,
+            "height": 18446744073709551615,
+            "key": "max_height_max_fees"
+          },
+          {
+            "fees": 18446744073709551615,
+            "height": 1,
+            "key": "overflow_is_none"
+          }
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "eleven_two_ways": {
+          "payouts": [
+            {
+              "hash160_hex": "0101010101010101010101010101010101010101",
+              "value": 6
+            },
+            {
+              "hash160_hex": "0202020202020202020202020202020202020202",
+              "value": 5
+            }
+          ],
+          "reward": 11,
+          "total": 11,
+          "weights": [
+            1,
+            1
+          ]
+        },
+        "hundred_by_weights": {
+          "payouts": [
+            {
+              "hash160_hex": "0101010101010101010101010101010101010101",
+              "value": 17
+            },
+            {
+              "hash160_hex": "0202020202020202020202020202020202020202",
+              "value": 33
+            },
+            {
+              "hash160_hex": "0303030303030303030303030303030303030303",
+              "value": 50
+            }
+          ],
+          "reward": 100,
+          "total": 100,
+          "weights": [
+            1,
+            2,
+            3
+          ]
+        },
+        "one_three_ways": {
+          "payouts": [
+            {
+              "hash160_hex": "0101010101010101010101010101010101010101",
+              "value": 1
+            }
+          ],
+          "reward": 1,
+          "total": 1,
+          "weights": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "id": "reward.split_reward.remainder",
+      "independent_check": "floor each share, credit the remainder to the first contributor",
+      "input": {
+        "cases": [
+          [
+            11,
+            [
+              1,
+              1
+            ]
+          ],
+          [
+            100,
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          [
+            1,
+            [
+              1,
+              1,
+              1
+            ]
+          ]
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "one_zero_weight": {
+          "payouts": [
+            {
+              "hash160_hex": "0202020202020202020202020202020202020202",
+              "value": 10
+            }
+          ],
+          "reward": 10,
+          "total": 10,
+          "weights": [
+            0,
+            3
+          ]
+        },
+        "zero_reward": {
+          "payouts": [],
+          "reward": 0,
+          "total": 0,
+          "weights": [
+            1,
+            1
+          ]
+        },
+        "zero_weights": {
+          "payouts": [],
+          "reward": 10,
+          "total": 0,
+          "weights": [
+            0,
+            0
+          ]
+        }
+      },
+      "id": "reward.split_reward.edge_cases",
+      "independent_check": "zero reward or zero total weight yields no payouts; zero shares are dropped",
+      "input": {
+        "cases": [
+          [
+            0,
+            [
+              1,
+              1
+            ]
+          ],
+          [
+            10,
+            [
+              0,
+              0
+            ]
+          ],
+          [
+            10,
+            [
+              0,
+              3
+            ]
+          ]
+        ]
+      },
+      "intent": "rule"
+    }
+  ],
+  "group": "reward.subsidy",
+  "intent": "rule",
+  "note": "The halving schedule, maturity, block reward and exact pool splitting.",
+  "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow <this file>`",
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors"
+}

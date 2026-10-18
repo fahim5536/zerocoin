@@ -5,10 +5,14 @@ migration: a complete audit of the existing Rust implementation, a study of Bitc
 Core used strictly as an educational reference, and a phased plan to build an
 independent C++ implementation beside the Rust one.
 
-> **Status of this milestone: documentation only.**
+> **Status: documents 01–05 are documentation only; 06 records phase P0.**
 > No Rust source file was modified, moved, or deleted. No C++, C, Python, CMake, or
 > Shell file has been added to the build. The Rust crate remains the reference
 > implementation and the only thing that currently produces blocks.
+>
+> P0 added one Rust integration-test target (`zerocoin/tests/export_baseline_vectors.rs`)
+> and a standard-library-only Python harness under `test/`. Neither is part of the
+> node build. `06` records what they prove and what is still missing.
 
 ---
 
@@ -101,6 +105,7 @@ ever be mistaken for a source change; the crate's own `target/` is git-ignored.
 | 03 | [Module mapping and phased plan](03-module-mapping-and-phased-plan.md) | Which Rust module becomes which C++ module, in what order, gated by what? |
 | 04 | [Risk register](04-risk-register.md) | What can go wrong, how would we notice, and what do we do about it? |
 | 05 | [Test strategy](05-test-strategy.md) | How do we prove the C++ implementation is equivalent before it is trusted? |
+| 06 | [P0 baseline vectors](06-p0-baseline-vectors.md) | Which values must a port reproduce byte for byte, how were they proven, and what is still missing? |
 
 ---
 

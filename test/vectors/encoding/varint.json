@@ -1,0 +1,119 @@
+{
+  "case_count": 9,
+  "cases": [
+    {
+      "expected": {
+        "bytes_hex": "00",
+        "length": 1
+      },
+      "id": "encoding.varint.0",
+      "independent_check": "Bitcoin CompactSize: 0xfd/0xfe/0xff prefixes with little-endian payloads",
+      "input": {
+        "value": 0
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "bytes_hex": "01",
+        "length": 1
+      },
+      "id": "encoding.varint.1",
+      "independent_check": "Bitcoin CompactSize: 0xfd/0xfe/0xff prefixes with little-endian payloads",
+      "input": {
+        "value": 1
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "bytes_hex": "fc",
+        "length": 1
+      },
+      "id": "encoding.varint.252",
+      "independent_check": "Bitcoin CompactSize: 0xfd/0xfe/0xff prefixes with little-endian payloads",
+      "input": {
+        "value": 252
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "bytes_hex": "fdfd00",
+        "length": 3
+      },
+      "id": "encoding.varint.253",
+      "independent_check": "Bitcoin CompactSize: 0xfd/0xfe/0xff prefixes with little-endian payloads",
+      "input": {
+        "value": 253
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "bytes_hex": "fdffff",
+        "length": 3
+      },
+      "id": "encoding.varint.65535",
+      "independent_check": "Bitcoin CompactSize: 0xfd/0xfe/0xff prefixes with little-endian payloads",
+      "input": {
+        "value": 65535
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "bytes_hex": "fe00000100",
+        "length": 5
+      },
+      "id": "encoding.varint.65536",
+      "independent_check": "Bitcoin CompactSize: 0xfd/0xfe/0xff prefixes with little-endian payloads",
+      "input": {
+        "value": 65536
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "bytes_hex": "feffffffff",
+        "length": 5
+      },
+      "id": "encoding.varint.4294967295",
+      "independent_check": "Bitcoin CompactSize: 0xfd/0xfe/0xff prefixes with little-endian payloads",
+      "input": {
+        "value": 4294967295
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "bytes_hex": "ff0000000001000000",
+        "length": 9
+      },
+      "id": "encoding.varint.4294967296",
+      "independent_check": "Bitcoin CompactSize: 0xfd/0xfe/0xff prefixes with little-endian payloads",
+      "input": {
+        "value": 4294967296
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "bytes_hex": "ffffffffffffffffff",
+        "length": 9
+      },
+      "id": "encoding.varint.18446744073709551615",
+      "independent_check": "Bitcoin CompactSize: 0xfd/0xfe/0xff prefixes with little-endian payloads",
+      "input": {
+        "value": 18446744073709551615
+      },
+      "intent": "rule"
+    }
+  ],
+  "group": "encoding.varint",
+  "intent": "rule",
+  "note": "Bitcoin CompactSize encoding at every width boundary.",
+  "provenance": "zerocoin/ Rust sources; the introducing commit is `git log --follow <this file>`",
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors"
+}
