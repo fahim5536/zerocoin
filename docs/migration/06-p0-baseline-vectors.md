@@ -177,6 +177,13 @@ out with CRLF and failed the comparison without a single code difference.
 that. This machine has `core.autocrlf=false` and `core.eol=lf`, so the committed
 bytes and the checked-out bytes are identical here `[VERIFIED]`.
 
+Because the comparison is byte-exact, the committed blobs were inspected
+directly: all 14 files contain LF only, none carries a byte-order mark, every
+file ends with a newline, and the only non-ASCII bytes in the whole corpus are
+two em dashes inside English prose in `chain/header.json` and
+`hash/primitives.json` — both sides read the files as UTF-8, and `serde_json`
+emits them literally rather than as `\u` escapes `[VERIFIED]`.
+
 What is **not** proven: that a different machine produces the same bytes. Inside
 the emitter the only cross-host variables would be map iteration order
 (neutralised — `serde_json`'s default map is a `BTreeMap`, so keys are sorted),
