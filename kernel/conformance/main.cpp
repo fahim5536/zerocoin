@@ -34,6 +34,8 @@
 
 #include "zerocoin/hash.h"
 #include "zerocoin/hex.h"
+#include "zerocoin/script.h"
+#include "zerocoin/sighash.h"
 #include "zerocoin/transaction.h"
 #include "zerocoin/uint256.h"
 #include "zerocoin/varint.h"
@@ -121,6 +123,14 @@ std::uint64_t parse_bits(const std::string& text) {
   return parse_u64(text, "bits");
 }
 
+std::uint32_t parse_u32(const std::string& text, const std::string& what) {
+  const std::uint64_t value = parse_u64(text, what);
+  if (value > 0xffff'ffffull) {
+    fail(what + ": does not fit in 32 bits: " + text);
+  }
+  return static_cast<std::uint32_t>(value);
+}
+
 std::vector<std::uint8_t> bytes_of(const std::string& hex, const std::string& what) {
   auto bytes = zk::from_hex(hex);
   if (!bytes.has_value()) {
@@ -141,6 +151,19 @@ Hash256 hash256_of(const std::string& hex, const std::string& what) {
 
 std::string hex_of(const std::vector<std::uint8_t>& bytes) {
   return zk::to_hex(bytes.data(), bytes.size());
+}
+
+Transaction tx_of(const std::string& hex, const std::string& what) {
+  const std::vector<std::uint8_t> bytes = bytes_of(hex, what);
+  const TxDecodeResult result = zk::deserialize_transaction(bytes.data(), bytes.size());
+  if (!result) {
+    fail(what + ": decode failed: " + zk::to_string(result.error));
+  }
+  if (result.consumed != bytes.size()) {
+    fail(what + ": " + std::to_string(bytes.size() - result.consumed) +
+         " trailing bytes after the transaction");
+  }
+  return result.tx;
 }
 
 std::string bool_text(bool value) { return value ? "true" : "false"; }
@@ -292,6 +315,133 @@ Produced op_compact(const Case& c) {
   };
 }
 
+Produced op_script_push_data(const Case& c) {
+  const std::vector<std::uint8_t> fill = bytes_of(c.one("fill"), "fill");
+  if (fill.size() != 1) {
+    fail("fill: expected one byte, got " + std::to_string(fill.size()));
+  }
+  Produced produced;
+  for (const std::string& text : c.all("len")) {
+    const std::uint32_t length = parse_u32(text, "len");
+    const std::vector<std::uint8_t> data(length, fill.front());
+    std::vector<std::uint8_t> script;
+    zk::push_data(data.data(), data.size(), script);
+    produced["len_" + std::to_string(length)] = hex_of(script);
+  }
+  if (produced.empty()) {
+    fail("script_push_data: no len given");
+  }
+  return produced;
+}
+
+Produced op_p2pkh_script_pubkey(const Case& c) {
+  const std::vector<std::uint8_t> raw = bytes_of(c.one("pubkey_hash_hex"), "pubkey_hash_hex");
+  if (raw.size() != Hash160::kWidth) {
+    fail("pubkey_hash_hex: expected 20 bytes, got " + std::to_string(raw.size()));
+  }
+  Hash160 pkhash{};
+  std::copy(raw.begin(), raw.end(), pkhash.bytes.begin());
+  const std::vector<std::uint8_t> script = zk::p2pkh_script_pubkey(pkhash);
+  return {{"script_hex", hex_of(script)}, {"length", std::to_string(script.size())}};
+}
+
+Produced op_p2pkh_script_sig(const Case& c) {
+  const std::vector<std::uint8_t> signature = bytes_of(c.one("signature_hex"), "signature_hex");
+  const std::vector<std::uint8_t> pubkey = bytes_of(c.one("pubkey_sec1_hex"), "pubkey_sec1_hex");
+  const std::vector<std::uint8_t> script =
+      zk::p2pkh_script_sig(signature.data(), signature.size(), pubkey.data(), pubkey.size());
+  return {{"script_hex", hex_of(script)}, {"length", std::to_string(script.size())}};
+}
+
+// The conformance runner has no curve backend. The accept/reject checkers are
+// stubs that pin the interpreter's control flow, never a signature verdict.
+struct AcceptAllChecker final : zk::SigChecker {
+  bool check_signature(const std::uint8_t* /*signature*/, std::size_t /*signature_size*/,
+                       const std::uint8_t* /*public_key*/,
+                       std::size_t /*public_key_size*/) const override {
+    return true;
+  }
+};
+
+struct RejectAllChecker final : zk::SigChecker {
+  bool check_signature(const std::uint8_t* /*signature*/, std::size_t /*signature_size*/,
+                       const std::uint8_t* /*public_key*/,
+                       std::size_t /*public_key_size*/) const override {
+    return false;
+  }
+};
+
+Produced op_script_verify(const Case& c) {
+  const std::vector<std::uint8_t> script_sig = bytes_of(c.one("script_sig_hex"), "script_sig_hex");
+  const std::vector<std::uint8_t> script_pubkey =
+      bytes_of(c.one("script_pubkey_hex"), "script_pubkey_hex");
+  const std::string checker = c.one("checker");
+  const AcceptAllChecker accept;
+  const RejectAllChecker reject;
+  const zk::SigChecker* selected = nullptr;
+  if (checker == "accept") {
+    selected = &accept;
+  } else if (checker == "reject") {
+    selected = &reject;
+  } else {
+    fail("checker: expected accept or reject: " + checker);
+  }
+  const zk::ScriptResult result = zk::verify(
+      script_sig.data(), script_sig.size(), script_pubkey.data(), script_pubkey.size(), *selected);
+  return {{"accepted", bool_text(static_cast<bool>(result))},
+          {"error", zk::to_string(result.error)},
+          {"opcode", std::to_string(result.opcode)}};
+}
+
+Produced op_sighash(const Case& c) {
+  const Transaction tx = tx_of(c.one("tx_hex"), "tx_hex");
+  const std::uint64_t input_index = parse_u64(c.one("input_index"), "input_index");
+  const std::vector<std::uint8_t> script_code =
+      bytes_of(c.one("script_code_hex"), "script_code_hex");
+  const std::uint32_t chain_id = parse_u32(c.one("chain_id"), "chain_id");
+  const std::uint32_t sighash_type = parse_u32(c.one("sighash_type"), "sighash_type");
+  const std::optional<zk::SigHash> sighash =
+      zk::signature_hash(tx, static_cast<std::size_t>(input_index), script_code.data(),
+                         script_code.size(), zk::ChainId{chain_id}, sighash_type);
+  if (!sighash.has_value()) {
+    return {{"digest", "null"}};
+  }
+  return {{"digest", sighash->digest.to_hex().str()},
+          {"digest_display_hex", sighash->digest.to_display_hex().str()},
+          {"preimage_hex", hex_of(sighash->preimage)}};
+}
+
+Produced op_sighash_distinct(const Case& c) {
+  const Transaction tx = tx_of(c.one("tx_hex"), "tx_hex");
+  const std::vector<std::uint8_t> script_code =
+      bytes_of(c.one("script_code_hex"), "script_code_hex");
+  Produced produced;
+  for (const std::string& spec : c.all("pair")) {
+    const std::vector<std::string> parts = split(spec, '|');
+    if (parts.size() != 7) {
+      fail("IN pair: expected name|chain_a|index_a|type_a|chain_b|index_b|type_b: " + spec);
+    }
+    const auto digest_of = [&](const std::string& chain, const std::string& index,
+                               const std::string& type) {
+      const std::optional<zk::SigHash> sighash = zk::signature_hash(
+          tx, static_cast<std::size_t>(parse_u64(index, "pair.index")), script_code.data(),
+          script_code.size(), zk::ChainId{parse_u32(chain, "pair.chain")},
+          parse_u32(type, "pair.type"));
+      if (!sighash.has_value()) {
+        fail("pair: index out of range: " + index);
+      }
+      return sighash->digest;
+    };
+    const Hash256 left = digest_of(parts[1], parts[2], parts[3]);
+    const Hash256 right = digest_of(parts[4], parts[5], parts[6]);
+    produced[parts[0]] = bool_text(left == right);
+  }
+  if (produced.empty()) {
+    fail("sighash_distinct: no pair given");
+  }
+  return produced;
+}
+
 Produced execute(const Case& c) {
   if (c.op == "sha256_utf8") return op_sha256_utf8(c);
   if (c.op == "sha256d_utf8") return op_sha256d_utf8(c);
@@ -302,6 +452,12 @@ Produced execute(const Case& c) {
   if (c.op == "tx_roundtrip") return op_tx_roundtrip(c);
   if (c.op == "tx_decode_error") return op_tx_decode_error(c);
   if (c.op == "compact") return op_compact(c);
+    if (c.op == "script_push_data") return op_script_push_data(c);
+    if (c.op == "p2pkh_script_pubkey") return op_p2pkh_script_pubkey(c);
+    if (c.op == "p2pkh_script_sig") return op_p2pkh_script_sig(c);
+    if (c.op == "script_verify") return op_script_verify(c);
+    if (c.op == "sighash") return op_sighash(c);
+    if (c.op == "sighash_distinct") return op_sighash_distinct(c);
   fail("unknown OP: " + c.op);
 }
 

@@ -327,10 +327,11 @@ Two further limits:
   error variants covered; G1 pins only `NonMinimalVarInt` among the five
   `TxDecodeError` rejections, while the unit suite exercises all five. Turning
   those unit cases into corpus vectors belongs to whoever closes `06` §11 item 1.
-- **F16 is still open.** The reference folds the sighash type into the preimage
-  and accepts any `u32`, so `SIGHASH_ALL` is a convention rather than a checked
-  rule. No C++ code touches sighash yet; the finding must be recorded before P2
-  writes any.
+- **F16 was the wrong id; the finding is now F18.** The reference folds the
+  sighash type into the preimage and accepts any `u32`, so `SIGHASH_ALL` is a
+  convention at the hasher and a checked rule only at `TxSigChecker`. No C++ code
+  touched sighash when this document was written; `01` §13 now carries the row and
+  `08` §3 records the resolution.
 
 ---
 
@@ -405,7 +406,7 @@ test.
 |---|---|---|
 | 1 | Build under MSVC and on a second host | every G1 number comes from one compiler |
 | 2 | Run ASan/UBSan somewhere with support | the decoder is the first code that will see hostile bytes |
-| 3 | Record F16 before P2 writes sighash | `06` §11 item 3; the convention is not a checked rule |
+| 3 | Record F16 before P2 writes sighash | done as **F18** in `01` §13 — the id F16 is the pinned-anchor finding |
 | 4 | Promote the `TxDecodeError` unit cases into corpus vectors | closes part of the `06` §7 gap with evidence, not prose |
 | 5 | Decide the P2 fixture shape | `g1_conformance.py` is phase-specific by name and count; P2 must either add a phase argument or a second wrapper, and the count guard must not be weakened to allow it |
 | 6 | Wire the gate into CI | the repository still has no CI (`README.md` §2) |

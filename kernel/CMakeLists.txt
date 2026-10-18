@@ -26,6 +26,8 @@ add_library(zerocoin_kernel STATIC
   src/uint256.cpp
   src/varint.cpp
   src/transaction.cpp
+  src/script.cpp
+  src/sighash.cpp
 )
 target_include_directories(zerocoin_kernel PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -50,6 +52,8 @@ add_executable(kernel_tests
   tests/test_uint256.cpp
   tests/test_varint.cpp
   tests/test_transaction.cpp
+  tests/test_script.cpp
+  tests/test_sighash.cpp
   tests/test_static_asserts.cpp
 )
 target_link_libraries(kernel_tests PRIVATE zerocoin_kernel)
@@ -68,5 +72,13 @@ find_program(PYTHON_EXECUTABLE NAMES python3 python REQUIRED)
 add_test(NAME kernel_conformance
   COMMAND ${PYTHON_EXECUTABLE}
           ${CMAKE_CURRENT_SOURCE_DIR}/tools/g1_conformance.py
+          --vectors ${CMAKE_CURRENT_SOURCE_DIR}/../test/vectors
+          --runner $<TARGET_FILE:kernel_conformance>)
+
+# P2 replays the script and sighash vectors that need no curve backend. It is a
+# separate test so the G1 guard keeps its own count and deferral list.
+add_test(NAME kernel_p2_conformance
+  COMMAND ${PYTHON_EXECUTABLE}
+          ${CMAKE_CURRENT_SOURCE_DIR}/tools/p2_conformance.py
           --vectors ${CMAKE_CURRENT_SOURCE_DIR}/../test/vectors
           --runner $<TARGET_FILE:kernel_conformance>)

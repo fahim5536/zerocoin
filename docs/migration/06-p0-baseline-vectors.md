@@ -428,6 +428,10 @@ digest rather than selecting `SIGHASH_NONE`. A C++ port that validates the type
 before hashing will diverge. This belongs in the register as F16 before the
 sighash module is ported.
 
+It was registered as **F18**, not F16: F16 is the pinned-anchor finding in `01`
+§13, and the id was taken when this item was written. The finding, its evidence
+and the porting rule are in `01` §13; P2's record of the resolution is `08` §3.
+
 ---
 
 ## 12. What P1 inherits
