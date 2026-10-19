@@ -106,19 +106,17 @@ public key. Those are the backend's obligations.
 | B1 | Accept **only 33-byte compressed SEC1** public keys; reject 65-byte uncompressed, hybrid prefixes, wrong lengths, off-curve `x`, and the point at infinity | `src/crypto/secp256k1.rs` 112–121 |
 | B2 | Parse **strict DER** for the signature; reject non-minimal integers, negative values, zero `r`/`s`, out-of-range `r`/`s`, bad lengths and trailing bytes inside the DER portion | `src/crypto/secp256k1.rs` 176–190 |
 | B3 | Verify over the **32-byte digest as given**; no hashing, no truncation, no padding | `src/crypto/secp256k1.rs` 137–143 |
-| B4 | **Do not enforce low-S.** The reference accepts high-S signatures and performs no normalisation | doc `08` §6; `src/crypto/secp256k1.rs` has no low-S check |
+| B4 | **Reproduce the reference's high-S rejection; do not normalise.** `k256` rejects `s > n/2` inside `verify_prehashed`; the wrapper must return `false` for the same inputs and must not rewrite `s` | `k256-0.13.4/src/ecdsa.rs:201-208`; `CRYPTO_BACKEND_READINESS.md` §2 H1 |
 | B5 | Return `false` for every malformed input; never throw across the C++ boundary | C2 convention 2 |
 | B6 | Be re-entrant and thread-safe for concurrent verification with a shared immutable context | P5 node threads |
 | B7 | Never log, copy or retain key material; the inputs are public | doc `08` §6 |
 
 B4 has a concrete consequence for the most likely candidate: libsecp256k1's
-`secp256k1_ecdsa_verify` returns 0 for a high-S signature by design. A wrapper
-that calls it directly would reject what Rust accepts. The wrapper must therefore
-verify a **normalised copy** of the parsed signature (normalise `s` to the lower
-half for the verification call only) while still accepting the original encoding.
-This is an internal step required to reproduce reference behaviour; it is not a
-low-S policy, and it must not be observable in the API
-(`CRYPTO_BACKEND_DECISION.md` §7).
+`secp256k1_ecdsa_verify` returns 0 for a high-S signature by design, and the
+reference does the same. A wrapper that calls it directly therefore matches. A
+wrapper that normalises a copy before the call would **not** match: it would
+accept transactions the Rust node rejects. No normalisation step exists, and none
+may be added (`CRYPTO_BACKEND_DECISION.md` §7.3).
 
 Parse-level strictness may exceed the reference **only where the excess cannot
 change a verdict**: a parse the reference accepts and then fails to verify may be

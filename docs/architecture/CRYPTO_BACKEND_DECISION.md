@@ -4,6 +4,12 @@ Status: **BLOCKED — no backend acquired, no download performed.**
 Recorded during P2.1 at commit `e8fda7e` (2026-10-18); host inventory taken on
 2026-10-19. This document authorises no code and makes no compatibility claim.
 
+> **Amended by P2.2.** `CRYPTO_BACKEND_READINESS.md` proves that the Rust
+> reference **rejects** high-S signatures, and that the normalisation step this
+> document specified in §7.3 would therefore accept signatures the reference
+> rejects. §1 constraint 6, §3, §7.3, §9 and §10 are corrected in place below.
+> The decision remains BLOCKED, for one additional reason.
+
 Scope: the secp256k1 implementation that `zk::SigVerifier`
 (`INTERFACE_CONTRACTS.md` §3) needs in order to close G2c. The Rust reference
 uses `k256 0.13.4`; the C++ kernel currently links nothing.
@@ -27,8 +33,9 @@ Constraints, all binding:
    Android via the NDK.
 5. **The kernel stays buildable without Rust.** A backend that requires a Rust
    toolchain is disqualified (`THREE_LANGUAGE_ARCHITECTURE.md` §3 rule 2).
-6. **Behaviour must match the reference**, including the absence of a low-S rule
-   (doc `08` §6).
+6. **Behaviour must match the reference**, which **rejects high-S signatures**
+   (`k256-0.13.4/src/ecdsa.rs:201-208`; `CRYPTO_BACKEND_READINESS.md` §2 H1).
+   The earlier reading of doc `08` §6 — that no low-S rule existed — was wrong.
 
 ---
 
@@ -66,9 +73,9 @@ here and records the decision instead of proceeding.
 
 | Candidate | Licence | Maintained | On host | Strict DER | High-S behaviour | Verdict |
 |---|---|---|---|---|---|---|
-| **bitcoin-core/secp256k1** (libsecp256k1) | MIT | Yes, active | No | Yes — `secp256k1_ecdsa_signature_parse_der` rejects non-canonical encodings; the lax parser lives in `contrib/` and is not linked | `secp256k1_ecdsa_verify` **returns 0 for high-S**; wrapper must normalise a copy before verifying | **Selected, blocked** |
-| OpenSSL 3.x (`libcrypto`) | Apache-2.0 | Yes | CLI only (Git runtime), no dev package | `d2i_ECDSA_SIG` is BER-tolerant; strictness and trailing-length checks must be re-implemented in the wrapper | Accepts high-S | Rejected as primary; fallback only |
-| `k256` via a Rust `staticlib` | Apache-2.0 OR MIT | Yes | Crate present (`k256-0.13.4`) | Exact — it is the reference | Accepts high-S (exact parity) | Rejected: couples the C++ build to a Rust toolchain |
+| **bitcoin-core/secp256k1** (libsecp256k1) | MIT | Yes, active | No | Yes — `secp256k1_ecdsa_signature_parse_der` rejects non-canonical encodings; the lax parser lives in `contrib/` and is not linked | `secp256k1_ecdsa_verify` **returns 0 for high-S**, which matches the reference; the wrapper must **not** normalise | **Selected, blocked** |
+| OpenSSL 3.x (`libcrypto`) | Apache-2.0 | Yes | CLI only (Git runtime), no dev package | `d2i_ECDSA_SIG` is BER-tolerant; strictness and trailing-length checks must be re-implemented in the wrapper | Accepts high-S — diverges from the reference | Rejected as primary; fallback only |
+| `k256` via a Rust `staticlib` | Apache-2.0 OR MIT | Yes | Crate present (`k256-0.13.4`) | Exact — it is the reference | Rejects high-S (exact parity) | Rejected: couples the C++ build to a Rust toolchain |
 | `secp256k1-sys` vendored C sources from crates.io | MIT | Yes | No | Same as libsecp256k1 | Same as libsecp256k1 | Alternative acquisition path for the selected candidate |
 | vcpkg `secp256k1` port | MIT | Yes | No | Same as libsecp256k1 | Same as libsecp256k1 | Alternative acquisition path; requires vcpkg bootstrap |
 | Python `coincurve` | MIT | Yes | No | Binding-level | Same as libsecp256k1 | Rejected: test-time only, not a C++ backend |
@@ -84,9 +91,11 @@ here and records the decision instead of proceeding.
 - It builds with both autotools and CMake in current releases and supports the
   required platforms, including MinGW and the Android NDK.
 
-The one behaviour that does **not** match is high-S rejection in
-`secp256k1_ecdsa_verify`. This is a known, documented property, not a defect,
-and it is handled in the wrapper (§7.3).
+The one behaviour that **does** match is high-S rejection in
+`secp256k1_ecdsa_verify`: the Rust reference rejects high-S too, at
+`k256-0.13.4/src/ecdsa.rs:201-208`. The earlier plan treated this agreement as a
+divergence to be papered over; it is the opposite. **No normalisation step is
+required or permitted** (`CRYPTO_BACKEND_READINESS.md` §2 H1).
 
 ---
 
@@ -161,24 +170,37 @@ being excluded on licence grounds.
   wrapper must enforce **33 bytes and prefix 0x02/0x03** before calling it, then
   reject any parse failure. This reproduces B1 exactly.
 - `secp256k1_ecdsa_signature_parse_der` is used for B2. It rejects non-minimal
-  integers, negative values, zero and out-of-range scalars, and bad lengths. The
+  integers, negative values, out-of-range scalars and bad lengths. Zero scalars
+  may be accepted at parse and rejected by `verify`; both paths return `false`,
+  which is verdict-equivalent (`CRYPTO_BACKEND_READINESS.md` §2 H3). These are
+  documented properties `[UNVERIFIED]` until the pinned source is read. The
   `contrib` lax parser must not be linked.
 - The trailing sighash byte is removed by `TxSigChecker` before the call; the
   parser sees DER only.
 
-### 7.3 High-S handling (the compatibility-critical step)
+### 7.3 High-S handling (withdrawn plan; corrected requirement)
 
-`secp256k1_ecdsa_verify` returns 0 when `s` is in the upper half of the group
-order. The Rust reference has no such rule. The wrapper therefore:
+**The plan originally written here is withdrawn.** It said to parse the DER,
+copy the signature, call `secp256k1_ecdsa_signature_normalize` on the copy, and
+verify the normalised copy. That would accept high-S signatures.
 
-1. parses the DER into a signature object (accepting either half);
-2. copies it and calls `secp256k1_ecdsa_signature_normalize` on the copy;
-3. calls `secp256k1_ecdsa_verify` with the normalised copy;
-4. returns the result.
+It was written on the belief that the reference has no low-S rule. The belief was
+wrong: `k256-0.13.4/src/ecdsa.rs:201-208` rejects high-S before verifying, so the
+Rust node returns `false` for every high-S signature it is given
+(`CRYPTO_BACKEND_READINESS.md` §2 H1).
 
-Step 2 is an internal transformation required to reproduce reference acceptance.
-It is **not** a low-S policy: a high-S signature is accepted, no error is
-reported to the caller, and no API exposes the normalised form. B4 stays true.
+The corrected requirement is therefore:
+
+1. parse the DER into a signature object;
+2. **do not normalise, canonicalise or re-encode `s`**;
+3. call `secp256k1_ecdsa_verify` on the parsed signature unchanged;
+4. return the result.
+
+This is not a new policy and not a protocol change. It reproduces the behaviour
+of the pinned dependency. A wrapper that normalises is a consensus defect: it
+accepts a transaction the reference rejects. The acceptance suite must fail if a
+normalisation call appears anywhere in the wrapper
+(`CRYPTO_BACKEND_READINESS.md` §4 S5, §7 R4).
 
 ### 7.4 Failure behaviour
 
@@ -231,34 +253,53 @@ backend, each with a Rust-generated vector.
 | Strict DER (**existing**, partly) | canonical; minimal integer with a leading zero only when the high bit is set; negative; zero `r`/`s`; `r ≥ n`; `s ≥ n`; non-minimal length; long-form length; trailing bytes; empty; truncated | `Signature::from_der` | Accept canonical only; reject the rest |
 | Prehashed verify (**existing**) | 32-byte digest from the P2 sighash corpus; a digest that is not `SHA-256(message)` | `verify_prehash` | No re-hashing; the same digest yields the same verdict |
 | Valid and invalid (**existing**) | valid signature; one flipped bit; wrong message; wrong public key; wrong chain id; wrong sighash type; wrong input index | `PublicKey::verify` | Identical verdicts |
-| Boundaries (new) | `r = 1`, `s = 1`, `r = n-1`, `s = n-1`, `s = n/2` (both sides), high-S twin of a valid signature | Rust vectors | Identical verdicts; **high-S accepted** |
-| ZeroCoin sighash (**existing**) | 15-byte tag, chain id, blanked scriptSigs, LE-u32 type fold (F18), out-of-range index | P2 corpus | 23/23 cases replayed, up from 21/23 |
-| Cross-signing (new) | Rust signs RFC 6979 → C++ verifies; C++ signs (test harness only) → Rust verifies | Both | Both directions accept |
+| Boundaries (new) | `r = 1`, `s = 1`, `r = n-1`, `s = n-1`, `s = n/2` (both sides), high-S twin of a valid signature | Rust vectors | Identical verdicts; **high-S rejected** |
+| ZeroCoin sighash (**existing**) | 15-byte tag, chain id, blanked scriptSigs, LE-u32 type fold (F18), out-of-range index | P2 corpus | 22/23 cases replayed, up from 21/23; see §9.1 |
+| Cross-signing (new) | Rust signs RFC 6979 → C++ verifies; C++ signs (test harness only) → Rust verifies | Both | Both directions accept, **if** a harness signer reproduces the RFC 6979 bytes |
 | Corruption (existing guard) | Every replayed case with one output byte flipped | `p2_conformance.py` | All rejected, none accepted |
 
+### 9.1 The one case a verifier cannot close
+
+`ledger.sighash.signature_der` expects a 71-byte DER signature to be **produced**
+from `{digest, scalar: 1}`, not merely checked. `SigVerifier` has no signing
+method, and §7.1 forbids signing in the kernel. The maximum a verification-only
+backend can reach is therefore **22/23 with one named deferral**, not 23/23. The
+case is closed only by a separate decision about a test-harness signer outside
+the kernel (`CRYPTO_BACKEND_READINESS.md` §2 H2, §3).
+
 Acceptance also requires: G1 28/28 unchanged; unit tests only added; Rust 263
-unchanged; P0 112/5/0/0 unchanged; the deferral list empty; and a written
-statement in the phase document that no low-S rule was introduced.
+unchanged; P0 112/5/0/0 unchanged; the deferral list reduced to exactly
+`ledger.sighash.signature_der` with a signing reason; and a written statement in
+the phase document that **no normalisation was added**.
 
 ---
 
 ## 10. Decision and non-claims
 
-**Decision.** libsecp256k1 (bitcoin-core/secp256k1) is the selected candidate,
-pinned by tag and archive SHA-256, MIT-licensed, with the high-S normalisation
-step of §7.3. The acquisition is **not authorised in P2.1**, so the candidate is
-selected but not obtained.
+**Decision.** libsecp256k1 (bitcoin-core/secp256k1) is the selected *candidate*.
+It is **not pinned**: no release tag and no archive SHA-256 are recorded, because
+no archive has been obtained. The high-S normalisation step of §7.3 is
+**withdrawn**; the wrapper must verify the parsed signature unchanged. The
+acquisition is **not authorised**, so the candidate is selected but not obtained.
+
+**P2.2 verdict: NO-GO for G2c** (`CRYPTO_BACKEND_READINESS.md` §5). Two
+independent blockers exist: the plan was incompatible with the reference on
+high-S (H1), and one deferred fixture needs signing rather than verification
+(H2). Neither is a reason to change a consensus rule.
 
 **Therefore, explicitly not claimed:**
 
 - no signature compatibility between C++ and Rust;
 - no closure of G2c, of gate G2, or of doc `03` §4's P2 exit criteria;
-- no low-S policy, in either direction;
+- no ZeroCoin low-S *policy*: the reference's high-S rejection is inherited from
+  `k256` and must be reproduced, not extended or removed;
+- no dependency pin, archive hash or licence verification;
 - no use of the OpenSSL CLI inside Git as a library;
 - no change to the kernel's dependency set — it still links nothing.
 
 The kernel keeps failing closed: `TxSigChecker` with a null verifier returns
-`false`, and the two corpus cases stay deferred (doc `08` §8.1).
+`false`, and the two corpus cases stay deferred (doc `08` §8.1), now with
+different reasons: one needs a verifier, one needs a signer.
 
 ---
 
@@ -273,8 +314,10 @@ One of the following, recorded in the next milestone's brief:
 | C. vcpkg manifest with `builtin-baseline` | vcpkg bootstrap plus the port | Good, but adds a package manager and its own updates |
 
 Whichever is authorised, the follow-up must also add the vectors in §9 before
-the backend is linked into a shipping target — and it still may not change the
-Rust reference.
+the backend is linked into a shipping target, must not normalise `s` (§7.3), and
+still may not change the Rust reference. Authorisation is necessary but not
+sufficient: P2.2's NO-GO stands until the revised plan and the acceptance suite
+exist (`CRYPTO_BACKEND_READINESS.md` §5).
 
 ---
 

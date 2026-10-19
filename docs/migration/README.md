@@ -31,6 +31,11 @@ independent C++ implementation beside the Rust one.
 > P2.1 added `docs/architecture/` — ownership, the three-language boundary,
 > interface contracts, the roadmap and the backend decision record. It changed no
 > code, no vector and no guard count.
+>
+> P2.2 reviewed backend readiness and recorded **NO-GO** for G2c: the Rust
+> reference rejects high-S signatures, the documented wrapper normalised them,
+> and one deferred fixture needs signing rather than verification. It changed
+> documentation only; no dependency was obtained and no gate count moved.
 
 ---
 
@@ -130,6 +135,7 @@ ever be mistaken for a source change; the crate's own `target/` is git-ignored.
 | 07 | [P1 kernel primitives](07-kernel-primitives-g1.md) | Which C++ primitives exist, how is the P0 corpus replayed against them, and what did gate G1 measure? |
 | 08 | [P2 script, sighash and secp256k1](08-kernel-script-sighash-secp256k1-p2.md) | Which ledger semantics were ported, what is deferred behind G2c, and what does the P2 replay prove? |
 | ARCH | [Architecture set](../architecture/COMPONENT_OWNERSHIP.md) | Who owns each subsystem, what may Rust/C++/Go do, what crosses an interface boundary, and when is temporary compatibility code removed? |
+| READY | [Crypto backend readiness review](../architecture/CRYPTO_BACKEND_READINESS.md) | Why is G2c blocked, what does the reference actually do about high-S, what must a backend prove, and is it safe to proceed? |
 | P1 | [Consensus rules](../consensus/CONSENSUS_RULES.md) · [C++ port requirements](../consensus/CPP_PORT_REQUIREMENTS.md) | What exactly does consensus require today, with which source references, and what must a C++ port match? |
 
 ---

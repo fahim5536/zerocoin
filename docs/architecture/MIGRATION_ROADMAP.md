@@ -61,15 +61,20 @@ only evidence needed to see that: `ledger.script.p2pkh_spend_accepted` and
 |---|---|---|
 | 1 | Obtain authorisation for one acquisition path (`CRYPTO_BACKEND_DECISION.md` §11) | The authorising brief, quoted in the phase document |
 | 2 | Vendor the pinned archive with `LICENSE`, `SHA256SUMS`, `ORIGIN` | Hashes match; tree builds offline |
-| 3 | Add `kernel/cmake/Secp256k1.cmake` and a façade under `kernel/src/` that implements `SigVerifier` with the high-S normalisation step | Wrapper has no C types in its public header |
-| 4 | Add the SEC1, DER, prehash, boundary and cross-signing vectors from the compatibility matrix | New vectors cite a Rust `source_commit` |
-| 5 | Remove the two cases from the deferral list; replay 23/23 | `p2_conformance.py` prints an empty deferral list |
-| 6 | Add a unit test proving a high-S signature verifies and is **not** reported as an error | Test fails if a low-S rule is ever added |
-| 7 | Run the full gate; record counts in the phase document | G1 28/28, P0 117 unchanged, Rust 263 unchanged |
+| 3 | Add `kernel/cmake/Secp256k1.cmake` and a façade under `kernel/src/` that implements `SigVerifier` by parsing and verifying **without normalising `s`** | Wrapper has no C types in its public header and no `normalize` call |
+| 4 | Add the SEC1, DER, prehash, boundary and high-S vectors from the compatibility matrix | New vectors cite a Rust `source_commit` |
+| 5 | Remove `ledger.script.p2pkh_spend_accepted` from the deferral list; replay 22/23 | `p2_conformance.py` prints exactly one deferral, by name |
+| 6 | Add a test proving a high-S signature is **rejected**, matching the reference, and that the low-S original verifies | Test fails if normalisation is ever added |
+| 7 | Record that `ledger.sighash.signature_der` stays deferred because it needs **signing**, and close it only under a separate decision about a test-harness signer | Deferral reason names signing, not verification |
+| 8 | Run the full gate; record counts in the phase document | G1 28/28, P0 117 unchanged, Rust 263 unchanged |
 
-Entry condition: an explicit authorisation to fetch. Exit condition: every row of
-`CRYPTO_BACKEND_DECISION.md` §9 passes and the kernel's dependency set contains
-exactly one third-party library.
+Entry conditions: an explicit authorisation to fetch, **and** a revised wrapper
+plan that drops the normalisation step, **and** the acceptance suite of
+`CRYPTO_BACKEND_READINESS.md` §4. The current plan meets none of the last two,
+which is why P2.2 recorded NO-GO. Exit condition: every row of
+`CRYPTO_BACKEND_DECISION.md` §9 passes, the kernel's dependency set contains
+exactly one third-party library, and the only remaining deferral is
+`ledger.sighash.signature_der` for signing.
 
 If the authorisation never arrives, G2c stays open, the deferral list stays
 non-empty, and the kernel keeps failing closed. That is a valid steady state; it
@@ -82,20 +87,23 @@ is not a signature-compatibility claim.
 Doc `03` §4 states the P2 exit gate as: *"Signatures produced by Rust verify in
 C++ and vice versa; the DER encoding and low-S normalisation match."*
 
-The second clause cannot be satisfied as written, because **the reference
-performs no low-S normalisation**. `src/crypto/secp256k1.rs` verifies with
-`verify_prehash` and has no half-order check; doc `08` §6 records the finding and
-its consequences.
+The second clause is satisfiable, but not in the sense the original wording
+suggests. The reference performs no normalisation **and it rejects high-S**:
+`k256-0.13.4/src/ecdsa.rs:201-208` returns an error before the verification
+arithmetic. `src/crypto/secp256k1.rs` has no check of its own only because the
+check lives one layer down. Doc `08` §6's earlier reading — "no low-S rule" — was
+wrong (`CRYPTO_BACKEND_READINESS.md` §2 H1).
 
-The gate is therefore read as:
+"Low-S normalisation match" therefore means: **neither side normalises, and both
+reject `s > n/2`.** The gate is read as:
 
 > Signatures produced by Rust verify in C++, and signatures produced by the test
-> harness verify in Rust. Both accept a high-S signature; neither normalises it,
-> rejects it, or reports it. Strict DER parsing matches.
+> harness verify in Rust. Strict DER parsing matches. Both reject a high-S
+> signature and neither normalises it.
 
 This is the only amendment. It does not relax the gate; it makes the gate
-describe the reference instead of Bitcoin's policy. The gate is still unmet until
-G2c closes, because no C++ verification exists.
+describe the reference instead of an assumption about the reference. The gate is
+still unmet until G2c closes, because no C++ verification exists.
 
 ---
 
@@ -108,7 +116,7 @@ failure.
 | # | Surface | Reason it exists | Removal condition | Owner |
 |---|---|---|---|---|
 | T1 | `TxSigChecker` with a null `SigVerifier` returns `false` | Fail closed while no backend exists | Replaced by a real verifier; the test asserting failure becomes a test asserting a call | Kernel |
-| T2 | Deferred cases `ledger.script.p2pkh_spend_accepted`, `ledger.sighash.signature_der` | They need secp256k1 | Re-enabled when G2c closes; the replay count becomes 23/23 | Kernel tools |
+| T2 | Deferred cases `ledger.script.p2pkh_spend_accepted`, `ledger.sighash.signature_der` | The first needs secp256k1 verification; the second needs RFC 6979 signing | First re-enabled when G2c closes (22/23); second only under a separate signing decision | Kernel tools |
 | T3 | The deferral list in `p2_conformance.py` | Makes the gap visible in code and in output | Deleted when empty | Kernel tools |
 | T4 | The C++ kernel itself | Compatibility proof for a possible cutover | G8: ship, keep as candidate, or delete `kernel/` | Maintainers |
 | T5 | Doc `03`'s proposed `cpp/` layout | Historical plan written before code existed | Superseded in writing by `THREE_LANGUAGE_ARCHITECTURE.md` §9; no code move | Documentation |
@@ -157,7 +165,9 @@ same change, and when the corresponding line in §5 is deleted in that change.
 | Item | Impact | Owner | Exit |
 |---|---|---|---|
 | G2c blocked | G2 incomplete; no signature compatibility | Maintainers | §3 |
-| Doc `03` G2 wording (low-S) | A literal reading would demand a rule the reference does not have | Documentation | §4 amendment recorded |
+| P2.2 NO-GO | The documented plan normalised high-S, which the reference rejects; one fixture needs signing | Maintainers | `CRYPTO_BACKEND_READINESS.md` §5 conditions |
+| Doc `03` G2 wording (low-S) | A literal reading is ambiguous about normalisation | Documentation | §4 amendment recorded |
+| High-S rule lives in `k256`, not in ZeroCoin tests | A dependency update could change consensus unnoticed | Maintainers | Add Rust-side high-S vectors; pin `k256` exactly (readiness §7 R1/R2) |
 | `kernel/` vs `cpp/` | Reviewers may look for the wrong path | Documentation | `THREE_LANGUAGE_ARCHITECTURE.md` §9 |
 | CMake floor 3.20 vs doc `03` ≥3.25 | A strict reader sees a mismatch | Build engineering | Raise the floor or amend doc `03` |
 | Stale comment in `kernel/CMakeLists.txt` line 2 (`03-target-architecture.md`) | Misleading reference | Documentation | Fixed with the next code change |

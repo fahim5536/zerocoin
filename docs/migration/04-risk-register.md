@@ -121,12 +121,13 @@ for anything consensus-visible. That should stay true.
 | **Likelihood** | M |
 | **Impact** | H — signatures that verify in one implementation and not the other |
 | **Trigger** | A cross-verification failure in G2 |
-| **Mitigation** | Cross-sign and cross-verify in both directions; pin the DER encoding and low-S rules with vectors; do not reimplement secp256k1 |
+| **Mitigation** | Cross-sign and cross-verify in both directions; pin DER strictness and the high-S verdict with vectors; do not reimplement secp256k1 |
 | **Residual** | Low |
 
 Rust uses `k256`; C++ should use a vetted library (libsecp256k1 is the obvious
 choice) rather than hand-written curve code. The two must agree on DER strictness,
-low-S normalisation, and the treatment of the recovery id.
+**high-S rejection** (both reject `s > n/2`; neither normalises), and the
+treatment of the recovery id.
 
 ### R10 — Storage and wallet format incompatibility
 

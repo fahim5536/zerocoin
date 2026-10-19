@@ -302,8 +302,11 @@ reference, and all testable without changing this phase:
   (`176–182`); the trailing sighash byte is stripped by the checker, not the
   parser;
 * verification is over the **32-byte digest** with no re-hashing (`137–143`);
-* **no low-S normalisation or rejection** exists anywhere in the reference.
-  A backend that enforces low-S would reject signatures the Rust node accepts;
+* **the reference rejects high-S**, one layer below `secp256k1.rs`:
+  `k256-0.13.4/src/ecdsa.rs:201-208` returns an error when `s > n/2`. This
+  bullet originally claimed that no low-S rule existed anywhere; that was wrong.
+  A backend must return `false` for high-S and must not normalise it
+  (`CRYPTO_BACKEND_READINESS.md` §2 H1);
 * malformed DER, malformed points and non-`SIGHASH_ALL` types must return
   `false`, never throw across the C boundary.
 

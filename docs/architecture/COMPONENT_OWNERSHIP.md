@@ -153,7 +153,7 @@ the same change.
 
 | Gap | Consequence | Owner of the gap | Closing criterion |
 |---|---|---|---|
-| G2c: no C++ curve backend | `OP_CHECKSIG` cannot succeed in C++; two corpus cases deferred | Kernel (seam) + maintainers (acquisition) | `CRYPTO_BACKEND_DECISION.md` §9 matrix passes |
+| G2c: no C++ curve backend | `OP_CHECKSIG` cannot succeed in C++; two corpus cases deferred, for two different reasons | Kernel (seam) + maintainers (acquisition) | `CRYPTO_BACKEND_READINESS.md` §5 conditions, then the corrected decision-record §9 matrix |
 | Go: nothing exists | No service layer; no risk yet | — | An approved ADR that names a service and its RPC dependency |
 | `kernel/` vs doc `03`'s proposed `cpp/` | Path in the proposal does not match the tree | Documentation | Recorded in `THREE_LANGUAGE_ARCHITECTURE.md` §9; no code move |
 | CMake floor 3.20 vs doc `03`'s ≥3.25 | The proposal is stricter than the build | Build engineering | Either raise the floor or amend doc `03`; recorded in `MIGRATION_ROADMAP.md` §8 |
