@@ -247,7 +247,8 @@ is the minimum evidence required before any backend is linked.
 
 **Status after P2.3: partial, not complete.** The twin-rejection and
 low-S-acceptance probes are pinned Rust-side (§9); the four scalar-boundary
-probes remain open, and S5 as a backend acceptance group is untouched.
+probes remain open, and S5 as a backend acceptance group is untouched. P2.4
+re-examined the four boundary probes and recorded them as blocked; see §10.3.
 
 ### S6 — Existing ZeroCoin sighash fixtures (23)
 
@@ -463,3 +464,246 @@ test changed.
    The independent evidence is the algebra in §9.1 and the fixed curve order.
 5. C++/libsecp256k1 parity remains unmeasured; no backend exists and none was
    acquired (D4).
+
+---
+
+## 10. P2.4 addendum — boundary-probe feasibility and dependency pin audit `[VERIFIED]`
+
+Baseline for this addendum: commit `aebca30`, clean working tree,
+`HEAD == origin/main` before the change. P2.4 adds one Rust integration test
+target and this section. It changes no production cryptography, no consensus
+rule, no dependency version, and no lockfile. G2c remains **NO-GO** and no
+backend was acquired. No C++ parity is claimed.
+
+### 10.1 S5 boundary probes — feasibility verdict
+
+S5 (§4) asks for four scalar-boundary verdicts in addition to the twin. All
+four share one requirement: the probe must present a signature that verifies
+except for the half-order rule, i.e. a valid ECDSA signature whose `s` is the
+chosen value. For key `d`, nonce `k` and digest `z`:
+
+```text
+r = x(k*G) mod n
+s = k^-1 * (z + r*d) mod n
+```
+
+`s` is an output of signing, not an input. A chosen `s` therefore has to be
+solved for: fix `k`, compute `r`, then set `z' = z + k*(s_target - s)` (or
+search `k` until `s` lands on the target).
+
+| Probe | Verdict sought | Reachable with the existing public APIs? | Status |
+|---|---|---|---|
+| `s = 1` | accept (when `r` is valid) | no — requires a chosen nonce and a solved digest | **Blocked** |
+| `s = n - 1` | reject | no — same construction, or the twin of an `s = 1` signature | **Blocked** |
+| `s = floor(n/2)` | accept | no — same construction | **Blocked** |
+| `s = floor(n/2) + 1` | reject | no — same construction | **Blocked** |
+
+Why each is blocked, in terms of the APIs that exist:
+
+1. `PrivateKey::sign` (`zerocoin/src/crypto/secp256k1.rs:81-87`) is the only
+   signing entry point in the crate. It takes a digest and nothing else: no
+   nonce, no target scalar. It delegates to `SigningKey::sign_prehash`, i.e.
+   RFC 6979 plus normalisation.
+2. `k256`'s `SignPrimitive::try_sign_prehashed` does accept a nonce, but its
+   `Secp256k1` implementation normalises the result —
+   `let sig_low = sig.normalize_s().unwrap_or(sig);`
+   (`k256-0.13.4/src/ecdsa.rs:194`). It therefore cannot emit `s = n-1`, and it
+   cannot emit a *chosen* low-S value either: given `k` it computes one `s`,
+   with no parameter to steer it.
+3. The only unnormalised route in this dependency set is the free function
+   `ecdsa::hazmat::sign_prehashed` (`ecdsa-0.16.9/src/hazmat.rs:224-259`),
+   re-exported as `k256::ecdsa::hazmat`. It takes `d`, `k` and `z` and returns
+   `s = k^-1*(z + r*d)` untouched. Building a chosen-`s` probe from it means
+   writing the solve above and wrapping it in a signer: that is a new
+   **test-only signing facility**, which P2.4 is explicitly not authorised to
+   add. The module header describes it as an easy-to-misuse low-level interface.
+4. Changing `s` on an existing signature is not an alternative. It leaves `r`,
+   `z` and `Q` fixed, so `u1 = z/s` and `u2 = r/s` change and
+   `x(u1*G + u2*Q) != r` with overwhelming probability. Such a probe returns
+   `VerificationFailed` because the equation fails, not because of the
+   half-order position, and would not isolate S5's rule. §2 H3 already records
+   this trap.
+
+Consequence: the four probes are blocked by the milestone's own constraints,
+not by a missing test idea. They become reachable only with (a) a
+nonce-controlling test signer, or (b) an external oracle that can sign, i.e. the
+C++/libsecp256k1 backend that G2c would provide. Neither exists here, and P2.4
+adds neither. This is consistent with §9.2: S5 is a backend acceptance group.
+
+### 10.2 Supporting pins added in this phase
+
+`zerocoin/tests/s5_boundary_probes.rs` contains three tests. They do **not**
+execute any of the four probes; they pin the two facts that make the blocked
+verdict auditable. No production code, dependency or consensus rule was
+touched.
+
+```powershell
+cargo +stable-x86_64-pc-windows-gnu test --test s5_boundary_probes
+```
+
+Observed:
+
+```text
+running 3 tests
+test high_s_predicate_boundary_is_strictly_above_half_the_group_order ... ok
+test high_s_twin_is_equation_valid_but_the_public_api_rejects_it ... ok
+test the_public_signing_api_cannot_emit_a_chosen_scalar ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+| Test | What it pins | Observed |
+|---|---|---|
+| `high_s_predicate_boundary_is_strictly_above_half_the_group_order` | `n-1` equals the secp256k1 order minus one; `2*floor(n/2) = n-1`; `IsHigh` is false at `1` and `floor(n/2)`, true at `n-1` and `floor(n/2)+1` | pass |
+| `high_s_twin_is_equation_valid_but_the_public_api_rejects_it` | the P2.3 twin is accepted by `hazmat::verify_prehashed` (equation only) and rejected by `PublicKey::verify` on the same digest and key | pass |
+| `the_public_signing_api_cannot_emit_a_chosen_scalar` | over a fixed 32-digest corpus, every `PrivateKey::sign` output is low-S: the sanctioned signer offers no scalar choice | pass |
+
+Two consequences worth stating precisely:
+
+- The predicate row pins *where the gate sits*, not what a signature does. It
+  says `floor(n/2)` would pass the gate and `floor(n/2)+1` would fail it if a
+  valid signature with that `s` existed. It is not an S5 verdict and is not
+  counted as one.
+- The equation row closes a gap in the P2.3 evidence. The twin is no longer
+  merely "rejected": it is rejected while satisfying the ECDSA equation under
+  the library's own equation-only primitive, so the only remaining difference
+  from the accepted original is the half-order position. The four blocked
+  probes have no such equation-valid witness, which is exactly why they are not
+  claimed.
+
+### 10.3 S5 status after P2.4
+
+S5 is **partial**. Two of six probes are pinned end-to-end; four are blocked.
+
+| S5 probe | Expected | State after P2.4 |
+|---|---|---|
+| High-S twin | reject | **Pinned** (§9.2; equation-validity now also pinned) |
+| Low-S original | accept | **Pinned** |
+| `s = 1` | accept | **Blocked** — needs a nonce-controlling signer |
+| `s = n-1` | reject | **Blocked** — needs a nonce-controlling signer |
+| `s = floor(n/2)` | accept | **Blocked** — needs a nonce-controlling signer |
+| `s = floor(n/2)+1` | reject | **Blocked** — needs a nonce-controlling signer |
+
+S5 is not complete. G2c remains **NO-GO** (D1) and P3 does not start (D7).
+
+### 10.4 Dependency pin audit
+
+**What the manifest requests.** `zerocoin/Cargo.toml:46`:
+
+```toml
+k256 = { version = "0.13", features = ["ecdsa", "arithmetic", "ecdh", "sha256", "pkcs8", "pem"] }
+```
+
+`"0.13"` is a caret requirement: `>=0.13.0, <0.14.0`. It does not name a patch
+release. The `ecdsa` feature is what compiles the half-order gate in; without
+it `VerifyPrimitive` is not implemented and the verify path would not exist.
+
+**What actually resolves.** `zerocoin/Cargo.lock` — tracked by git
+(`git ls-files` confirms) and format `version = 3` — records the exact graph.
+The consensus-relevant chain `[VERIFIED]`:
+
+| Crate | Version | SHA-256 checksum in `Cargo.lock` |
+|---|---|---|
+| `k256` | 0.13.4 | `f6e3919bbaa2945715f0bb6d3934a173d1e9a59ac23767fbaaef277265a7411b` |
+| `ecdsa` | 0.16.9 | `ee27f32b5c5292967d2d4a9d7f1e0b0aed2c15daded5a60300e4abb9d8020bca` |
+| `elliptic-curve` | 0.13.8 | `b5e6043086bf7973472e0c7dff2142ea0b680d30e18d9cc40f267efbf222bd47` |
+| `crypto-bigint` | 0.5.5 | `0dc92fb57ca44df6db8059111ab3af99a63d5d0f8375d9972e319a379c6bab76` |
+| `rfc6979` | 0.4.0 | `f8dd2a808d456c4a54e300a23e9f5a67e122c3024119acbfd73e3bf664491cb2` |
+| `sec1` | 0.7.3 | `d3e97a565f76233a6003f9f5c54be1d9c5bdfa3eccfb189469f11ec4901c47dc` |
+| `signature` | 2.2.0 | `77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de` |
+| `sha2` | 0.10.9 | `a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283` |
+| `der` | 0.7.10 | `e7c1832837b905bbfb5101e07cc24c8deddf52f93225eee6ead5f4d63d53ddcb` |
+| `digest` | 0.10.7 | `9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292` |
+| `base16ct` | 0.2.0 | `4c7f02d4ea65f2c1853089ffd8d2787bdbc63de2f0d29dedbcf8ccdfa0ccd4cf` |
+
+**How it is enforced.** Every entry names
+`source = "registry+https://github.com/rust-lang/crates.io-index"` and carries a
+checksum, so Cargo verifies the downloaded `.crate` archive against the lock on
+every fetch. The repository has no `.cargo/config.toml`, no `[patch]`, no
+`[replace]`, no `vendor/` directory and no `url.*.insteadOf` rewrite, so
+resolution is exactly "crates.io index + this lock". Any change to a resolved
+version therefore appears as a visible diff in `zerocoin/Cargo.lock`.
+
+**What is *not* pinned.** H4 is unchanged. There is no archive hash recorded
+out of band, no vendored source subtree, and the manifest does not use
+`=0.13.4`. A build that regenerates the lock (a deleted lock, a fresh
+`cargo update`, or a resolver run under a different Cargo) can move `k256` to
+any `0.13.x`, and every crate in the table with it, without any file under
+`zerocoin/src/` changing.
+
+**How an update could change consensus-relevant behaviour.** The verification
+verdict is decided by four pieces of the pinned graph, each replaceable by a
+patch release:
+
+1. `k256-0.13.4/src/ecdsa.rs:201-208` — the `is_high()` early return. It is the
+   only high-S rule in the stack. A patch that dropped, relaxed or reordered it
+   would make the Rust node accept signatures the current binary rejects,
+   splitting the chain against nodes built from this lock.
+2. `k256-0.13.4/src/arithmetic/scalar.rs:42,481-485` — `IsHigh` compares against
+   `ORDER >> 1`. A changed threshold would move every boundary in §10.1 by one
+   scalar and invert the `floor(n/2)` / `floor(n/2)+1` verdicts.
+3. `ecdsa-0.16.9/src/hazmat.rs:270-293` — the equation check itself, over the
+   `crypto-bigint` and `elliptic-curve` arithmetic underneath it. A changed
+   reduction, inversion or linear combination changes which signatures verify.
+4. `sha2 0.10.9` — provides SHA-256, which hashes the `ZRO/sighash/v1`
+   preimage. A behavioural change there changes the digest that is signed, which
+   is equally consensus-visible.
+
+The C++ kernel links none of these crates (§9.4 item 5), so an update cannot
+silently change the reference implementation's behaviour; the risk is entirely
+on the Rust side. That asymmetry is the G2c problem, not a mitigation.
+
+**Review and test policy for a future cryptographic dependency update**
+`[PROPOSED]`:
+
+1. Treat `k256`, `ecdsa`, `elliptic-curve`, `crypto-bigint`, `rfc6979`, `sec1`,
+   `signature` and `sha2` as consensus-critical. A version movement is a
+   consensus change and needs its own phase, not a drive-by `cargo update`.
+2. Change one crate at a time:
+   `cargo +stable-x86_64-pc-windows-gnu update -p <crate> --precise <version>`,
+   then read `git diff zerocoin/Cargo.lock` and confirm only the intended
+   package's `version` and `checksum` lines moved. Do not run a bare
+   `cargo update`.
+3. Diff the crate source between the two versions along the paths named in
+   items 1-4 above, and confirm the gate, the threshold and the equation are
+   unchanged or that the change is understood and intended.
+4. Re-run `scripts/gate-g1.ps1`, the P2 conformance runner, and both high-S
+   targets (`high_s_signature`, `s5_boundary_probes`). Compare the verdict
+   tables in §9.2 and §10.3 against the new output; a green suite with a
+   changed verdict is a failure.
+5. Commit the lock diff and record the new version and checksum in this
+   document. The update is not accepted while G2c is NO-GO unless the C++ /
+   oracle comparison in §5 is satisfied.
+6. Never regenerate the lock as a side effect of an unrelated change. The lock
+   is part of the consensus surface.
+
+### 10.5 Gates observed after the change
+
+| Gate | Command | Result |
+|---|---|---|
+| G1 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\gate-g1.ps1` | **PASS** — build (warnings as errors), ctest, 108 kernel unit tests, 28/28 corpus, 270 Rust tests across 9 targets, P0 `112 PASS / 5 ANCHOR / 0 FAIL` |
+| P2 | `python kernel\tools\p2_conformance.py --vectors test\vectors --runner .build\kernel-g1\kernel_conformance.exe` | **PASS** — 21/21 replayed, 2 deferred (G2c), corruption self-check 21/21, exit 0 |
+| S5 pins | `cargo +stable-x86_64-pc-windows-gnu test --test s5_boundary_probes` | **PASS** — 3/3 |
+| P2.3 pins | `cargo +stable-x86_64-pc-windows-gnu test --test high_s_signature` | **PASS** — unchanged, included in the G1 Rust suite |
+
+The Rust total moved from 267 to 270 because of the three new tests; no existing
+test changed. Files changed in this phase: `zerocoin/tests/s5_boundary_probes.rs`
+(new) and this section. No `.publish` state, fixture, vector or script was
+touched.
+
+### 10.6 Remaining limitations
+
+1. S5 is **partial**: two of six probes are pinned, four are blocked by the
+   absence of a nonce-controlling signer (§10.1). It is not marked complete.
+2. The predicate pin proves where the gate sits, not that a signature carrying
+   that scalar verifies. It is supporting evidence, not an S5 verdict.
+3. The equation-validity pin uses the same library family as the code under
+   test. It separates the gate from the equation, but it is not an independent
+   big-integer derivation; the independent evidence for the twin remains the
+   algebra in §9.1.
+4. The dependency set is pinned by lockfile and checksum, not by archive hash or
+   vendored source. H4 stays open, and the manifest range still permits
+   `0.13.x` drift if the lock is regenerated.
+5. G2c remains **NO-GO**. No backend exists, C++/libsecp256k1 parity is
+   unmeasured, and no parity is claimed.
+6. P3 has not started.
