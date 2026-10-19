@@ -136,6 +136,7 @@ ever be mistaken for a source change; the crate's own `target/` is git-ignored.
 | 08 | [P2 script, sighash and secp256k1](08-kernel-script-sighash-secp256k1-p2.md) | Which ledger semantics were ported, what is deferred behind G2c, and what does the P2 replay prove? |
 | ARCH | [Architecture set](../architecture/COMPONENT_OWNERSHIP.md) | Who owns each subsystem, what may Rust/C++/Go do, what crosses an interface boundary, and when is temporary compatibility code removed? |
 | READY | [Crypto backend readiness review](../architecture/CRYPTO_BACKEND_READINESS.md) | Why is G2c blocked, what does the reference actually do about high-S, what must a backend prove, and is it safe to proceed? |
+| AUDIT | [Crypto backend selection audit](../architecture/CRYPTO_BACKEND_SELECTION_AUDIT.md) | Which C++ backend is defensible on source evidence, what must a differential Rust-versus-C++ test prove, which S5 probes stay blocked, and what is the reproducibility policy? |
 | P1 | [Consensus rules](../consensus/CONSENSUS_RULES.md) · [C++ port requirements](../consensus/CPP_PORT_REQUIREMENTS.md) | What exactly does consensus require today, with which source references, and what must a C++ port match? |
 
 ---

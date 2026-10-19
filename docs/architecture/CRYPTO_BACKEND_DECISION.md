@@ -10,6 +10,11 @@ Recorded during P2.1 at commit `e8fda7e` (2026-10-18); host inventory taken on
 > rejects. §1 constraint 6, §3, §7.3, §9 and §10 are corrected in place below.
 > The decision remains BLOCKED, for one additional reason.
 
+> **Amended by P2.5.** `CRYPTO_BACKEND_SELECTION_AUDIT.md` reads the candidate's
+> parser and verify path from upstream source. §7.2's `[UNVERIFIED]` note is
+> replaced with what was found, qualified by the fact that `master` was read, not
+> a pinned release. The selection is unchanged and still not authorised.
+
 Scope: the secp256k1 implementation that `zk::SigVerifier`
 (`INTERFACE_CONTRACTS.md` §3) needs in order to close G2c. The Rust reference
 uses `k256 0.13.4`; the C++ kernel currently links nothing.
@@ -170,11 +175,14 @@ being excluded on licence grounds.
   wrapper must enforce **33 bytes and prefix 0x02/0x03** before calling it, then
   reject any parse failure. This reproduces B1 exactly.
 - `secp256k1_ecdsa_signature_parse_der` is used for B2. It rejects non-minimal
-  integers, negative values, out-of-range scalars and bad lengths. Zero scalars
-  may be accepted at parse and rejected by `verify`; both paths return `false`,
-  which is verdict-equivalent (`CRYPTO_BACKEND_READINESS.md` §2 H3). These are
-  documented properties `[UNVERIFIED]` until the pinned source is read. The
-  `contrib` lax parser must not be linked.
+  integers, negative values and bad lengths; **out-of-range values parse but
+  become scalar `0`, so they fail in `verify`** rather than at parse. Both paths
+  return `false`, which is verdict-equivalent (`CRYPTO_BACKEND_READINESS.md`
+  §2 H3). These properties were read from `src/ecdsa_impl.h` and
+  `include/secp256k1.h` on `master` (2026-10-19) and are recorded with their
+  exact rules in `CRYPTO_BACKEND_SELECTION_AUDIT.md` §4.1; the pinned tag must
+  be re-read at acquisition because `master` is not a release. The `contrib` lax
+  parser must not be linked.
 - The trailing sighash byte is removed by `TxSigChecker` before the call; the
   parser sees DER only.
 
@@ -331,3 +339,13 @@ exist (`CRYPTO_BACKEND_READINESS.md` §5).
 | Use OpenSSL as primary | `d2i` strictness and trailing-data handling would have to be re-implemented, creating a divergence risk exactly where the contract is strictest; larger surface than needed |
 | Use a test-only Python binding | Not available in the kernel; would leave C++ unable to verify a spend |
 | Skip verification and accept signatures | Violates fail-closed; would make the kernel unable to validate consensus |
+
+---
+
+## 13. P2.5 audit pointer
+
+`CRYPTO_BACKEND_SELECTION_AUDIT.md` (P2.5) records the source-verified
+comparison, the differential Rust-versus-C++ conformance matrix, the S5
+boundary-probe decision, the dependency reproducibility policy and the fresh gate
+results. It does not change this decision: libsecp256k1 remains the selected but
+unauthorised candidate, G2c remains **NO-GO**, and P3 has not started.
