@@ -89,9 +89,11 @@ produces is low-S.
 - No low-S rule is *introduced* by this document. The rule already exists in the
   pinned dependency. What is forbidden is removing it by normalisation.
 - The rule is inherited from a dependency, not written in ZeroCoin source and
-  not pinned by any existing Rust test. That is a residual risk (R1 in §7): a
-  `k256` update could change consensus silently. It must be pinned by vectors
-  before a second implementation validates it.
+  not pinned by any existing Rust test at the time of this review. That is a
+  residual risk (R1 in §7): a `k256` update could change consensus silently. It
+  must be pinned by vectors before a second implementation validates it.
+  **Update (P2.3):** the high-S verdict is now pinned by
+  `zerocoin/tests/high_s_signature.rs`; see §9.
 
 ### H2 — `ledger.sighash.signature_der` needs signing, not verification. **Blocking for 23/23.**
 
@@ -243,6 +245,10 @@ accept); `s = 1` (accept when `r` is valid); `s = n-1` (reject); `s = n/2`
 (accept); `s = (n/2)+1` (reject). This is the group that decides H1 in code. It
 is the minimum evidence required before any backend is linked.
 
+**Status after P2.3: partial, not complete.** The twin-rejection and
+low-S-acceptance probes are pinned Rust-side (§9); the four scalar-boundary
+probes remain open, and S5 as a backend acceptance group is untouched.
+
 ### S6 — Existing ZeroCoin sighash fixtures (23)
 
 Replay the whole P2 slice through the seam, not through a new API. Success is
@@ -315,8 +321,8 @@ must never be linked into the kernel.
 
 | # | Risk | Impact | Mitigation |
 |---|---|---|---|
-| R1 | The low-S rule lives in `k256`, not in ZeroCoin code or fixtures | A dependency update could change consensus with no test failing | Add the S5 vectors Rust-side and pin `k256` by exact version and checksum; treat a version change as a consensus change |
-| R2 | No existing Rust test asserts high-S rejection | The claim in H1 is proven by reading code, not by a failing test | Add a Rust integration test that a high-S twin is rejected; do not change verification code |
+| R1 | The low-S rule lives in `k256`, not in ZeroCoin code or fixtures | A dependency update could change consensus with no test failing | **Partially mitigated in P2.3:** the high-S verdict is pinned Rust-side (§9). `Cargo.toml` still allows the `0.13` range while `Cargo.lock` records `0.13.4`; treat a version change as a consensus change |
+| R2 | No existing Rust test asserts high-S rejection | The claim in H1 is proven by reading code, not by a failing test | **Closed in P2.3:** `high_s_twin_is_rejected_at_verification` in `zerocoin/tests/high_s_signature.rs`; verification code unchanged |
 | R3 | `signature_der` has no owner under the current plan | "23/23" is repeated in two documents as if achievable | Split the deferral reason; D6; roadmap §3 corrected |
 | R4 | A future wrapper re-adds normalisation "for compatibility" | Silent divergence on exactly the malleated signatures an attacker controls | S5 must fail if normalisation appears; the wrapper must have no `normalize` call |
 | R5 | No platform evidence beyond MinGW | The backend may not build where the node is meant to run | G7 CI matrix; do not claim support before it exists |
@@ -344,3 +350,116 @@ in place; the historical phase documents keep their original findings.
 `docs/migration/03-module-mapping-and-phased-plan.md:183` keeps its original
 gate wording as history; the amendment in `MIGRATION_ROADMAP.md` §4 is the text
 that governs.
+
+---
+
+## 9. P2.3 addendum — Rust regression pins for high-S `[VERIFIED]`
+
+Baseline for this addendum: commit `eff89b8`, clean working tree,
+`HEAD == origin/main`. P2.3 adds one Rust integration test target. It changes no
+production cryptography, no consensus rule, no dependency version, no fixture,
+and no C++ or Go code. G2c remains **NO-GO** and no backend was acquired.
+
+### 9.1 Test target and commands
+
+`zerocoin/tests/high_s_signature.rs` contains four tests. It signs a real
+ZeroCoin sighash — `ledger::sighash::signature_hash` over the `ZRO/sighash/v1`
+preimage with a regtest chain id and `SIGHASH_ALL` — using a fixed key
+(`PrivateKey::from_bytes([7u8; 32])`), then verifies through `PublicKey::verify`
+and `ECDSA::verify` with the 33-byte compressed SEC1 encoding produced by
+`PrivateKey::public_key`. There is no RNG, clock or filesystem input, so the
+result is deterministic and isolated.
+
+```powershell
+cargo +stable-x86_64-pc-windows-gnu test --test high_s_signature
+```
+
+Observed:
+
+```text
+running 4 tests
+test high_s_twin_is_rejected_at_verification ... ok
+test valid_low_s_sighash_signature_is_accepted ... ok
+test invalid_signatures_are_still_rejected ... ok
+test signing_conventions_are_pinned ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+| Test | What it pins | Observed |
+|---|---|---|
+| `valid_low_s_sighash_signature_is_accepted` | `PrivateKey::sign` emits low-S; `PublicKey::verify` and `ECDSA::verify` accept it over the exact prehash and compressed key | pass |
+| `high_s_twin_is_rejected_at_verification` | `(r, n − s)` parses as DER, is high-S, normalises back to the original byte for byte, and returns `CryptoError::VerificationFailed` | pass |
+| `invalid_signatures_are_still_rejected` | flipped `r`; flipped `s` chosen to stay low-S; wrong prehash; wrong key; empty, empty-sequence, trailing-byte and truncated DER | pass |
+| `signing_conventions_are_pinned` | RFC 6979 determinism; 32-byte prehash not re-hashed; 70–72-byte DER | pass |
+
+The twin is not hard-coded. For a signature `(r, s)` over digest `z` under key
+`Q`, write `w = s^-1`, `u1 = z*w`, `u2 = r*w`; the verifier computes
+`R = u1*G + u2*Q` and accepts when `x(R) = r`. For `(r, n − s)`:
+
+```text
+w' = (n - s)^-1 = -s^-1 = -w
+u1' = -u1,   u2' = -u2
+R'  = -(u1*G + u2*Q) = -R
+x(R') = x(-R) = x(R) = r
+```
+
+with the secp256k1 group order
+
+```text
+n = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+```
+
+The test computes `n − s` with `k256`'s `Scalar::negate` and asserts
+`twin.normalize_s() == Some(original)`, so the twin is proven to be the same
+ECDSA point rather than arbitrary bytes.
+
+### 9.2 S5 coverage — partial
+
+| S5 probe | Expected | State after P2.3 |
+|---|---|---|
+| High-S twin | reject | **Pinned Rust-side** |
+| Low-S original | accept | **Pinned Rust-side** |
+| `s = 1` | accept | **Open** |
+| `s = n-1` | reject | **Open** |
+| `s = floor(n/2)` | accept | **Open** |
+| `s = floor(n/2)+1` | reject | **Open** |
+
+The boundary semantics are `s > floor(n/2)`, not `>=`: `IsHigh` is
+`self.0.ct_gt(&FRAC_MODULUS_2)` with `FRAC_MODULUS_2 = ORDER >> 1`
+(`k256-0.13.4/src/arithmetic/scalar.rs:42,481-485`). `n` is odd, so
+`floor(n/2)` is low-S and `floor(n/2)+1` is the smallest high-S value.
+
+The four scalar-boundary probes are **not** covered. Changing `s` alone changes
+the ECDSA equation, so the result would be rejected as an invalid signature
+regardless of its half-order position and would not isolate the rule. Producing
+a *valid* signature with a chosen `s` requires controlling the nonce or solving
+for the digest, i.e. a test-only signer. P2.3 is not authorised to add one, and
+the kernel has no signer (`kernel/include/zerocoin/sighash.h:79-89`). S5 as
+written is a backend acceptance group; it stays open until a backend exists and
+an oracle that can sign generates its vectors.
+
+### 9.3 Gates observed after the change
+
+| Gate | Command | Result |
+|---|---|---|
+| G1 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\gate-g1.ps1` | **PASS** — build (warnings as errors), ctest, 108 kernel unit tests, 28/28 corpus, 267 Rust tests across 8 targets, P0 `112 PASS / 5 ANCHOR / 0 FAIL` |
+| P2 | `python kernel\tools\p2_conformance.py --vectors test\vectors --runner .build\kernel-g1\kernel_conformance.exe` | **PASS** — 21/21 replayed, 2 deferred (G2c), corruption self-check 21/21 |
+
+The Rust total moved from 263 to 267 because of the four new tests; no existing
+test changed.
+
+### 9.4 Remaining limitations
+
+1. S5 is **partial**, as detailed in §9.2. It is not marked complete.
+2. The pin covers the boolean verdict at the public API, not the internal
+   rejection point. A dependency change that preserved the verdict while
+   altering unrelated verification behaviour would not be caught here.
+3. `zerocoin/Cargo.toml` still requests `k256 = "0.13"`; only `Cargo.lock`
+   names `0.13.4`. H4 is unchanged: there is still no archive checksum and no
+   vendored subtree.
+4. The equivalence assertion uses the same library as the code under test, so
+   it proves internal consistency, not an independent big-integer derivation.
+   The independent evidence is the algebra in §9.1 and the fixed curve order.
+5. C++/libsecp256k1 parity remains unmeasured; no backend exists and none was
+   acquired (D4).
