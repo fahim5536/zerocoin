@@ -328,6 +328,12 @@ produce a dependency-free static library (U3).
 
 ## 9. Differential conformance matrix (Rust vs C++)
 
+> **Executed and superseded by §16.** The table below is the P2.5 *plan*, written
+> before a backend existed and using its own `V1..V15` family labels. P2.6 ran a
+> 117-case matrix; §16 records the measured per-case results. The `V1..V7`
+> labels used there are the **fixture's group labels** and are not the same
+> taxonomy as `V1..V15` here.
+
 Two axes, deliberately separate:
 
 - **V — verification parity.** The C++ verifier returns the same verdict as the
@@ -534,6 +540,11 @@ the reference implementation.
 
 ## 14. G2c and P3 verdict
 
+> **Restated with measurements in §16.10.** The reasons below describe the P2.5
+> state, when no backend had been acquired. P2.6 acquired, built and measured
+> one; the verdict is still NO-GO, for a different and now measured reason
+> (§16.6).
+
 **G2c: NO-GO.** The decision is unchanged from P2.2 and P2.4
 (`CRYPTO_BACKEND_READINESS.md` §5 D1):
 
@@ -577,3 +588,609 @@ Explicitly **not** claimed:
   artefact;
 - no use of Git's bundled OpenSSL;
 - no change to the kernel's dependency set — it still links nothing.
+
+---
+
+## 16. P2.6 addendum — acquisition, reproducible build, and the measured differential result
+
+This section records what P2.6 **executed**. It replaces §9's planned matrix with
+measured results and restates §14's verdict. It does not supersede §10 (S5), §11
+(acquisition paths) or §13 (risks); those stay as written, with the status
+updates called out below.
+
+Baseline: repository root `D:\Downloads\zerocoin\.publish\upstream`, branch
+`main`, `HEAD == origin/main == 6435d53`
+(`docs(architecture): record the P2.5 backend selection audit`), remote `origin` →
+`https://github.com/fahim5536/zerocoin.git`, working tree clean apart from the
+files this milestone adds. No user change was present and none was overwritten.
+
+P2.6 adds a pinned third-party source tree, an isolated CMake project, a test-only
+C++ runner, a Rust-generated fixture, a grading wrapper, a gate script and this
+section. It changes **no** file under `zerocoin/src/`, no consensus rule, no
+kernel source, no existing fixture and no vector.
+
+### 16.1 Provenance and integrity `[VERIFIED]`
+
+`kernel/third_party/secp256k1/ORIGIN.md` is the byte-level record; this is its
+summary.
+
+| Field | Value |
+|---|---|
+| Repository | `https://github.com/bitcoin-core/secp256k1` |
+| Release | annotated, PGP-signed tag `v0.8.0` — not a branch, not `master` |
+| Tag object | `18f07c42218765cd46148d74d9fe575795f56dce` |
+| Commit | `6e2c8bc4ecdc6e71dbe7a368f360d8d453ce435d` |
+| Archive | `libsecp256k1-0.8.0.tar.gz`, 2,436,784 bytes |
+| Archive SHA-256 | `dd685546f9e717b9adde329acd5a4cd8083d40f710fdb0a603ee5a83f908132b` |
+| Signature | `libsecp256k1-0.8.0.tar.gz.sig`, 566 bytes, SHA-256 `c7eb14bbd67fe94b9ac4b556df6ae18aebb450092c836d05a6e13ea005fc7ac8` |
+| Signer fingerprint | `6A8F 9C26 6528 E25A EB1D  7731 C237 1D91 CB71 6EA7` — RSA 4096, Sebastian Falbesoner (theStack) |
+| `gpg --status-fd 1 --verify` | `GOODSIG` and `VALIDSIG`, exit **0** |
+| Acquired | 2026-10-19 |
+| Licence | MIT, `Copyright (c) 2013 Pieter Wuille` |
+
+The fingerprint was established **independently of the downloaded archive**, from
+three sources that agree: `SECURITY.md` at the tag, the owner-controlled GitHub
+key endpoint `https://github.com/thestack.gpg`, and `keys.openpgp.org` queried by
+fingerprint. `TRUST_UNDEFINED` is expected: this host has no web-of-trust path to
+the key, so trust comes from the cross-reference, not from a certification chain.
+
+**Recorded anomaly, not a silent success.** The key copy served by
+`https://github.com/thestack.gpg` was stale — it expired `2025-11-20`, before the
+signature was made on `2026-08-03` — and the first verification attempt produced
+`EXPKEYSIG`. Re-importing the keyserver copy of the *same fingerprint* added the
+later self-signatures, and the same signature then verified `GOODSIG`/`VALIDSIG`.
+Only the expiry assertion changed; the fingerprint did not.
+
+**Tree integrity.** `SHA256SUMS` covers every vendored file plus the archive
+itself. Re-verified after the final build: **60/60 files match, 0 mismatches**,
+3,266,759 bytes. Every vendored file except `ORIGIN.md` and `SHA256SUMS` is a
+byte-for-byte copy of the upstream path; nothing was edited, patched, generated
+or reformatted.
+
+### 16.2 Vendored footprint, licence and attribution `[VERIFIED]`
+
+```text
+kernel/third_party/secp256k1/
+  COPYING                         upstream MIT licence, verbatim
+  ORIGIN.md                       this provenance record
+  SHA256SUMS                      per-file and archive digests
+  include/secp256k1.h             the whole public API surface used
+  include/secp256k1_preallocated.h
+  src/*.h                         headers required by the three .c files
+  src/secp256k1.c                 the library
+  src/precomputed_ecmult.c        shipped verification table
+  src/precomputed_ecmult_gen.c    shipped signing table
+```
+
+Compiled translation units: exactly the three `.c` files above. Omitted on
+purpose: every `src/modules/**`, upstream's own test and benchmark sources, the
+`precompute_*.c` generators, the module headers, `cmake/`, `.github/`, `ci/`,
+`contrib/`, `doc/`, `sage/`, `tools/`, `examples/`, and upstream's
+`CMakeLists.txt` (its option semantics are transcribed in `ORIGIN.md` §4).
+`README.md` and `SECURITY.md` are omitted from the tree to keep the footprint
+minimal; `SECURITY.md` remains one of the three fingerprint sources.
+
+Defines, all transcribed from upstream `v0.8.0` rather than guessed:
+
+| Define | Value | Why |
+|---|---|---|
+| `ECMULT_WINDOW_SIZE` | `15` | must match the shipped `precomputed_ecmult.c` table |
+| `COMB_BLOCKS` | `43` | must match the shipped `precomputed_ecmult_gen.c` table |
+| `COMB_TEETH` | `6` | same |
+| `SECP256K1_STATIC` | defined, `PUBLIC` | static linkage on Windows; suppresses `dllimport` |
+
+Deliberately **not** defined: every `ENABLE_MODULE_*`, `USE_EXTERNAL_DEFAULT_CALLBACKS`,
+`USE_FORCE_WIDEMUL_*`, `SECP256K1_NO_API_VISIBILITY_ATTRIBUTES`. The field,
+scalar and widemul backends are left to upstream's own compile-time detection,
+exactly as an upstream default build does. **No security check was disabled**:
+the library is compiled whole, with its runtime verification intact.
+
+Licence: `COPYING` is MIT and is vendored verbatim; every `.c`/`.h` file keeps its
+upstream copyright header. The library is not linked into any shipped binary in
+P2.6, so no release attribution obligation has been triggered yet. That
+obligation starts if and when it is linked into a node.
+
+### 16.3 Reproducible build `[VERIFIED]`
+
+Standalone project, outside `kernel/CMakeLists.txt` and outside the
+`zerocoin_kernel` target:
+
+```powershell
+cmake -S kernel/differential -B .build/p26-differential-repro-a -G Ninja
+cmake --build .build/p26-differential-repro-a
+ctest --test-dir .build/p26-differential-repro-a --output-on-failure
+```
+
+`CMAKE_BUILD_TYPE` defaults to `Release` when neither the cache nor a multi-config
+generator supplies one. `CMAKE_C_STANDARD 90` for the vendored C (as upstream
+builds it), `CMAKE_CXX_STANDARD 20` for the harness. No optimisation level is
+forced, no global compiler flag is added, and no toolchain file is used. Warnings
+are errors (`-Wall -Wextra -Wpedantic -Werror`) on ZeroCoin-authored translation
+units only — never on the vendored tree, which must stay byte-for-byte upstream.
+
+Toolchain observed for every build below: CMake 4.4.3, Ninja 1.13.2, GCC and G++
+16.2.0 (WinLibs MinGW-W64, UCRT, POSIX threads, SEH) from
+`...\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_...\mingw64\bin`, Python
+3.15.0, cargo 1.99.1 (`5f94df478 2026-08-27`), rustc 1.99.1
+(`58cf8f9c3 2026-10-13`), host `x86_64-pc-windows-gnu`.
+
+Two independent clean builds from empty directories (`.build/p26-differential-repro-a`
+and `...-b`) produced seven artefacts each. Byte comparison:
+
+| Artefact | Length | Result |
+|---|---|---|
+| `secp256k1.c.obj` | 167,189 | **byte-identical**, sha256 `18b385efe4f199322b3855ff6c3dd45c3db141d4b9fe67a299cc51a74e97e306` |
+| `precomputed_ecmult.c.obj` | 1,049,211 | **byte-identical**, sha256 `93e43da54eddf2975c7b918b33ad44168eb9fdb021943eda4956b11a1e8fde7b` |
+| `precomputed_ecmult_gen.c.obj` | 88,681 | **byte-identical**, sha256 `e2cc3bc1080ce0d27f3dec0aa76702d56d2b06a9f581796b5f541e79e9769609` |
+| `libsecp256k1_vendored.a` | 1,306,932 | same length, **6 differing bytes** in a clean run (7 in an earlier run) |
+| `secp256k1_differential.exe` | 1,397,151 | same length, **2 differing bytes** |
+
+The archive differences sit in container member metadata and are not stable
+between runs — the count changed from 7 to 6 — which is itself evidence that they
+are timestamp-like rather than code. The executable differences are exactly two
+bytes: the PE `TimeDateStamp` (at `e_lfanew + 8` = `0x88` = 136, values
+`1792408372` vs `1792408382`) and the PE32+ `CheckSum` (at `0x98 + 64` = 216).
+Every code and data section is identical.
+
+**Claim made:** all three source translation units compile to byte-identical
+objects across independent clean builds, and the linked image differs only in
+link-time metadata. **Claim not made:** byte-identical binaries. The archive and
+the executable are not byte-identical, and archive-container timestamps are not
+reproducible here without a further change that P2.6 did not authorise.
+
+Only Windows/MinGW was exercised. No Linux, macOS, MSVC or Android build was
+run, so no cross-platform reproducibility is claimed (U4 unchanged).
+
+### 16.4 The test-only differential harness `[VERIFIED]`
+
+```text
+kernel/differential/backend/secp256k1_verifier.{h,cpp}   zk::SigVerifier over libsecp256k1
+kernel/differential/runner/main.cpp                      fixture reader and reporter
+kernel/differential/vectors/ledger.sighash.differential.txt   generated fixture
+kernel/tools/secp256k1_differential.py                   grading wrapper
+zerocoin/tests/differential_vectors.rs                   fixture emitter + live oracle
+```
+
+The adapter implements `zk::SigVerifier::verify` and *includes* the kernel header,
+so the compiler checks the override — but the target links only
+`secp256k1_vendored`. No kernel object, transaction parser or sighash
+implementation is pulled in, and nothing here is reachable from `TxSigChecker`
+or from a node binary.
+
+The runner prints two verdicts per case, which is the point of the design:
+
+- **`seam`** — the contract gate plus the maths: 33-byte public key with tag
+  `0x02`/`0x03`, strict DER, then `secp256k1_ecdsa_verify`;
+- **`backend`** — raw `secp256k1_ec_pubkey_parse` + `secp256k1_ecdsa_verify`,
+  with no contract gate.
+
+`adapter=faithful` means both agree, i.e. the library alone produced the verdict.
+`adapter=load-bearing` means the contract gate changed the answer, so the case is
+**not** evidence of library parity and is never reported as such.
+
+Fail-closed: every parse failure, verify failure, short buffer, null pointer and
+unexpected library return produces `reject`. There is no path that converts an
+error into acceptance, and no key or signature material is logged.
+
+**The Rust verdicts are derived, never hand-written.** The fixture is emitted by
+`zerocoin/tests/differential_vectors.rs`; on every `cargo test` run the committed
+file is re-parsed and every `RUST` line is re-derived from the live Rust
+implementation by `differential_vectors_match_rust_reference`. A hand-edited
+expectation therefore fails the Rust suite before it can reach the C++ runner.
+
+**The comparison cannot go dead silently.** `secp256k1_differential.py` enforces
+a pinned case count (117), requires every mismatch to be a listed
+`--known-divergence`, requires every listed divergence to *still* mismatch (a
+stale pin fails), checks the runner exit code against the failure count, and runs
+a liveness probe that corrupts one recorded verdict and demands exactly one new
+mismatch on top of the known set. A wrapper that stopped comparing would fail
+rather than pass.
+
+### 16.5 Measured matrix `[VERIFIED]`
+
+```text
+secp256k1 differential: 116/117 cases match the Rust reference (7 accept, 110 reject)
+  groups                V1=2, V2=3, V3=18, V4=11, V5=5, V6=2, V7=76
+  adapter load-bearing  V4.uncompressed_65 (rust=reject backend=accept)
+  adapter load-bearing  V4.hybrid_prefix_06 (rust=reject backend=accept)
+  documented divergence 1:
+    V4.prefix_05: rust=accept seam=reject backend=reject
+```
+
+| Group | Cases | Rust accept | Match | What it covers |
+|---|---|---|---|---|
+| `V1` | 2 | 2 | 2 | valid low-S signatures: the P2 corpus triple, and the P2.3 scalar-7 fixture |
+| `V2` | 3 | 0 | 3 | high-S twins of the V1 rows and of the S5 probe digest — all rejected |
+| `V3` | 18 | 0 | 18 | DER structure and scalar range: empty, sequence-only, truncated, trailing byte, trailing byte inside the sequence, non-minimal long-form length, redundant leading zeros, negative integers, wrong integer tag, indefinite length, `r = 0`, `s = 0`, zero-length integer, `r = n`, `s = n`, extra integer |
+| `V4` | 11 | 1 | 10 | public-key encodings: 65-byte uncompressed, hybrid `0x06`/`0x07`, lengths 32/34, prefixes `0x00`/`0x05`, all-zero, empty, `x = p`, `x` with no curve point |
+| `V5` | 5 | 3 | 5 | digest handling: wrong digest, all-zero digest, `z = n` reducing to 0, `z = n + 1` reducing to 1, all-ones digest reducing |
+| `V6` | 2 | 1 | 2 | P2 script level: the corpus triple replayed through the seam, and the 72-byte scriptSig push (DER + `SIGHASH_ALL`) fed as DER |
+| `V7` | 76 | 0 | 76 | corruption corpus: 71 single-site DER corruptions, 4 public-key corruptions, 1 digest corruption |
+
+Every accept row, with its identity:
+
+| Case | Note |
+|---|---|
+| `V1.p2_corpus_low_s` | `ledger.sighash.signature_der` / `ledger.script.p2pkh_spend_accepted` triple: scalar 1 over the regtest P2PKH sighash |
+| `V1.p23_scalar7_low_s` | `tests/high_s_signature.rs` fixture: seed `[7u8; 32]`, RFC 6979, low-S |
+| `V4.prefix_05` | **the divergence** — §16.6 |
+| `V5.digest_equals_n_reduces_to_zero` | `z = n` reduces to 0; the signature was made over `z = 0` |
+| `V5.digest_equals_n_plus_one_reduces_to_one` | `z = n + 1` reduces to 1 |
+| `V5.digest_all_ones_reduces` | `z = 2^256 - 1` reduces below the group order |
+| `V6.p2pkh_spend_accepted` | the corpus triple replayed through the seam; byte-identical to `V1.p2_corpus_low_s` |
+
+The V5 rows matter beyond arithmetic: both implementations reduce a 256-bit
+digest modulo `n` rather than rejecting it (`ecdsa-0.16.9/src/hazmat.rs:279`
+`Scalar::reduce_bytes`; libsecp `secp256k1_scalar_set_b32` over the overflow
+flag), and the measurement confirms the two reductions agree on all three
+non-canonical digests. That covers four of §9 V11's five digest shapes; a digest
+with a leading `0x00` byte is **not** in the fixture, so nothing is claimed about
+it.
+
+The complete 117-row matrix — fixture identifier, Rust verdict, seam verdict,
+backend verdict, match flag, adapter class — is in **§16.12**. It is generated
+mechanically from the runner's own output, and can be regenerated with the
+command in §16.9.
+
+### 16.6 `V4.prefix_05` — a consensus-relevant divergence `[VERIFIED]`
+
+This is the finding that decides the milestone. It is not a rounding error, not a
+missing fixture, and not something the adapter may normalise away.
+
+**Observation.** A 33-byte public key whose tag byte is `0x05` is **accepted by
+the Rust reference** and **rejected by libsecp256k1** for the same digest and
+signature:
+
+```text
+CASE V4.prefix_05 group=V4 rust=accept seam=reject backend=reject match=no adapter=faithful
+```
+
+**Mechanism in the Rust reference.**
+
+1. `zerocoin/src/crypto/secp256k1.rs:112-119` — `PublicKey::from_sec1` gates on
+   **length only** (`bytes.len() != COMPRESSED_PUBKEY_LEN`), then calls
+   `VerifyingKey::from_sec1_bytes`.
+2. `sec1-0.7.3/src/point.rs:485-486,491-500` — `Tag::Compact = 5`, and
+   `Tag::from_u8(5) => Ok(Tag::Compact)`.
+3. `sec1-0.7.3/src/point.rs:520-527` — `Tag::Compact.message_len()` is one field
+   element, so `0x05 || X` is exactly 33 bytes and passes the length check.
+4. `k256-0.13.4/src/arithmetic/affine.rs:247-253` — `from_encoded_point` maps
+   `Coordinates::Compact { x } => Self::decompact(x)`.
+5. `k256-0.13.4/src/arithmetic/affine.rs:204-211` — `decompact` is
+   `Self::decompress(x_bytes, Choice::from(0))`, i.e. **the same `x` with `y`
+   forced even**. `0x05 || X` is therefore a silent alias for `0x02 || X`.
+
+**Mechanism in libsecp256k1.**
+`kernel/third_party/secp256k1/src/eckey_impl.h:18-36` admits 33 bytes with tag
+`SECP256K1_TAG_PUBKEY_EVEN` or `..._ODD` only; 65 bytes with
+`UNCOMPRESSED`/`HYBRID_EVEN`/`HYBRID_ODD` plus a parity check on the hybrid
+tags; **everything else returns 0**. Tag `0x05` at 33 bytes falls into the final
+`else`.
+
+**Why it is consensus-relevant, not a library detail.** The production path is:
+
+```text
+OP_CHECKSIG (zerocoin/src/ledger/script.rs:162)
+  -> TxSigChecker::check_signature (zerocoin/src/ledger/sighash.rs:113-126)
+  -> PublicKey::from_sec1 (zerocoin/src/crypto/secp256k1.rs:112-119)
+  -> VerifyingKey::from_sec1_bytes -> sec1 Tag::Compact -> k256 decompact
+```
+
+A spender can commit `hash160(0x05 || X)` into a P2PKH `scriptPubKey` and produce
+a valid signature under key `X`. The current Rust node accepts that spend; a
+libsecp256k1-backed node rejects the public key outright. Two nodes therefore
+disagree on whether a transaction is valid — the definition of a consensus
+split. This is a **live property of the Rust reference today**, independent of
+whether any C++ backend is ever adopted.
+
+**The fixture's own note disagrees with the fixture's verdict.** The generated
+`NOTE` for this case reads "prefix 0x05 is not a SEC1 tag", because that is what
+the contract intends; the `RUST` line says `accept`, because that is what the
+implementation does. Deriving expectations from the implementation rather than
+from intent is what exposed this.
+
+**Remediation options, both outside P2.6's authority.**
+
+1. **Tighten the Rust gate** to `0x02 | 0x03` on a 33-byte key. That is a change
+   to production cryptography with consensus effect and needs its own phase, its
+   own fixtures and its own audit. It is the option that makes the reference
+   match its stated contract.
+2. **Authorise the C++ adapter to emulate the quirk** — decompact `0x05` with an
+   even `y`. This deliberately reproduces a bug and must be a written decision,
+   not an implementation detail discovered later.
+
+Neither was done here. The divergence is pinned in `CMakeLists.txt` as
+`--known-divergence V4.prefix_05` precisely so that it cannot be forgotten: the
+gate fails if any *other* case diverges, and it also fails once this one starts
+matching, forcing the allowance to be removed.
+
+### 16.7 Verification parity and deterministic signing `[VERIFIED / UNVERIFIED]`
+
+Kept separate, exactly as §9 requires.
+
+**Verification (V).** Measured, with the single exception above: 116/117 rows
+agree, and the incompatible row is recorded rather than papered over. The
+verifier is not authorised for production use.
+
+**Deterministic signing (S).** `[UNVERIFIED]` — no signing comparison was
+performed in P2.6.
+
+What `ledger.sighash.signature_der` requires is exact DER bytes from
+`(d, z)`. The two signing entry points are:
+
+| Side | Entry point | Nonce derivation |
+|---|---|---|
+| Rust | `PrivateKey::sign` → `SigningKey::sign_prehash` | RFC 6979 HMAC-SHA256 over the 32-byte digest, then low-S normalisation |
+| C++ | `secp256k1_ecdsa_sign` | RFC 6979 HMAC-SHA256 seeded with `key32` and `msg32`, then low-S normalisation |
+
+Both implement RFC 6979 with HMAC-SHA256 and both normalise to low-S, so byte
+parity is **structurally plausible**. It remains **unmeasured**, and plausible is
+not the same as proven: extra-entropy handling, DER minimal-integer emission and
+the exact treatment of `h1` are all places where two RFC 6979 implementations can
+diverge without either being wrong. No signing code was added to production, and
+closing S requires a separate authorisation to build a signer harness and compare
+exact DER bytes on deterministic vectors.
+
+A matching verifier does not imply a matching signer: verification accepts a set
+of signatures, signing emits one element of that set. §9 states this and P2.6
+provides no counter-evidence.
+
+### 16.8 S5 status `[UNCHANGED]`
+
+S5 is **partial — two of six probes pinned, four blocked**. P2.6 changes nothing
+here:
+
+| S5 probe | Expected | State after P2.6 |
+|---|---|---|
+| High-S twin | reject | **Pinned** |
+| Low-S original | accept | **Pinned** |
+| `s = 1` | accept | **Blocked** |
+| `s = n - 1` | reject | **Blocked** |
+| `s = floor(n/2)` | accept | **Blocked** |
+| `s = floor(n/2) + 1` | reject | **Blocked** |
+
+The four blocked probes still need a mathematically valid signature carrying the
+target scalar. P2.6 did **not** add a test-only signing oracle, and does not
+count the high-S twins in `V2`, the predicate pins, or any invalid signature as
+boundary evidence. `V2.s5_probe_digest_5a_high_s_twin` is a twin, not a probe.
+
+### 16.9 Regression gates `[VERIFIED, fresh]`
+
+One command, every step executed from a fresh build directory:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\gate-p2-6.ps1
+```
+
+| Gate | Observed | Exit |
+|---|---|---|
+| Kernel configure + build | 23/23 targets from scratch, warnings as errors | 0 |
+| C++ kernel unit tests | `kernel unit tests: 108 run, 0 failed` | 0 |
+| G1 conformance | `28/28 cases replayed against source_commit 7cb9017c…` | 0 |
+| P2 conformance | `21/21 cases`; `corruption self-check rejected 21/21 cases`; 2 deferred (G2c) | 0 |
+| P0 baseline | `PASS 112  ANCHOR 5  SKIP 0  FAIL 0` | 0 |
+| Rust suite (`--all-targets`) | `271 passed, 0 failed across 10 targets`; 1 ignored (the fixture emitter) | 0 |
+| `high_s_signature` | `4 passed, 0 failed` | 0 |
+| `s5_boundary_probes` | `3 passed, 0 failed` | 0 |
+| Differential build A + B | 7 artefacts each, both from empty directories | 0 |
+| Reproducibility comparison | `3/3 objects identical; archive=differs; exe=differs` | 0 |
+| Differential `ctest` | `1/1 kernel_secp256k1_differential ... Passed 0.30 sec` | 0 |
+| Differential verdicts | `116/117 match, 1 pinned (V4.prefix_05)` | 0 |
+
+Final lines of the run:
+
+```text
+P2.6 gates: PASS (every step executed; 1 documented divergence pinned)
+G2c: NO-GO — V4.prefix_05 is consensus-relevant; see docs/architecture/CRYPTO_BACKEND_SELECTION_AUDIT.md
+```
+
+No cached build was reported as evidence. The Rust total rose from 270 to 271
+because of the new oracle test; no existing test changed and none was weakened.
+The two deferred corpus cases are still reported as deferred, not as passed.
+
+To regenerate the per-case matrix in §16.12:
+
+```powershell
+.build\p26-differential-repro-a\secp256k1_differential.exe `
+  kernel\differential\vectors\ledger.sighash.differential.txt
+```
+
+### 16.10 G2c verdict
+
+**G2c: NO-GO.**
+
+The P2.5 verdict was NO-GO because no backend existed. That reason is gone: one
+is now acquired, PGP-verified, hash-pinned, vendored, built reproducibly and
+measured against 117 Rust-derived cases. The verdict is unchanged because the
+measurement produced a **consensus-relevant disagreement** (§16.6), which is a
+stop condition under the milestone's own rules.
+
+Read against §14's GO conditions:
+
+| §14 condition | P2.6 state |
+|---|---|
+| written authorisation naming one acquisition path | satisfied for the experiment; not for production integration |
+| pinned tag with archive SHA-256 and verified GPG signature | **satisfied** (§16.1) |
+| wrapper gating SEC1 to 33 bytes / `0x02` / `0x03`, strict DER, no `s` normalisation | **satisfied** — and it is exactly what surfaced the divergence |
+| §9 V matrix green against Rust-generated fixtures | **not satisfied** — 116/117; `V4.prefix_05` is not green |
+| S5 closed or explicitly waived | not satisfied, not waived |
+| separate decision for `signature_der` | not taken |
+
+That third row is the important lesson. §14 assumed the C++ wrapper was the
+risk and the Rust reference was canonical. The measurement shows the opposite for
+this one case: the wrapper was strict, the reference was lax. A gate on the
+wrapper cannot fix a divergence that originates in the reference's own parser.
+
+**What would move G2c to GO**, in order: (1) a decision on `V4.prefix_05` — fix
+the Rust gate, or authorise bug-for-bug emulation; (2) a re-run of the 117-case
+matrix with the divergence either gone or explicitly authorised; (3) an explicit
+S5 disposition; (4) a separate decision on `signature_der`.
+
+A passing isolated verifier does **not** authorise production integration, and
+even a fully green matrix would not by itself: the backend remains isolated, the
+kernel still links nothing, and the two deferred corpus cases stay deferred.
+
+### 16.11 Files changed and non-claims
+
+Added in P2.6:
+
+- `kernel/third_party/secp256k1/**` — 60 vendored files + `ORIGIN.md` + `SHA256SUMS`;
+- `kernel/differential/**` — standalone CMake project, adapter, runner, fixture;
+- `kernel/tools/secp256k1_differential.py` — grading wrapper;
+- `zerocoin/tests/differential_vectors.rs` — fixture emitter and live oracle;
+- `scripts/gate-p2-6.ps1` — the milestone gate;
+- this section, and the §11 addendum in `CRYPTO_BACKEND_READINESS.md`.
+
+Not changed: any file under `zerocoin/src/`, `kernel/include/`, `kernel/src/`,
+`kernel/tests/`, `test/`; `kernel/CMakeLists.txt`; `Cargo.toml`; `Cargo.lock`;
+any existing fixture or vector; any `.publish` state; Git identity or remote
+configuration.
+
+Explicitly **not** claimed:
+
+- that C++ verification is compatible with Rust — one row demonstrably is not;
+- that the backend may be linked into the kernel or a node binary;
+- RFC 6979 or DER byte parity for signing;
+- cross-platform build reproducibility — Windows/MinGW only;
+- byte-identical binaries — the archive and executable differ in metadata;
+- any S5 progress beyond the two previously pinned probes;
+- G2c, gate G2, or the P2 exit criteria as closed;
+- any start of P2.7, P3, service layer, RPC or Go networking.
+
+### 16.12 Per-case matrix (all 117 executed rows)
+
+Generated from the runner's own output; not hand-transcribed. `seam` is the
+contract gate plus the maths, `backend` is raw libsecp256k1. Every row is a case
+that was executed; nothing is inferred or extrapolated.
+
+| Fixture | Rust | Seam | Backend | Match | Adapter |
+|---|---|---|---|---|---|
+| `V1.p2_corpus_low_s` | accept | accept | accept | yes | faithful |
+| `V1.p23_scalar7_low_s` | accept | accept | accept | yes | faithful |
+| `V2.p2_corpus_high_s_twin` | reject | reject | reject | yes | faithful |
+| `V2.p23_scalar7_high_s_twin` | reject | reject | reject | yes | faithful |
+| `V2.s5_probe_digest_5a_high_s_twin` | reject | reject | reject | yes | faithful |
+| `V3.der_empty` | reject | reject | reject | yes | faithful |
+| `V3.der_sequence_only` | reject | reject | reject | yes | faithful |
+| `V3.der_truncated` | reject | reject | reject | yes | faithful |
+| `V3.der_trailing_byte` | reject | reject | reject | yes | faithful |
+| `V3.der_trailing_inside_sequence` | reject | reject | reject | yes | faithful |
+| `V3.der_long_form_length` | reject | reject | reject | yes | faithful |
+| `V3.der_r_redundant_zero` | reject | reject | reject | yes | faithful |
+| `V3.der_s_redundant_zero` | reject | reject | reject | yes | faithful |
+| `V3.der_r_negative` | reject | reject | reject | yes | faithful |
+| `V3.der_s_negative` | reject | reject | reject | yes | faithful |
+| `V3.der_wrong_integer_tag` | reject | reject | reject | yes | faithful |
+| `V3.der_indefinite_length` | reject | reject | reject | yes | faithful |
+| `V3.der_r_zero` | reject | reject | reject | yes | faithful |
+| `V3.der_s_zero` | reject | reject | reject | yes | faithful |
+| `V3.der_s_zero_length` | reject | reject | reject | yes | faithful |
+| `V3.der_r_equals_n` | reject | reject | reject | yes | faithful |
+| `V3.der_s_equals_n` | reject | reject | reject | yes | faithful |
+| `V3.der_extra_integer` | reject | reject | reject | yes | faithful |
+| `V4.uncompressed_65` | reject | reject | accept | yes | **load-bearing** |
+| `V4.hybrid_prefix_06` | reject | reject | accept | yes | **load-bearing** |
+| `V4.hybrid_prefix_07` | reject | reject | reject | yes | faithful |
+| `V4.length_32` | reject | reject | reject | yes | faithful |
+| `V4.length_34` | reject | reject | reject | yes | faithful |
+| `V4.prefix_00` | reject | reject | reject | yes | faithful |
+| `V4.prefix_05` | accept | reject | reject | **no** | faithful |
+| `V4.all_zero_33` | reject | reject | reject | yes | faithful |
+| `V4.empty` | reject | reject | reject | yes | faithful |
+| `V4.x_equals_field_prime` | reject | reject | reject | yes | faithful |
+| `V4.x_without_curve_point` | reject | reject | reject | yes | faithful |
+| `V5.wrong_digest` | reject | reject | reject | yes | faithful |
+| `V5.zero_digest` | reject | reject | reject | yes | faithful |
+| `V5.digest_equals_n_reduces_to_zero` | accept | accept | accept | yes | faithful |
+| `V5.digest_equals_n_plus_one_reduces_to_one` | accept | accept | accept | yes | faithful |
+| `V5.digest_all_ones_reduces` | accept | accept | accept | yes | faithful |
+| `V6.p2pkh_spend_accepted` | accept | accept | accept | yes | faithful |
+| `V6.script_sig_push_including_sighash_byte` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_00` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_01` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_02` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_03` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_04` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_05` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_06` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_07` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_08` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_09` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_10` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_11` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_12` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_13` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_14` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_15` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_16` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_17` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_18` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_19` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_20` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_21` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_22` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_23` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_24` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_25` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_26` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_27` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_28` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_29` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_30` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_31` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_32` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_33` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_34` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_35` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_36` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_37` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_38` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_39` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_40` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_41` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_42` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_43` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_44` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_45` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_46` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_47` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_48` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_49` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_50` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_51` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_52` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_53` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_54` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_55` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_56` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_57` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_58` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_59` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_60` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_61` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_62` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_63` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_64` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_65` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_66` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_67` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_68` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_69` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_der_70` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_pubkey_prefix` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_pubkey_x_first_byte` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_pubkey_x_last_byte` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_pubkey_truncated` | reject | reject | reject | yes | faithful |
+| `V7.corrupt_digest_last_byte` | reject | reject | reject | yes | faithful |
+
+Totals: 117 rows, 7 Rust accepts (V1×2, V4×1, V5×3, V6×1), 110 Rust rejects,
+116 matches, 1 divergence (`V4.prefix_05`), 2 load-bearing adapter rows
+(`V4.uncompressed_65`, `V4.hybrid_prefix_06`).
+
+Input normalisation: **none**. The adapter does not re-encode, right-pad, strip or
+reorder any input. DER is passed to `secp256k1_ecdsa_signature_parse_der`
+unmodified, the digest is passed as 32 raw bytes in the order the Rust reference
+hashes them, and a public key is accepted only at exactly 33 bytes with tag
+`0x02`/`0x03`. The two load-bearing rows are the cases where that last gate
+differs from raw `secp256k1_ec_pubkey_parse`, which also admits 65-byte keys and
+is why `backend=accept` there while the seam rejects.

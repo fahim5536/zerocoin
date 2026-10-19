@@ -707,3 +707,143 @@ touched.
 5. G2c remains **NO-GO**. No backend exists, C++/libsecp256k1 parity is
    unmeasured, and no parity is claimed.
 6. P3 has not started.
+
+---
+
+## 11. P2.6 addendum — backend acquired, built and measured; G2c still NO-GO `[VERIFIED]`
+
+Baseline for this addendum: commit `6435d53`, clean working tree,
+`HEAD == origin/main` before the change. P2.6 adds a pinned third-party source
+tree, an isolated CMake project, a test-only C++ runner, a Rust-generated fixture,
+a grading wrapper, a gate script and documentation. It changes no production
+cryptography, no consensus rule, no dependency version and no lockfile. D1
+remains in force: **G2c is still NO-GO**, but for a measured reason rather than an
+absent backend. Full evidence is in
+`CRYPTO_BACKEND_SELECTION_AUDIT.md` §16.
+
+### 11.1 Acquisition and build `[VERIFIED]`
+
+libsecp256k1 `v0.8.0` was acquired as the annotated tag archive, verified with
+`gpg --verify` against fingerprint
+`6A8F 9C26 6528 E25A EB1D 7731 C237 1D91 CB71 6EA7` — established independently
+from `SECURITY.md`, the owner's GitHub key endpoint and `keys.openpgp.org`, not
+from a key shipped beside the artifact. `GOODSIG`/`VALIDSIG`, exit 0. Archive
+SHA-256 `dd685546f9e717b9adde329acd5a4cd8083d40f710fdb0a603ee5a83f908132b`
+(2,436,784 bytes). The first attempt produced `EXPKEYSIG` because the GitHub key
+copy was stale; re-importing the same fingerprint from the keyserver resolved it.
+That anomaly is recorded in the audit rather than smoothed over.
+
+60 files (3,266,759 bytes) are vendored under
+`kernel/third_party/secp256k1/` with `COPYING` (MIT), `ORIGIN.md` and
+`SHA256SUMS`; 60/60 re-verified after the final build. The library compiles from
+three translation units with `ECMULT_WINDOW_SIZE=15`, `COMB_BLOCKS=43`,
+`COMB_TEETH=6` and `SECP256K1_STATIC`; every optional module is off and no
+security check is disabled.
+
+Two independent clean builds produced **byte-identical objects** for all three
+source files. The static archive (1,306,932 bytes) and the runner executable
+(1,397,151 bytes) differ only in metadata: 6-7 bytes of archive container
+metadata, and two bytes in the PE image — `TimeDateStamp` and `CheckSum`. No
+claim of byte-identical binaries is made.
+
+### 11.2 Verification result — one consensus-relevant divergence `[VERIFIED]`
+
+117 cases derived from the live Rust implementation, replayed through a test-only
+C++ adapter that links only the vendored library:
+
+```text
+secp256k1 differential: 116/117 cases match the Rust reference (7 accept, 110 reject)
+  groups                V1=2, V2=3, V3=18, V4=11, V5=5, V6=2, V7=76
+  adapter load-bearing  V4.uncompressed_65 (rust=reject backend=accept)
+  adapter load-bearing  V4.hybrid_prefix_06 (rust=reject backend=accept)
+  documented divergence 1:
+    V4.prefix_05: rust=accept seam=reject backend=reject
+```
+
+The divergence is not a fixture artefact. `sec1-0.7.3` maps tag `0x05` to
+`Tag::Compact` (`src/point.rs:485-486,491-500`), whose message length is one field
+element, and `k256-0.13.4` decompacts it as `decompress(x, y = even)`
+(`src/arithmetic/affine.rs:204-211,247-253`). A 33-byte key `0x05 || X` is
+therefore a **silent alias for `0x02 || X`** in the Rust reference.
+libsecp256k1 admits only `0x02`/`0x03` at 33 bytes
+(`src/eckey_impl.h:18-36`).
+
+`zerocoin/src/crypto/secp256k1.rs:112-119` gates the SEC1 key on **length only**,
+so the alias reaches the curve maths; the production path
+`OP_CHECKSIG → TxSigChecker::check_signature
+(zerocoin/src/ledger/sighash.rs:113-126) → PublicKey::from_sec1` accepts it. A
+spender can commit `hash160(0x05 || X)` into a P2PKH `scriptPubKey` and the
+current Rust node accepts the spend while a libsecp256k1-backed node rejects the
+key. Two nodes would disagree on validity.
+
+This is a live property of the Rust reference, independent of whether a C++
+backend is ever adopted, and it is the milestone's own stop condition. It was not
+normalised away in the adapter: the case is pinned as `--known-divergence`, and
+the wrapper fails both if another case diverges and if this one starts matching.
+
+### 11.3 Deterministic signing — still unproven `[UNVERIFIED]`
+
+No signing comparison was performed. Both sides are RFC 6979 with low-S
+normalisation (Rust `SigningKey::sign_prehash`; libsecp
+`secp256k1_ecdsa_sign`), so byte parity is structurally plausible and entirely
+unmeasured. U2 is unchanged, and `ledger.sighash.signature_der` stays deferred.
+A green verifier does not imply a green signer.
+
+### 11.4 S5 status — unchanged
+
+Two of six probes pinned, four blocked. P2.6 added no signing oracle and does not
+count twins, predicate tests or invalid signatures as boundary evidence. §10.3
+still describes the state exactly.
+
+### 11.5 Gates observed after the change `[VERIFIED, fresh]`
+
+| Gate | Command | Result |
+|---|---|---|
+| P2.6 gate (all steps) | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\gate-p2-6.ps1` | **PASS**, exit 0 |
+| C++ kernel unit tests | inside the gate, fresh `.build\p26-kernel` | 108 run, 0 failed |
+| G1 conformance | inside the gate | 28/28 cases |
+| P2 conformance | inside the gate | 21/21 cases, corruption self-check 21/21, 2 deferred (G2c) |
+| P0 baseline | `python test\harness\run_vectors.py --quiet` | `PASS 112  ANCHOR 5  SKIP 0  FAIL 0` |
+| Rust suite | `cargo +stable-x86_64-pc-windows-gnu test --all-targets` | 271 passed, 0 failed across 10 targets, 1 ignored (emitter) |
+| High-S pins | `--test high_s_signature` | 4 passed |
+| S5 pins | `--test s5_boundary_probes` | 3 passed |
+| Differential build | two empty directories, 7 artefacts each | both exit 0 |
+| Differential `ctest` | `ctest --test-dir .build\p26-differential-repro-a` | 1/1 passed |
+| Differential verdicts | wrapper over the 117-case fixture | 116/117, 1 pinned |
+
+No cached build was reported. No existing test was weakened. The Rust count moved
+from 270 to 271 because of the new oracle test; the fixture emitter is `#[ignore]`d
+and is not counted as passing evidence.
+
+### 11.6 Effect on the decision
+
+D1 (NO-GO) stands, and the reason has moved:
+
+| §5 / §14 condition | State after P2.6 |
+|---|---|
+| a pinned tag with archive SHA-256 and a verified GPG signature | **met** |
+| a dependency-free static build from source | **met** |
+| a wrapper gating SEC1, strict DER, no `s` normalisation | **met** |
+| the V matrix green against Rust-derived fixtures | **not met** — 116/117 |
+| S5 closed or explicitly waived | **not met** |
+| a separate decision for `signature_der` | **not taken** |
+
+What moves G2c forward, in order: a decision on `V4.prefix_05` (tighten the Rust
+SEC1 gate, or authorise bug-for-bug emulation in C++ — both need their own
+phase); a re-run of the matrix with that case gone or authorised; an explicit S5
+disposition; and a separate `signature_der` decision.
+
+A green isolated verifier would still not authorise production integration, and
+the matrix is not green.
+
+### 11.7 Remaining limitations
+
+1. The backend is **isolated**: not linked into `zerocoin_kernel`, not reachable
+   from `TxSigChecker`, not part of any node binary.
+2. Verification parity holds for 116 of 117 executed cases and for no case that
+   was not executed. No extrapolation is made beyond the fixture.
+3. Reproducibility evidence covers Windows/MinGW only, and only at the object
+   level; the archive and executable differ in metadata.
+4. S is unmeasured; S5 is unchanged at two of six.
+5. `V4.prefix_05` is an open production-crypto question, not a test gap.
+6. P3 has not started, and P2.7 was not begun.
