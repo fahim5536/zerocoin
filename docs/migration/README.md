@@ -23,6 +23,14 @@ independent C++ implementation beside the Rust one.
 >
 > P1 (`03` §4) added the dependency-free C++ kernel under `kernel/` and its gate,
 > `scripts/gate-g1.ps1`. `07` records what it proves and what it does not.
+>
+> P2 (`03` §4) added the script interpreter, sighash and signature-verification
+> seam. `08` records it: 21 of 23 corpus cases replay, and the two that need
+> secp256k1 stay deferred as G2c because no vetted backend is present on the host.
+>
+> P2.1 added `docs/architecture/` — ownership, the three-language boundary,
+> interface contracts, the roadmap and the backend decision record. It changed no
+> code, no vector and no guard count.
 
 ---
 
@@ -120,6 +128,8 @@ ever be mistaken for a source change; the crate's own `target/` is git-ignored.
 | 05 | [Test strategy](05-test-strategy.md) | How do we prove the C++ implementation is equivalent before it is trusted? |
 | 06 | [P0 baseline vectors](06-p0-baseline-vectors.md) | Which values must a port reproduce byte for byte, how were they proven, and what is still missing? |
 | 07 | [P1 kernel primitives](07-kernel-primitives-g1.md) | Which C++ primitives exist, how is the P0 corpus replayed against them, and what did gate G1 measure? |
+| 08 | [P2 script, sighash and secp256k1](08-kernel-script-sighash-secp256k1-p2.md) | Which ledger semantics were ported, what is deferred behind G2c, and what does the P2 replay prove? |
+| ARCH | [Architecture set](../architecture/COMPONENT_OWNERSHIP.md) | Who owns each subsystem, what may Rust/C++/Go do, what crosses an interface boundary, and when is temporary compatibility code removed? |
 | P1 | [Consensus rules](../consensus/CONSENSUS_RULES.md) · [C++ port requirements](../consensus/CPP_PORT_REQUIREMENTS.md) | What exactly does consensus require today, with which source references, and what must a C++ port match? |
 
 ---
