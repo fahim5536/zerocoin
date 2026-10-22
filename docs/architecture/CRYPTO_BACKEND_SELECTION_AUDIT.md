@@ -1194,3 +1194,460 @@ hashes them, and a public key is accepted only at exactly 33 bytes with tag
 `0x02`/`0x03`. The two load-bearing rows are the cases where that last gate
 differs from raw `secp256k1_ec_pubkey_parse`, which also admits 65-byte keys and
 is why `backend=accept` there while the seam rejects.
+
+---
+
+## 17. P2.7 addendum — the `0x05` divergence traced end to end `[VERIFIED]`
+
+P2.6 measured the divergence and stopped at the gate, because a decision between
+two remediation options was missing. P2.7 answers the questions that decision
+needs: what exactly the parser accepts, whether that acceptance can reach the
+consensus decision, what the written contract actually says, and what each
+remediation would cost.
+
+**No production behaviour was changed. `V4.prefix_05` still diverges.**
+
+### 17.1 Starting state `[VERIFIED]`
+
+| Item | Observed |
+|---|---|
+| Repository root | `D:/Downloads/zerocoin/.publish/upstream` |
+| Branch | `main`, tracking `origin/main` |
+| HEAD | `96678c62969e966316f0927e08cd104428bc6053` ("test(crypto): vendor libsecp256k1 v0.8.0 and measure the differential result") |
+| `origin/main` | same commit |
+| Working tree | clean apart from one new untracked test file added by this milestone |
+| P2.6 commit present | yes — it is HEAD |
+
+No unexplained modifications were found, so the audit proceeded. The working
+tree state was clean at the point the tests were written, not merely "clean
+after a stash".
+
+### 17.2 The parser gate is length-only; the contract says it is not
+
+The whole of the tag decision lives in six lines:
+
+```rust
+pub fn from_sec1(bytes: &[u8]) -> Result<Self, CryptoError> {
+    if bytes.len() != COMPRESSED_PUBKEY_LEN {
+        return Err(CryptoError::InvalidPublicKey);
+    }
+    // Validate that the bytes are a real point on the curve.
+    VerifyingKey::from_sec1_bytes(bytes).map_err(|_| CryptoError::InvalidPublicKey)?;
+    let mut out = [0u8; COMPRESSED_PUBKEY_LEN];
+    out.copy_from_slice(bytes);
+    Ok(PublicKey { bytes: out })
+}
+```
+
+`zerocoin/src/crypto/secp256k1.rs:112-121`. The comment claims curve
+membership; the check is curve membership **plus whatever `sec1` decides a tag
+byte means**. The type's own doc comment one line above the struct
+(`secp256k1.rs:105`) says "A compressed SEC1 public key", so `0x05` violates the
+type's stated invariant while satisfying its code.
+
+This matters for reading the contract. `INTERFACE_CONTRACTS.md` B1 reads:
+
+> Accept **only 33-byte compressed SEC1** public keys; reject 65-byte
+> uncompressed, hybrid prefixes, wrong lengths, off-curve `x`, and the point at
+> infinity — source of the rule: `src/crypto/secp256k1.rs` 112–121
+
+The cited range implements the *length* half of B1 and none of the tag half.
+B1 cites code that does not do what B1 says. That is a documentation defect
+independent of the consensus question, and it is why "but B1 says only
+compressed" cannot settle the matter on its own.
+
+### 17.3 Complete validation path `[VERIFIED]`
+
+Both entry points converge on the same interpreter:
+
+```text
+block acceptance   Chain::connect_block            chain.rs:274
+                   -> UtxoSet::apply_transaction    utxo.rs:191
+                   -> script::verify                utxo.rs:231 -> script.rs:69
+mempool admission  Chain::validate_transaction     chain.rs:406
+                   -> (same UtxoSet path)
+
+script::verify
+  -> run_script(script_sig); run_script(script_pubkey)
+  -> OP_CHECKSIG                                   script.rs:157-162
+  -> SigChecker::check_signature                   script.rs:40
+  -> TxSigChecker::check_signature                 sighash.rs:114-138
+  -> PublicKey::from_sec1(public_key)              sighash.rs:126
+  -> PublicKey::verify                             secp256k1.rs:137-143
+  -> PublicKey::verifying_key                      secp256k1.rs:145-147
+  -> VerifyingKey::verify_prehash
+```
+
+The public key that reaches `from_sec1` is the **`scriptSig` push**, not the
+`scriptPubKey`. That ordering is the whole reason the impact is bounded:
+`P2PKH` is `DUP HASH160 <20> EQUALVERIFY CHECKSIG`, so `OP_EQUALVERIFY`
+hashes the pushed bytes and compares them to the committed hash *before*
+`OP_CHECKSIG` ever parses them.
+
+The five stages the milestone asks to be kept distinct:
+
+| Stage | Where | What a `0x05` key does |
+|---|---|---|
+| Input parsing | `from_sec1`, `secp256k1.rs:112` | **accepted** — 33 bytes, `Tag::Compact` |
+| Point interpretation | `sec1` -> `k256` `decompact` | same point as `0x02 \|\| x` (y forced even) |
+| Signature equation | `verify_prehash` | **succeeds** for the real key holder |
+| Script execution | `OP_EQUALVERIFY` then `OP_CHECKSIG` | fails on a canonical-locked coin, succeeds on a compact-locked one |
+| Transaction / block | `validate_transaction`, `connect_block` | accepts a spend of a compact-locked coin |
+
+### 17.4 Observed results, every relevant encoding `[VERIFIED]`
+
+Measured by `zerocoin/tests/p2_7_pubkey_encoding.rs` (7 tests). Byte inputs are
+literal; nothing is re-encoded before the call.
+
+| Input | Length | Parser | Point | Signature |
+|---|---|---|---|---|
+| `02 \|\| x` (fixture canonical) | 33 | accept | even-y point | verifies |
+| `03 \|\| x` (odd-y key, seed scan 1..64) | 33 | accept | odd-y point, round-trips exactly | verifies |
+| `05 \|\| x` (disputed) | 33 | **accept** | even-y point, identical to `02 \|\| x` | **verifies the same signature** |
+| `00`, `04`, `06`, `07`, `01`, `ff` `\|\| x` | 33 | reject | — | — |
+| `04 \|\| X \|\| Y` (valid point) | 65 | reject | — | — |
+| `06`/`07 \|\| X \|\| Y` (hybrid) | 65 | reject | — | — |
+| any tag, truncated/padded | 0, 32, 34 | reject | — | — |
+| all zero | 33 | reject | — | — |
+| `02 \|\| p` (`x` not a field element) | 33 | reject | — | — |
+| `04 \|\| ...` (the `V4.uncompressed_65` row) | 65 | reject | — | — |
+
+Two controls matter as much as the accept rows:
+
+* the same signature under `05 \|\| x` and `02 \|\| x` both verify, but a
+different digest under `05 \|\| x` returns `VerificationFailed` — the equation
+is still an equation, `0x05` is not a bypass;
+* `0x05` is rejected by the C++ seam and by raw libsecp256k1 on the same bytes
+(`CASE V4.prefix_05 group=V4 rust=accept seam=reject backend=reject match=no
+adapter=faithful`).
+
+The disputed fixture row, verbatim:
+
+```text
+PUBKEY 05989c0b76cb563971fdc9bef31ec06c3560f3249d6ee9e5d83c57625596e05f6f
+DIGEST e6d8533d96866eecea284731dac93bce9978750097c45629228e709fc80b7650
+```
+
+The canonical spelling of the same point appears elsewhere in the fixture as
+`02989c0b...e05f6f`, which is what makes `0x05` a byte-exact alias rather than a
+distinct key.
+
+**A note on the fixture's own NOTE.** It reads "prefix 0x05 is not a SEC1 tag".
+That is the project's intent. It is not a fact about SEC1: `0x05` *is*
+`Tag::Compact` in `sec1-0.7.3`, which is precisely why `k256` accepts it. The
+fixture is right about what the contract should say and wrong about what the
+encoding standard says.
+
+### 17.5 End-to-end acceptance, and how such a coin arises `[VERIFIED]`
+
+**Acceptance was reproduced, at both levels.**
+
+`divergence_pin_end_to_end_p2pkh_spend_from_a_compact_locked_coin_is_accepted`
+mines 100 blocks paying `hash160(0x05 \|\| x)`, takes the matured coinbase, and:
+
+1. builds a spend whose `scriptSig` pushes `05 \|\| x` and a signature over the
+   `P2PKH` script code — `Chain::validate_transaction` returns the fee (admitted);
+2. mines it — `Chain::mine_block` accepts the block and the recipient is credited;
+3. as a negative control, the same spend with the **canonical** `02 \|\| x`
+   push is rejected with `ChainError::Utxo(UtxoError::ScriptInvalid { .. })`
+   (`EvalFalse` at `OP_CHECKSIG`, not `EqualVerifyFailed`) — proving the hash
+   comparison passed and only the key spelling differed.
+
+A second pin shows the two spellings are not interchangeable in either
+direction: `divergence_pin_key_hash_commits_to_the_encoding_not_the_point` gets
+`EqualVerifyFailed` when a `0x02` `scriptSig` meets a `0x05`-locked output, and
+symmetrically. So this is **not** a way to spend somebody else's coin.
+
+**Reachability without hand-built state.** `Message::Share` carries
+`SharePayload { header, payout: PublicKey }`; `PublicKey`'s `Deserialize`
+(`secp256k1.rs:219-225`) hex-decodes and calls the same `from_sec1`. The node
+then records `payload.payout.key_hash()` into the `PoolLedger`, and
+`pool_coinbase_transaction` pays `p2pkh_script_pubkey(pubkey_hash)`. A peer that
+submits a `0x05` payout therefore causes a compact-locked output to exist
+on-chain without anyone editing local state. `divergence_pin_wire_share_payout_accepts_the_compact_tag`
+round-trips that message and asserts the decoded payout is byte-identical to the
+compact spelling.
+
+**What this does and does not establish.** It establishes a real validity
+disagreement: the same block is valid to the Rust reference and invalid to a
+libsecp256k1 backend, which is the definition of a consensus split. It does
+**not** establish theft or forgery: the spender must hold the secret for `x`,
+the coin must already be locked to `hash160(0x05 \|\| x)`, and the stock wallet
+cannot produce such a `scriptSig` because it derives the canonical spelling from
+the secret (`wallet.rs:352-353`). The honest description is *non-canonical
+encodings are accepted for coins already locked with them*, plus a
+history-dependent validity question for any node that did not see the funding
+transaction.
+
+### 17.6 The intended encoding contract `[VERIFIED]`
+
+The written sources do not agree with each other:
+
+| Source | What it says about the tag set |
+|---|---|
+| `CONSENSUS_RULES.md` §8.4 | **silent.** Specifies `script::verify`, the four limits, the ten opcodes and the `P2PKH` templates; no statement about public-key encoding |
+| `CPP_PORT_REQUIREMENTS.md` C-38..C-47 | **silent.** Covers opcodes, limits, sighash, apply order, maturity, state root, no floats |
+| `INTERFACE_CONTRACTS.md` B1 | "Accept **only 33-byte compressed SEC1**" |
+| `INTERFACE_CONTRACTS.md` §3.3 ¶3 | "a backend that rejects an unusual-but-valid encoding is not equivalent and is a defect" |
+| `CRYPTO_BACKEND_READINESS.md` S3 | `0x02`/`0x03` accept; "prefix `0x00`/`0x04`/`0x05` (reject)" |
+| implementation | accepts `0x02`, `0x03` and `0x05`; rejects everything else |
+
+Answering the milestone's questions directly:
+
+* **Which encodings does the documented protocol permit?** The only written
+  rule is "33-byte compressed", enumerated as `0x02`/`0x03` in the test plan.
+  `0x05` is not authorised anywhere.
+* **Does the specification explicitly prohibit it?** `CONSENSUS_RULES` and the
+  port requirements do not mention it at all. S3 prohibits it, but S3 is a
+  **test plan**, not a consensus rule. B1 prohibits it by wording while citing
+  code that does not implement the prohibition.
+* **Documented rule, accidental library behaviour, or unresolved ambiguity?**
+  **An unresolved specification ambiguity sitting on top of an implementation
+  defect.** No documented rule authorises acceptance. Acceptance arises from
+  `sec1`'s `Tag::Compact` support reached through a length-only gate, which
+  exceeds the type's own documented invariant.
+* **Does the implementation differ from the documented contract?** Yes — from
+  B1 and S3 it differs by accepting; from §3.3 ¶3 the *rejection* is a defect.
+  Both clauses cannot hold at once for `0x05`. That contradiction, not the
+  library behaviour, is the finding.
+* **Would tightening change the accepted set?** Yes, in exactly one narrow
+  class: spends whose `scriptSig` pushes a `0x05` key against an output
+  committing to `hash160(0x05 \|\| x)`. Output *creation* never parses a key,
+  so no funding transaction and no coinbase changes status.
+
+### 17.7 Remediation options A / B / C `[ANALYSIS]`
+
+#### A — tighten the Rust parser to the protocol-approved encodings
+
+Reject anything at 33 bytes whose tag is not `0x02`/`0x03`.
+
+| Dimension | Assessment |
+|---|---|
+| Consensus compatibility | Removes the split by making the reference match libsecp256k1 and B1/S3. It is nonetheless a **consensus change**: a node running old code accepts a spend a new node rejects |
+| Historical validity | Nothing is retroactively invalidated. No public chain exists (`README.md:297` "**Mainnet is not launched.**"), the genesis nonce is unpinned, P3 has not started, and the kernel links nothing. Within devnet/regtest, a block containing such a spend would become invalid to upgraded nodes |
+| Security of accepting non-canonical encodings | The accepted set shrinks. Today one curve point has at least two on-chain identities (`hash160(0x02\|\|x)` and `hash160(0x05\|\|x)`); tightening removes that aliasing class. No forgery is removed, because none existed |
+| Wallets, scripts, construction | Zero impact on the stock wallet, which derives canonical spellings from the secret. Only hand-built or third-party scripts that deliberately used `0x05` are affected — and none exist in the repository |
+| Activation mechanism | Required if any chain exists at the time of the change: an activation height or protocol-version gate, or a coordinated restart of devnet. The cheapest correct moment is **before the mainnet genesis nonce is pinned**, when the mechanism can simply be "it was never activated" |
+| Test and rollback | Flip the `V4.prefix_05` expectation to `reject` in the fixture, drop the `--known-divergence` allowance, add reject rows for `0x05` at 33 bytes. Rollback is `git revert` of a small, isolated diff |
+
+#### B — make the C++ adapter emulate the Rust behaviour
+
+Add a non-SEC1-tag branch that decompacts `0x05` with even `y`.
+
+| Dimension | Assessment |
+|---|---|
+| Consensus compatibility | Makes both sides agree by preserving the reference's current behaviour. It also permanently contradicts B1/S3 and diverges from upstream libsecp256k1 semantics |
+| Historical validity | Unchanged — this option changes only the port |
+| Security of accepting non-canonical encodings | Institutionalises the aliasing class and creates a second independent implementation of a suspected parser bug, which must then be maintained and audited forever |
+| Wallets, scripts, construction | None |
+| Activation mechanism | None needed for the port, which is exactly the problem: it freezes a defect into the new implementation with no protocol decision behind it |
+| Test and rollback | The 117-row matrix goes green with **no fixture change** — which is the failure mode the milestone brief explicitly forbids. Rollback means removing adapter code that a green gate now depends on |
+
+#### C — preserve current behaviour, document, and defer
+
+| Dimension | Assessment |
+|---|---|
+| Consensus compatibility | Status quo exactly. The split stays latent; it cannot manifest on a live chain because there is no live chain |
+| Historical validity | Unchanged |
+| Security of accepting non-canonical encodings | Unchanged — the acceptance surface remains |
+| Wallets, scripts, construction | None |
+| Activation mechanism | None now. An explicit decision is required **before** mainnet genesis is pinned and before any C++ backend is linked |
+| Test and rollback | Keep the divergence pinned with the allowance. This is the current state and it is why the guard is bidirectional |
+
+Option B must not be chosen merely to make the matrix green. Reproducing a
+suspected parser bug in a second implementation is a protocol decision, and no
+evidence supports making it: the defect is in the reference, the port is the
+side that matches the written contract, and B1's cited source does not
+implement B1.
+
+### 17.8 Recommendation `[DECISION]`
+
+**Recommend option A**, executed under a separate, explicitly authorised change,
+and **not in this milestone**. Until that authorisation exists, option C is what
+this repository is doing, and it is the correct interim state: the divergence is
+measured, pinned, guarded in both directions, and cannot be forgotten.
+
+A is preferred on the evidence for four reasons: it makes the reference match
+the only written contract (B1, S3); it makes the two implementations agree by
+removing behaviour rather than adding it; it touches one narrowly-scoped
+predicate with a small, revertible diff and no wallet impact; and the moment to
+do it is before genesis is pinned, when no compatibility mechanism has to be
+built at all.
+
+The evidence is sufficient to *recommend* A. It is not sufficient to *execute*
+A in this milestone, and this document does not claim it is. Three preconditions
+belong to that separate change:
+
+1. an explicit recorded decision, since it changes the accepted set;
+2. a determination of whether any chain that its operators care about already
+   contains a compact-locked output — if none, no activation mechanism is needed;
+3. fixture and guard updates in the same commit, so the gate goes from "1 pinned
+   divergence" to "0 divergences" deliberately rather than silently.
+
+### 17.9 Backend provenance re-audit `[PARTIALLY VERIFIED]`
+
+Recorded in `kernel/third_party/secp256k1/ORIGIN.md`, re-read and independently
+re-checked in this milestone:
+
+| Field | Recorded | Re-checked |
+|---|---|---|
+| Tag object | `18f07c42218765cd46148d74d9fe575795f56dce` | matches |
+| Commit | `6e2c8bc4ecdc6e71dbe7a368f360d8d453ce435d` | matches |
+| Archive size | 2,436,784 bytes | matches |
+| Archive SHA-256 | `dd685546f9e717b9adde329acd5a4cd8083d40f710fdb0a603ee5a83f908132b` | matches the skipped line in `SHA256SUMS` |
+| Signature SHA-256 | `c7eb14bbd67fe94b9ac4b556df6ae18aebb450092c836d05a6e13ea005fc7ac8` | recorded only; the `.sig` is not vendored |
+| Signer fingerprint | `6A8F 9C26 6528 E25A EB1D 7731 C237 1D91 CB71 6EA7`, RSA 4096, Sebastian Falbesoner (theStack) | recorded only; no keyring is vendored |
+| Vendored tree | 60 of 60 files | **re-verified: `match=60 mismatch=0 missing=0 skipped=1`** |
+
+The skip is the `libsecp256k1-0.8.0.tar.gz` line — the upstream archive, which is
+intentionally not vendored.
+
+**What `GOODSIG` + `VALIDSIG` (exit 0) establish.** A signature over exactly
+those archive bytes was made by the key with that fingerprint, and the archive
+was not altered after signing.
+
+**What they do not establish.**
+
+* `TRUST_UNDEFINED 0 pgp` — there is no certification path from this host to the
+  key. Trust in the *identity* rests on cross-referencing three sources, and one
+  of them (`SECURITY.md`) travels **inside the artifact being verified**, so it is
+  circular. The other two (the owner-controlled GitHub key endpoint and a public
+  keyserver) are both self-assertions of the same key.
+* `EXPKEYSIG` — the first verification attempt **failed**. Recovery was to import
+  a second copy of the *same fingerprint* carrying later self-signatures. A
+  self-signature extends an expiry claim made by the key itself; it adds no
+  independent evidence. The fingerprint never changed, so this is an expiry
+  bookkeeping anomaly, not evidence of substitution.
+* **Reproducibility.** No archive, no `.sig`, no keyring and no full transcript
+  is vendored anywhere under `kernel/`, `docs/` or `scripts/`, so the GPG
+  verification cannot be re-run from the repository. `SHA256SUMS` is generated
+  from the tree it validates; it proves internal consistency and non-drift, not
+  equality with upstream.
+
+No evidence of key compromise was found, and none is claimed. No evidence that
+the release is invalid was found, and none is claimed. Equally, no evidence was
+found that would justify calling the key independently trusted.
+
+**Independent trust evidence required before production integration:**
+
+1. a reproducible verification path committed to the repository — the `.sig`,
+   the archive hash in a tamper-evident record, and a verifier script with a
+   pinned fingerprint;
+2. at least one trust anchor not controlled by the release author — a second
+   maintainer's signature, a reproducible-build comparison against a third-party
+   build, or a project-held signing key;
+3. a checksum chain that terminates outside the artifact under test;
+4. re-verification recorded at adoption time, with the `--status-fd` transcript,
+   rather than a single historical transcript.
+
+### 17.10 Regression gates `[VERIFIED, fresh]`
+
+Command:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\gate-p2-6.ps1 `
+  -BuildDir .build\p27-final-kernel `
+  -DifferentialBuildDir .build\p27-final-differential
+```
+
+| Gate | Observed | Exit |
+|---|---|---|
+| Preflight | cmake 4.4.3, MinGW g++ 16.2.0, Python 3.15.0, cargo 1.99.1 | 0 |
+| Kernel configure + build | 23/23 targets compiled from an **empty** directory, warnings as errors | 0 |
+| C++ kernel unit tests | `kernel unit tests: 108 run, 0 failed` | 0 |
+| G1 conformance | `28/28 cases replayed against source_commit 7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c` | 0 |
+| P2 conformance | `21/21 cases`; `corruption self-check rejected 21/21 cases`; 2 deferred (G2c) | 0 |
+| P0 deterministic baseline | `PASS 112  ANCHOR 5  SKIP 0  FAIL 0` | 0 |
+| Rust suite (`--all-targets`) | **278 passed, 0 failed across 11 targets**; 1 ignored (the fixture emitter) | 0 |
+| `high_s_signature` | 4 passed, 0 failed | 0 |
+| `s5_boundary_probes` | 3 passed, 0 failed | 0 |
+| Differential build A + B | 7 artifacts each, both from empty directories | 0 |
+| Reproducibility comparison | `3/3 objects byte-identical`; `archive=differs; exe=differs` | 0 |
+| Differential `ctest` | `1/1 kernel_secp256k1_differential ... Passed 0.23 sec` | 0 |
+| Differential verdicts | `116/117 match (7 accept, 110 reject)`; groups `V1=2, V2=3, V3=18, V4=11, V5=5, V6=2, V7=76` | 0 |
+| Adapter load-bearing rows | `V4.uncompressed_65`, `V4.hybrid_prefix_06` | 0 |
+| Known divergence | `1 pinned: V4.prefix_05: rust=accept seam=reject backend=reject` | 0 |
+
+Byte-identical objects: `precomputed_ecmult.c.obj` (1,049,211 B,
+`93e43da54eddf2975c7b918b33ad44168eb9fdb021943eda4956b11a1e8fde7b`),
+`precomputed_ecmult_gen.c.obj` (88,681 B,
+`e2cc3bc1080ce0d27f3dec0aa76702d56d2b06a9f581796b5f541e79e9769609`),
+`secp256k1.c.obj` (167,189 B,
+`18b385efe4f199322b3855ff6c3dd45c3db141d4b9fe67a299cc51a74e97e306`).
+
+Final lines:
+
+```text
+P2.6 gates: PASS (every step executed; 1 documented divergence pinned)
+G2c: NO-GO — V4.prefix_05 is consensus-relevant
+```
+
+**Guard negative controls, re-run against the final runner.** Both directions
+still work, so the allowance narrows the gate rather than disabling it:
+
+| Control | Command | Exit | Message |
+|---|---|---|---|
+| No allowance | `--expect-cases 117` | **1** | `undocumented divergence(s): V4.prefix_05: rust=accept seam=reject backend=reject` |
+| Stale allowance | `--expect-cases 117 --known-divergence V4.prefix_05 --known-divergence V4.prefix_00` | **1** | `stale --known-divergence entry: V4.prefix_00 now matches; remove the allowance` |
+
+**Cached-run disclosure.** The gate was executed three times in P2.7. The first
+execution reused an existing kernel build directory and printed `ninja: no work
+to do`; that run is **not** treated as fresh-build evidence anywhere above. The
+second and third used empty directories and compiled all 23 kernel targets and
+all 7 differential artifacts from scratch. The numbers recorded here are from
+the final empty-directory run.
+
+The Rust total rose 271 (P2.6) -> 277 -> 278 as the new test file grew from 6 to
+7 tests. No existing test changed, none was weakened, no fixture was edited and
+the known-divergence allowance was not removed.
+
+### 17.11 G2c verdict and P3 status
+
+**G2c: NO-GO — unchanged.**
+
+P2.6 was NO-GO because the measurement produced a consensus-relevant
+disagreement. P2.7 does not lift that, and could not: the missing input is a
+**protocol decision**, not another measurement. Measured against §14's GO
+conditions, no condition became satisfied — the divergence is now fully
+characterised and carries a recommendation, but the condition that gates on it
+(`§9 V matrix green`) still fails, and a seventh condition has been added:
+
+| §14 condition | State after P2.7 |
+|---|---|
+| written authorisation naming one acquisition path | experiment only |
+| pinned tag, archive SHA-256, GPG signature | satisfied for the bytes; verification not reproducible from the repo |
+| wrapper gating SEC1 to 33 bytes / `0x02` / `0x03` | satisfied |
+| §9 V matrix green | **not satisfied** — 116/117, `V4.prefix_05` pinned |
+| S5 closed or explicitly waived | not satisfied, not waived |
+| separate decision for `signature_der` | not taken |
+| **new:** `0x05` disposition decided | **not decided — recommendation recorded in §17.8** |
+
+**P3: not started.** No Go networking, no service layer, no RPC and no P3 work
+was performed. The kernel still links nothing, the backend remains isolated, and
+the two deferred corpus cases remain deferred.
+
+### 17.12 Files changed and non-claims
+
+Added in P2.7:
+
+- `zerocoin/tests/p2_7_pubkey_encoding.rs` — 7 tests, 445 lines, no production
+  module changed;
+- this section.
+
+Not changed: any file under `zerocoin/src/`, `kernel/include/`, `kernel/src/`,
+`kernel/tests/`, `kernel/differential/`, `test/`; the differential fixture; the
+known-divergence allowance in `scripts/gate-p2-6.ps1`; `Cargo.toml`;
+`Cargo.lock`; the vendored `secp256k1` tree; any `.publish` state; Git identity
+or remote configuration.
+
+Explicitly **not** claimed:
+
+- that the `0x05` acceptance is exploitable for theft or forgery — it is not;
+- that any historical block or transaction is invalid;
+- that option A is safe to apply without an authorisation and an activation
+  decision;
+- that libsecp256k1's stricter parser defines ZeroCoin's consensus rules;
+- that the signing key is compromised, or that the release is invalid;
+- that the key is independently trusted;
+- that G2c, gate G2 or the P2 exit criteria are closed;
+- that P3, the service layer, RPC or Go networking has begun.

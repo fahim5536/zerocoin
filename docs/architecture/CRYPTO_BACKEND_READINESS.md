@@ -847,3 +847,67 @@ the matrix is not green.
 4. S is unmeasured; S5 is unchanged at two of six.
 5. `V4.prefix_05` is an open production-crypto question, not a test gap.
 6. P3 has not started, and P2.7 was not begun.
+
+---
+
+## 12. P2.7 addendum — `V4.prefix_05` characterised; D1 unchanged `[VERIFIED]`
+
+P2.7 was an audit, not a fix. It answered the questions that blocked the
+remediation decision and changed no production code. Full detail is in
+`CRYPTO_BACKEND_SELECTION_AUDIT.md` §17; this section records only what moves
+*this* document.
+
+### 12.1 What is now known
+
+| Question | Answer |
+|---|---|
+| Can a `0x05` key reach the consensus decision? | **Yes.** Traced `connect_block` / `validate_transaction` -> `script::verify` -> `OP_CHECKSIG` -> `TxSigChecker` -> `from_sec1` -> `verify_prehash`, and reproduced both mempool and block acceptance with a test |
+| Does it permit theft or forgery? | **No.** The spender must hold the secret, and the output must already commit to `hash160(0x05 \|\| x)`; `OP_EQUALVERIFY` runs before `OP_CHECKSIG`, so canonical-locked outputs are unaffected in either direction |
+| Is acceptance a documented rule? | **No.** `CONSENSUS_RULES` §8.4 and `CPP_PORT_REQUIREMENTS` C-38..C-47 are silent; S3 below says reject; B1 says reject while citing code that only enforces the length |
+| Would tightening change the accepted set? | Yes — only spends of compact-locked outputs. Funding transactions and coinbases never parse a public key |
+| Is there a live chain to split? | **No.** `README.md:297` — "Mainnet is not launched"; genesis nonce unpinned; P3 not started |
+
+The `0x05` alias is produced by `sec1`'s `Tag::Compact` reached through a
+length-only gate (`zerocoin/src/crypto/secp256k1.rs:112-121`), so it is
+accidental library behaviour exceeding the type's own documented invariant
+("A compressed SEC1 public key", `secp256k1.rs:105`), not a deliberate rule.
+
+### 12.2 Effect on D1
+
+**D1 (G2c stays blocked, NO-GO) is unchanged.** P2.7 could not change it: the
+missing input is a protocol decision, and the milestone was explicitly forbidden
+from making one. What changed is that the decision is now specified rather than
+open-ended — the reference recommends **tightening the Rust SEC1 gate (option
+A)**, executed under a separate authorisation, with **option B (C++ emulation)
+rejected** because it would reproduce a suspected parser bug and turn the matrix
+green without a fixture change.
+
+Until that authorisation exists, the repository is deliberately in option C:
+behaviour preserved, divergence pinned, guard bidirectional. That is the correct
+state, not an oversight.
+
+### 12.3 Correction to S3
+
+§S3 above lists "prefix `0x00`/`0x04`/`0x05` (reject)" among the probe
+expectations. That remains the correct expectation for a C++ backend and for the
+intended contract, but it must not be read as a description of the reference:
+the reference **accepts** `0x05` today. S3's reject rows are therefore a
+specification of the target, and the `V4.prefix_05` differential row is the
+evidence that the target is not yet the reference. Do not adjust S3 to match the
+implementation; adjust the implementation when option A is authorised.
+
+### 12.4 Limitations after P2.7
+
+Items 1–5 of §11.7 stand. Item 6 is superseded: P2.7 has now been performed, but
+P3 still has not started, and no production crypto, consensus rule, dependency
+or vendored source was changed in P2.7.
+
+Two limitations are added:
+
+7. The GPG verification of the vendored archive is **not reproducible from the
+   repository** — no archive, `.sig` or keyring is vendored, and `SHA256SUMS` is
+   generated from the tree it validates. It proves non-drift, not upstream
+   equality. See §17.9 of the audit for the evidence that would close this.
+8. The recommended remediation has not been applied, so the reference and the
+   backend still disagree on one of 117 cases. Any statement that the two
+   implementations are compatible remains false until that case changes.
