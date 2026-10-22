@@ -981,3 +981,44 @@ Items 1–7 of §11.7 and §12.4 stand; item 8 of §12.4 is closed by §13.1.
 11. Rules P-1 and B1 are enforced at `from_sec1`. A future backend that parses
     public keys through its own path must reproduce the same tag set, and what
     proves it does is the differential corpus, not the Rust source.
+
+## 14. P2.9 addendum — S5 closed against the Rust reference `[VERIFIED]`
+
+P2.9 supplies the S5 half of the G2c conditions without touching production
+code. The full trail is in `CRYPTO_BACKEND_SELECTION_AUDIT.md` §19; this section
+records only what moves *this* document.
+
+### 14.1 Which readiness findings move
+
+| Condition (§13.3 / §5.1) | State after P2.9 |
+|---|---|
+| S5 closed or explicitly waived | **satisfied against the Rust reference** — 6/6 pinned: the two end-to-end pins plus the four scalar-boundary probes (`s = 1`, `s = n − 1`, `s = floor(n/2)`, `s = floor(n/2) + 1`), each equation-proven and verdict-recorded |
+| separate decision for `signature_der` | **not taken** — unchanged; the audit §19.2 records the RFC 6979 requirement and that signing is not on the consensus validation path |
+| pinned tag, archive SHA-256, GPG signature | unchanged from §12.4 item 7 — non-drift re-verified (60/60), upstream identity still not reproducible from the repository |
+
+Nothing else in §2, §13.2 or §13.3 moves. §4's S5 group (six verdicts) is now
+fully pinned against the Rust reference; the measured C++ acceptance of the
+four boundary probes remains future work — the audit's V-matrix rows V3–V6 stay
+open until a backend verifier exists.
+
+### 14.2 The test-only signer is fixture-only
+
+The signer that closes S5 lives only in `zerocoin/tests/s5_boundary_probes.rs`,
+an integration-test target that cannot be linked into a node. It uses fixed
+public constants (`d = 1`, nonce `k = 3`) through
+`ecdsa::hazmat::sign_prehashed`, emits only fixtures, and proves equation
+validity independently of the half-order gate. Production signing
+(`PrivateKey::sign`, RFC 6979) and consensus verification are untouched; no file
+under `zerocoin/src/` changed in P2.9.
+
+### 14.3 Limitations after P2.9
+
+Items 1–11 stand, with item 9 narrowed by §14.1: S5 is no longer an open
+condition against the Rust reference; what remains open is S5 *against a
+production C++ backend*.
+
+12. `signature_der` remains deferred: RFC 6979 byte parity between `k256`/`ecdsa`
+    and a C++ signer is structurally plausible but unmeasured (audit U2).
+13. The vendored provenance is re-verified as non-drift (all 60 vendored files
+    match `SHA256SUMS`); upstream identity verification remains non-reproducible
+    from the repository.

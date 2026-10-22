@@ -424,8 +424,9 @@ A future test-only signer would have to satisfy all of: use
 re-exported as `k256::ecdsa::hazmat`) or an independent modular derivation;
 live in a target that cannot be linked into a node; emit only fixtures; prove
 equation validity independently of the gate under test; and never be counted as a
-production signing path. Until then the four probes stay **Blocked**, and S5
-stays **partial: 2 of 6 pinned**.
+production signing path. P2.9 implemented exactly this signer and closed the
+four probes; the recorded results are in §19.1. S5 is now **closed against the
+Rust reference: 6 of 6 pinned**.
 
 ---
 
@@ -531,7 +532,7 @@ MinGW-W64 UCRT), Ninja, cargo 1.99.1 (`5f94df478 2026-08-27`), Python 3.15.0.
 | R9 | Incompatible crypto library behaviour (risk register) | Cross-verification failure in G2 | §9 V matrix; no C++ row can be green until a backend exists |
 | H2 | `signature_der` needs a signer, not a verifier | Caps verification-only work at 22/23 | A separate decision about a test-only signer (§10) |
 | H4 | No backend archive pin, no vendored subtree | Dependency provenance unproven | §11.3, after authorisation |
-| S5 | 2 of 6 probes pinned; 4 blocked | High-S boundary evidence incomplete | §10 evidence table |
+| S5 | **closed against the Rust reference: 6 of 6 pinned** (P2.9) | C++ verdicts for the four probes stay analytic until a backend verifier measures them | §10 evidence table, §19.1 |
 
 None of these is a reason to change a consensus rule, a fixture expectation, or
 the reference implementation.
@@ -1904,3 +1905,154 @@ Explicitly **not** claimed: that S5 is closed; that the backend is production
 ready or fully proven equivalent; that the DER policy is decided; that G2c, gate
 G2 or the P2 exit criteria are closed; that a production mainnet exists or that a
 chain split is impossible; that P3 has begun.
+
+---
+
+## 19. P2.9 addendum — S5 closed against the Rust reference
+
+P2.9 is an audit and test-strategy milestone. It closes the four blocked S5
+probes against the Rust reference, resolves the `signature_der` strategy
+question, and re-verifies what the vendored provenance evidence can and cannot
+prove. Nothing in §16–§18 is rewritten; this section records the measured
+results and supersedes the P2.5-era status lines pointed to from §10 and §13.
+
+Baseline: `main` at `ccae97a98d1ed61abea508670420d3b92e1b192f`, equal to
+`origin/main`, working tree clean. Path note per the brief's §2: the brief
+listed `docs/migration/CRYPTO_BACKEND_READINESS.md` and
+`docs/migration/CRYPTO_BACKEND_SELECTION_AUDIT.md`; neither exists. The actual
+paths are `docs/architecture/CRYPTO_BACKEND_READINESS.md` and
+`docs/architecture/CRYPTO_BACKEND_SELECTION_AUDIT.md` (this document).
+
+### 19.1 The four S5 probes
+
+The test-only signer §10 prescribed — `ecdsa::hazmat::sign_prehashed`, fixed
+`d = 1` (the corpus `signature_der` key) and nonce `k = 3`,
+`z' = z + k*(s_target − s) mod n` — now exists only in
+`zerocoin/tests/s5_boundary_probes.rs`, an integration-test target that cannot
+be linked into a node. It emits only fixtures and is never a production signing
+path; `zerocoin/src/crypto/secp256k1.rs` is untouched.
+
+Each probe asserts the exact `s_target`, proves equation validity over `z'`
+through the equation-only primitive (`hazmat::verify_prehashed`, which has no
+half-order rule), and records the production `PublicKey::verify` verdict. The
+two low-S probes also run the negative control — the same signature over the
+original corpus digest fails the equation — which separates a boundary probe
+from a mere mutation of `s`.
+
+| Probe | Equation over z' | Rust reference `PublicKey::verify` | C++ backend (analytic) |
+|---|---|---|---|
+| `s = 1` | valid | **accept** (`Ok`) | accept — `is_high(1)` is false; the equation-only `secp256k1_ecdsa_sig_verify` passes |
+| `s = n − 1` | valid | **reject** (`VerificationFailed`) | reject — `is_high(n−1)` is true; the public `secp256k1_ecdsa_verify` returns false before the equation (`secp256k1.c`, `return (!secp256k1_scalar_is_high(&s) && …)`) |
+| `s = floor(n/2)` | valid | **accept** (`Ok`) | accept — `is_high` is strict (`a > SECP256K1_N_H`, `floor(n/2)` limbs `…681B20A0`), so `floor(n/2)` passes the gate |
+| `s = floor(n/2) + 1` | valid | **reject** (`VerificationFailed`) | reject — the smallest scalar above the threshold |
+
+S5 is therefore **closed against the Rust reference: 6 of 6 pinned** — the two
+end-to-end pins in `high_s_signature.rs` plus these four, all six genuinely
+exercised and their expected outcomes recorded. The C++ column above is derived
+from the vendored source, not from execution, because the backend is not a
+production verifier yet; it becomes measured when a backend exists. The
+V-matrix rows V3–V6 (§9) remain open for exactly that reason.
+
+### 19.2 `ledger.sighash.signature_der` — deterministic DER signing
+
+- The fixture inputs are digest
+  `e0e7ce176c2aa8077378299f682baec23e02abc289b51fa1895b7cde9ce6a237` (below
+  `n`, so the verifier's mod-n reduction is the identity) and `scalar: 1` as the
+  secret key; the expected output is the committed 71-byte low-S DER.
+- Reproducing those bytes requires RFC 6979 nonce derivation
+  (`SigningKey::sign_prehash` → `try_sign_prehashed_rfc6979`, HMAC-SHA256),
+  not merely some valid signer. The pinned Rust implementation produces the
+  committed bytes (`SOURCE_COMMIT 7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c`,
+  corpus provenance intact).
+- A candidate C++ backend would need a signing adapter
+  (`secp256k1_ecdsa_sign` + `secp256k1_ecdsa_signature_serialize_der`) to be
+  compared byte-for-byte. Structural plausibility is recorded; **byte parity is
+  unmeasured** (risk U2 stands).
+- Signing is **not on the consensus validation path** (the `TxSigChecker` path
+  is verify-only). Production signing surfaces exist (wallet, miner, mempool,
+  handshake) and are untouched. Per C-52 a future signer may be
+  non-deterministic while verification must stay deterministic; the fixture
+  pins the current Rust signer, not a requirement on all future signers. No
+  production signer was added and no consensus verification changed in P2.9.
+
+### 19.3 Vendored provenance — what the repository proves
+
+Verified from the repository without any download:
+
+- The vendored tree is `libsecp256k1` v0.8.0 (annotated tag object
+  `18f07c42218765cd46148d74d9fe575795f56dce` → commit
+  `6e2c8bc4ecdc6e71dbe7a368f360d8d453ce435d`), per `ORIGIN.md`.
+- `ORIGIN.md` records the acquisition-time GPG transcript: key
+  `6A8F 9C26 6528 E25A EB1D 7731 C237 1D91 CB71 6EA7`, `GOODSIG`/`VALIDSIG`,
+  `TRUST_UNDEFINED`, and the `EXPKEYSIG` anomaly noted there.
+- Archive SHA-256 `dd685546f9e717b9adde329acd5a4cd8083d40f710fdb0a603ee5a83f908132b`
+  and signature SHA-256 `c7eb14bbd67fe94b9ac4b556df6ae18aebb450092c836d05a6e13ea005fc7ac8`
+  are recorded; the archive, the `.sig` and the keyring are **not vendored**.
+- `SHA256SUMS` covers 60 vendored files plus one annotated archive entry.
+  Recomputing every hash from the current tree this milestone: **60/60 match**.
+  That proves the tree has not drifted from the recorded state.
+- It does **not** prove upstream identity: the checksum file was generated from
+  the tree it validates, and the materials needed to re-derive it from upstream
+  (archive, signature, keyring) are absent. Reproducible upstream verification
+  remains **not claimed**; §17.9 stands.
+
+### 19.4 Gates executed this milestone
+
+Fresh directories only — `.build\p29-kernel` and `.build\p29-diff` were new and
+empty; nothing was inherited from an earlier run.
+
+| Gate | Command | Observed | Exit |
+|---|---|---|---|
+| S5 probes | `cargo +stable-x86_64-pc-windows-gnu test --manifest-path zerocoin\Cargo.toml --test s5_boundary_probes` | **7 passed, 0 failed** (3 P2.4 pins unchanged + 4 P2.9 probes) | **0** |
+| High-S pins | `cargo +stable-x86_64-pc-windows-gnu test --manifest-path zerocoin\Cargo.toml --test high_s_signature` | 4 passed, 0 failed | **0** |
+| Rust suite | `cargo +stable-x86_64-pc-windows-gnu test --manifest-path zerocoin\Cargo.toml --all-targets` | **287 passed, 0 failed across 11 targets** | **0** |
+| Full gate | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\gate-p2-6.ps1 -BuildDir .build\p29-kernel -DifferentialBuildDir .build\p29-diff` | kernel build 23/23 from scratch; kernel unit **108 run, 0 failed**; G1 **28/28**; P2 **21/21, corruption rejected**; P0 **PASS 112 ANCHOR 5 SKIP 0 FAIL 0**; Rust **287 passed**; `high_s_signature` 4; `s5_boundary_probes` 7; differential A/B built independently; reproducibility **3/3 objects byte-identical**; differential ctest passed; differential verdicts **117/117 match, none allowed** | **0** |
+| Provenance recompute | PowerShell `Get-FileHash -Algorithm SHA256` over every `SHA256SUMS` entry | **60/60 vendored files match** | 0 |
+
+No gate was skipped, and no existing test was weakened, skipped or deleted.
+Environment recorded with the run: CMake 4.4.3, g++ 16.2.0 (GNU, WinLibs
+MinGW-W64 UCRT), Ninja, cargo 1.99.1, Python 3.15.0.
+
+### 19.5 G2c verdict and P3 status
+
+**G2c: NO-GO — unchanged.** P2.9 closes S5 against the Rust reference. It does
+not take a decision on `signature_der` (§19.2), the vendored provenance is
+still not reproducible from the repository (§19.3), and the backend remains
+outside the production verification path. S5 closure is one condition, not the
+gate.
+
+**P3: not started.** No Go networking, RPC, service layer or production crypto
+integration was performed in P2.9.
+
+### 19.6 Files changed and non-claims
+
+Tests: `zerocoin/tests/s5_boundary_probes.rs` (module doc; the four probes and
+their helpers; the three P2.4 pins kept unchanged).
+
+Documents: this section, `CRYPTO_BACKEND_READINESS.md` §14.
+
+Final state: `main`, working tree clean after one fast-forward commit
+containing exactly the changes above; remote unchanged.
+
+Not changed: production Rust source, `Cargo.toml`, `Cargo.lock`, the vendored
+`secp256k1` tree, the P0 corpus, the signature equation, the high-S policy, DER
+parsing, the sighash preimage, block or transaction serialisation, `.publish`
+state, Git identity and remote configuration.
+
+Explicitly **not** claimed: that S5 is closed against a production C++ verifier
+(the C++ column is analytic); that RFC 6979 byte parity between the backends is
+measured; that the vendored provenance is independently re-verifiable; that the
+DER policy is decided; that G2c, gate G2 or the P2 exit criteria are closed;
+that P3 has begun.
+
+### 19.7 Recommended next milestone
+
+**P2.10 — backend authorisation and provenance closure**, with explicit entry
+criteria: (1) a written decision on `signature_der` — either a test-only C++
+signing adapter scoped exactly like the §10 signer, or an explicit deferral;
+(2) provenance closed or explicitly waived — archive + `.sig` + keyring vendored
+and re-verifiable, or a recorded decision that the non-drift evidence of §19.3
+is the accepted level; (3) the acquisition path for the production backend
+wrapper authorised per decision-record §11; (4) the four C++ boundary verdicts
+of §19.1 re-derived as measured results once a backend verifier exists. No P3
+work and no production crypto integration until these conditions are met.
