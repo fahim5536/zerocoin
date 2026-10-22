@@ -8,7 +8,7 @@ Supersedes: nothing. Fills a gap: `CONSENSUS_RULES.md` and
 
 This document defines which byte strings a ZeroCoin node may interpret as a
 public key. It is the authority that `CONSENSUS_RULES.md` §8.4 rule **P-1**,
-`CPP_PORT_REQUIREMENTS.md` **C-48**, `INTERFACE_CONTRACTS.md` **B1** and
+`CPP_PORT_REQUIREMENTS.md` **C-53**, `INTERFACE_CONTRACTS.md` **B1** and
 `CRYPTO_BACKEND_READINESS.md` **S3** now point at.
 
 ---
