@@ -223,6 +223,18 @@ unordered map iteration, or a different length encoding (F-4).
 commitment. Mempool ordering (F-9) MAY use floats or exact arithmetic, but the choice MUST
 be documented as non-consensus.
 
+**C-53** — A public key MUST be accepted only as a 33-byte compressed SEC1 encoding
+tagged `0x02` or `0x03` that names a point on secp256k1 (`CONSENSUS_RULES.md` §8.4.1,
+rule P-1). Every other encoding — including SEC1 tag `0x05` (*compact*, 33 bytes), tags
+`0x00`/`0x01`/`0x04`/`0x06`/`0x07`, and any length other than 33 — MUST be rejected
+before the signature equation is evaluated, and MUST surface as a failed `OP_CHECKSIG`
+(empty push), not as a distinct error. The port MUST NOT normalise, re-encode or alias a
+non-canonical spelling into a canonical one: `hash160` commits to the 33 bytes, so one
+curve point with two encodings is two P2PKH locks.
+
+> Appended by P2.8 after C-43 rather than renumbering the IDs cited by §8–§10 and by the
+> kernel tests. Requirement IDs are permanent labels, not section addresses.
+
 ---
 
 ## 8. Genesis and boot invariants

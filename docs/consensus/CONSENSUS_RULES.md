@@ -598,6 +598,38 @@ CHECKSIG`) and `p2pkh_script_sig` (`src/ledger/script.rs:237`). P0 cases: `ledge
 Rule **U-4** — A script that pushes a false value and a script that fails the final
 `is_true` both surface as `ScriptInvalid`, not as a distinct error.
 
+### 8.4.1 Public-key encoding — rule **P-1**
+
+A public key accepted by `OP_CHECKSIG` is exactly 33 bytes, tagged `0x02` or `0x03`, and
+names a point on secp256k1:
+
+| Input | Verdict |
+|---|---|
+| 33 bytes, tag `0x02`, `x` on the curve | **accept** |
+| 33 bytes, tag `0x03`, `x` on the curve | **accept** |
+| 33 bytes, tag `0x05` (SEC1 *compact*) | reject |
+| 33 bytes, any other tag (`0x00`, `0x01`, `0x04`, `0x06`, `0x07`, …) | reject |
+| any other length (0, 32, 64, 65, …) | reject |
+| `x >= p`, or `x` with no curve point | reject |
+
+The gate is `PublicKey::from_sec1` (`src/crypto/secp256k1.rs:117`), the single funnel for
+script, storage and wire keys. It tests the length, then the tag, then the curve, and
+returns `InvalidPublicKey` at the first failure. A rejected key pushes nothing, so
+`OP_CHECKSIG` leaves an empty value and the final `is_true` of §8.4 yields `EvalFalse`,
+reported as `UtxoError::ScriptInvalid`.
+
+Rule **P-1** — A public key is its *encoding*, not merely the curve point it names.
+`0x05 || x` denotes the same point as `0x02 || x` but is **not** an accepted spelling:
+`key_hash` is `hash160` over the 33 bytes, so admitting both would give one key two P2PKH
+commitments. No code path may re-encode, normalise or alias a non-canonical spelling into
+a canonical one.
+
+The decision record — including why `0x05` is excluded on the plain meaning of
+*compressed* in B1, and why the contract does not rest on libsecp256k1 — is
+[`PUBLIC_KEY_ENCODING_CONTRACT.md`](PUBLIC_KEY_ENCODING_CONTRACT.md). Regression coverage:
+`p2_7_pubkey_encoding` (`zerocoin/tests/p2_7_pubkey_encoding.rs`) and the `V4` group of
+the P2.6 differential fixture.
+
 ### 8.5 `Chain::validate_transaction`
 
 `Chain::validate_transaction` (`src/chain.rs:406`) clones the UTXO set and applies the

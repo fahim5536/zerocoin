@@ -109,8 +109,19 @@ pub struct PublicKey {
 }
 
 impl PublicKey {
+    /// Parse a 33-byte compressed SEC1 public key.
+    ///
+    /// Only the tags `0x02` and `0x03` are in contract; every other encoding is
+    /// rejected before the curve is touched. See
+    /// `docs/consensus/PUBLIC_KEY_ENCODING_CONTRACT.md` (P-1).
     pub fn from_sec1(bytes: &[u8]) -> Result<Self, CryptoError> {
         if bytes.len() != COMPRESSED_PUBKEY_LEN {
+            return Err(CryptoError::InvalidPublicKey);
+        }
+        // `k256` also decodes SEC1 tag 0x05 ("compact"), which names the same
+        // point with an even `y`. Accepting it would give one point two key
+        // hashes, because `key_hash` commits to the encoding, not the point.
+        if !matches!(bytes[0], 0x02 | 0x03) {
             return Err(CryptoError::InvalidPublicKey);
         }
         // Validate that the bytes are a real point on the curve.
@@ -280,6 +291,35 @@ mod tests {
         assert!(matches!(pubkey.to_sec1()[0], 0x02 | 0x03));
         // Round-trips through SEC1.
         assert_eq!(PublicKey::from_sec1(&pubkey.to_sec1()).unwrap(), pubkey);
+    }
+
+    #[test]
+    fn accepts_only_the_two_compressed_tags() {
+        let key = PrivateKey::from_bytes([7u8; SECRET_LEN]).expect("valid scalar");
+        let canonical = key.public_key().to_sec1();
+
+        // Both parities of the same `x` are in contract: `y` and `-y` are on curve.
+        for tag in [0x02u8, 0x03] {
+            let mut bytes = canonical;
+            bytes[0] = tag;
+            let parsed = PublicKey::from_sec1(&bytes).expect("compressed tag is accepted");
+            assert_eq!(parsed.to_sec1(), bytes, "the encoding is stored unchanged");
+        }
+
+        // Every other tag is out of contract, including SEC1 "compact" 0x05.
+        for tag in [0x00u8, 0x01, 0x04, 0x05, 0x06, 0x07, 0x08, 0xff] {
+            let mut bytes = canonical;
+            bytes[0] = tag;
+            assert_eq!(
+                PublicKey::from_sec1(&bytes).err(),
+                Some(CryptoError::InvalidPublicKey),
+                "tag {tag:#04x}"
+            );
+        }
+
+        // The length gate still runs first.
+        assert!(PublicKey::from_sec1(&canonical[..32]).is_err());
+        assert!(PublicKey::from_sec1(&[canonical.as_slice(), &[0u8]].concat()).is_err());
     }
 
     #[test]

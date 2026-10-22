@@ -659,7 +659,11 @@ fn build_cases() -> Vec<Case> {
             ("V4.length_32", x_only, "x coordinate only, 32 bytes"),
             ("V4.length_34", length_34, "33-byte key plus a trailing byte"),
             ("V4.prefix_00", prefix_zero, "prefix 0x00 is not a SEC1 tag"),
-            ("V4.prefix_05", prefix_five, "prefix 0x05 is not a SEC1 tag"),
+            (
+                "V4.prefix_05",
+                prefix_five,
+                "SEC1 compact tag 0x05 at 33 bytes: outside the P-1 contract, so rejected before the curve is consulted",
+            ),
             ("V4.all_zero_33", vec![0u8; 33], "33 zero bytes"),
             ("V4.empty", Vec::new(), "zero-length key"),
             (

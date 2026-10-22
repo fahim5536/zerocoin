@@ -598,6 +598,10 @@ measured results and restates §14's verdict. It does not supersede §10 (S5), �
 (acquisition paths) or §13 (risks); those stay as written, with the status
 updates called out below.
 
+> **Superseded in part by §18.** The `116/117` result and the single pinned
+> allowance recorded here describe the P2.6 tree. P2.8 removed the divergence and
+> the allowance; see §18.5.
+
 Baseline: repository root `D:\Downloads\zerocoin\.publish\upstream`, branch
 `main`, `HEAD == origin/main == 6435d53`
 (`docs(architecture): record the P2.5 backend selection audit`), remote `origin` →
@@ -1207,6 +1211,10 @@ remediation would cost.
 
 **No production behaviour was changed. `V4.prefix_05` still diverges.**
 
+> **Superseded by §18.** This section is the record of the tree at `96678c6`.
+> P2.8 recorded the contract, tightened `PublicKey::from_sec1`, and regenerated the
+> fixture, so `V4.prefix_05` no longer diverges and the allowance is gone.
+
 ### 17.1 Starting state `[VERIFIED]`
 
 | Item | Observed |
@@ -1651,3 +1659,248 @@ Explicitly **not** claimed:
 - that the key is independently trusted;
 - that G2c, gate G2 or the P2 exit criteria are closed;
 - that P3, the service layer, RPC or Go networking has begun.
+
+## 18. P2.8 addendum — contract recorded, gate tightened, divergence closed `[VERIFIED]`
+
+P2.7 stopped at a decision. P2.8 records the decision, applies it in the narrowest
+place that can carry it, and re-runs the whole evidence chain against the final
+tree. Contract text: `docs/consensus/PUBLIC_KEY_ENCODING_CONTRACT.md`. Normative
+summaries: `CONSENSUS_RULES.md` §8.4.1 rule **P-1**,
+`CPP_PORT_REQUIREMENTS.md` C-53, `INTERFACE_CONTRACTS.md` B1.
+
+### 18.1 Starting state `[VERIFIED]`
+
+| Item | Observed |
+|---|---|
+| Repository root | `D:/Downloads/zerocoin/.publish/upstream` |
+| Branch | `main`, tracking `origin/main` |
+| HEAD | `65a61cdfa8bb033df41e98e8432043a4f709a58f` ("docs(crypto): trace the 0x05 public-key divergence to block acceptance") |
+| `origin/main` | same commit — present and published |
+| Working tree | clean, no untracked files |
+| P2.7 commit present | yes — it is HEAD |
+
+No unexplained modification was found, so §1's stop condition did not trigger.
+
+### 18.2 The contract, and why libsecp256k1 is not the source of it
+
+Thirty-three bytes with tag `0x05` is SEC1 *compact*: it names the same curve
+point as `0x02 || x` with an even `y`. Nothing in ZeroCoin asks for that alias,
+and six project-internal facts say the contract is compressed-only:
+
+1. the type is documented as "A compressed SEC1 public key"
+   (`secp256k1.rs:105`), and the constant is `COMPRESSED_PUBKEY_LEN`;
+2. the error text is "not a valid **compressed** secp256k1 point";
+3. the wallet only ever emits `to_encoded_point(true)` — `0x02`/`0x03`;
+4. `key_hash()` is `hash160(&self.bytes)`, so the *spelling* is consensus data:
+   two encodings of one point are two P2PKH locks;
+5. B1 already rejects uncompressed and hybrid encodings, which is a tag rule,
+   not a length rule — `0x04`, `0x06` and `0x07` are 65 bytes;
+6. `CRYPTO_BACKEND_DECISION.md` §7.2 states the contract as "33 bytes and prefix
+   0x02/0x03".
+
+So the divergence was in the reference, and the fix belongs there. Had the
+evidence been ambiguous, P2.8 would have stopped and asked; §8.4 of
+`CONSENSUS_RULES` and C-38..C-47 of the port requirements were silent on the tag
+set, which is why the rule is now written down as P-1 rather than left implicit
+in code.
+
+### 18.3 Production change — one predicate
+
+```rust
+pub fn from_sec1(bytes: &[u8]) -> Result<Self, CryptoError> {
+    if bytes.len() != COMPRESSED_PUBKEY_LEN {
+        return Err(CryptoError::InvalidPublicKey);
+    }
+    if !matches!(bytes[0], 0x02 | 0x03) {
+        return Err(CryptoError::InvalidPublicKey);
+    }
+    VerifyingKey::from_sec1_bytes(bytes).map_err(|_| CryptoError::InvalidPublicKey)?;
+    /* ... unchanged ... */
+}
+```
+
+`zerocoin/src/crypto/secp256k1.rs:117-132`. Order is length, then tag, then
+curve: an out-of-contract tag is rejected without consulting `sec1` or the
+curve at all, so the verdict cannot depend on library tag support. No
+dependency, no signature-equation, low-S, DER, sighash, serialization, retarget
+or reward change; the predicate is the only edit under `zerocoin/src/`.
+
+**Error funnel, unchanged in shape.** `InvalidPublicKey` → `OP_CHECKSIG` pushes
+nothing → final `is_true` fails → `ScriptError::EvalFalse` →
+`UtxoError::ScriptInvalid { index, source }`. A rejected key is indistinguishable
+from a bad signature to the caller, which is U-4's requirement.
+
+**Every route is covered by the one predicate.** `TxSigChecker::check_signature`
+(`sighash.rs:126`) for spends, and `PublicKey::deserialize`
+(`secp256k1.rs:230-236`) for anything decoded from JSON or the wire — including a
+`Message::Share` payout key. No normalization, re-encoding or fallback exists on
+either path.
+
+### 18.4 Regression tests
+
+`zerocoin/tests/p2_7_pubkey_encoding.rs`, 11 tests, plus one new lib unit test
+`accepts_only_the_two_compressed_tags` in `secp256k1.rs`:
+
+| Required coverage | Test |
+|---|---|
+| 33-byte `0x02` accepted | `canonical_prefix_02_is_accepted` |
+| 33-byte `0x03` accepted | `canonical_prefix_03_is_accepted` |
+| the disputed `0x05` | `compact_prefix_05_is_rejected_at_the_parser` |
+| `0x00`,`0x01`,`0x04`,`0x06`,`0x07`,`0xff` and more | `every_other_unsupported_prefix_is_rejected` (`0x00`,`0x01`,`0x04`,`0x05`,`0x06`,`0x07`,`0x08`,`0x0a`,`0xff`) |
+| invalid lengths and off-curve points | `invalid_lengths_and_invalid_curve_points_are_rejected` |
+| valid signatures still verify | `valid_signature_verification_is_unchanged` |
+| P2PKH with canonical and non-canonical encodings | `p2pkh_script_validation_uses_canonical_and_noncanonical_encodings` (4 sub-cases), `canonical_p2pkh_spend_is_still_accepted`, `compact_locked_coin_can_no_longer_be_spent` |
+| wire-supplied pool payout key | `wire_share_with_a_compact_payout_key_is_rejected` |
+| the former alias stays rejected | `historical_regression_the_former_0x05_alias_is_rejected` |
+
+Three of these were P2.7 pins that asserted the *old* behaviour (a compact key
+verifies, a compact-locked coin is spendable, a wire share with a compact
+payout decodes). They were inverted, not deleted: the historical test keeps the
+former alias as a named regression, which is what stops a future "accept both"
+shortcut from silently returning.
+
+`canonical_p2pkh_spend_is_still_accepted` also pins the negative side through
+`Chain`: 100 mined blocks, a compact-signed spend rejected as
+`ChainError::Utxo(ScriptInvalid { .. })`, then a canonical spend admitted and
+mined. `compact_locked_coin_can_no_longer_be_spent` proves the failed attempt is
+atomic — `state_root()` is unchanged, the outpoint is still present and the
+balance is intact.
+
+### 18.5 Differential matrix, before and after
+
+`V4.prefix_05`, 33-byte `05989c0b...e05f6f`:
+
+| | rust | seam | backend | verdict |
+|---|---|---|---|---|
+| P2.7 (committed at `65a61cd`) | accept | reject | reject | `match=no` — pinned allowance |
+| P2.8 (this tree) | **reject** | reject | reject | **`match=yes`** |
+
+The fixture changed in exactly two lines — `RUST accept` → `RUST reject` and the
+NOTE — and was regenerated by the `#[ignore]`d emitter, not edited by hand. The
+in-suite test `differential_vectors_match_rust_reference` re-derives every RUST
+column through `seam_verdict`, so the fixture cannot drift from the reference
+without failing the suite.
+
+Full corpus: **117/117 match, 0 failures, 6 accept / 111 reject.**
+
+| Group | Cases | Accept | Reject |
+|---|---|---|---|
+| V1 | 2 | 2 | 0 |
+| V2 | 3 | 0 | 3 |
+| V3 | 18 | 0 | 18 |
+| V4 | 11 | 0 | 11 |
+| V5 | 5 | 3 | 2 |
+| V6 | 2 | 1 | 1 |
+| V7 | 76 | 0 | 76 |
+
+Two rows remain adapter load-bearing rather than faithful — `V4.uncompressed_65`
+and `V4.hybrid_prefix_06`, both `rust=reject backend=accept`, where a libsecp256k1
+parser accepts a 65-byte key that the backend adapter rejects before the curve.
+Both rows still agree on the verdict (`match=yes`); the difference is recorded as
+the adapter's behaviour, not hidden.
+
+**Allowance removed.** `scripts/gate-p2-6.ps1` now has `$KnownDivergences = @()`;
+`kernel/differential/CMakeLists.txt` no longer registers
+`--known-divergence V4.prefix_05` with ctest, and the wrapper's docstring says
+so. The guard is unchanged in strength: an unexplained divergence fails the run,
+and a stale allowance fails the run too. Both controls were re-proved against
+the final runner:
+
+| Control | Command | Exit | Message |
+|---|---|---|---|
+| stale allowance (`V4.prefix_05`) | `--expect-cases 117 --known-divergence V4.prefix_05` | **1** | `stale --known-divergence entry: V4.prefix_05 now matches; remove the allowance` |
+| stale allowance (unrelated) | `--expect-cases 117 --known-divergence V4.prefix_00` | **1** | same stale-entry failure |
+
+### 18.6 Activation and compatibility
+
+**No production chain exists, so there is nothing to activate on.** `README.md`
+states "Mainnet is not launched" and that the mainnet genesis nonce is unpinned;
+the only pinned mainnet artefact is the nonce-independent
+`GENESIS_PREIMAGE_DIGEST_MAINNET`. `GENESIS_HASH_REGTEST` and
+`GENESIS_HASH_DEVNET` are pinned, but they belong to test networks whose genesis
+is solved deterministically.
+
+**Genesis cannot depend on this contract.** `genesis_coinbase()` has no outputs,
+so block 0 contains no `scriptPubKey`, no `hash160` commitment and no public key.
+No genesis hash, merkle root or coinbase txid can move as a result.
+
+**The one residual case is a local datadir.** `Chain::open` verifies the genesis
+hash and then loads stored blocks and the UTXO set without replaying them. A
+datadir written by an earlier build keeps its history; any *unspent* output
+locked to `hash160(0x05 || x)` becomes unspendable. The wallet never produces
+such an output (it emits `0x02`/`0x03`), so it can only appear in a deliberately
+crafted datadir, and discarding regtest/devnet datadirs removes it.
+
+No activation height is invented and no claim is made that a split is
+impossible; the claim is narrower — there is no accepted history for this rule to
+reinterpret.
+
+### 18.7 Gates, run fresh against this tree
+
+The whole chain was executed by one command in a fresh kernel build directory and
+two fresh, empty differential build directories (no reused CMake cache):
+
+```text
+powershell -ExecutionPolicy Bypass -File scripts\gate-p2-6.ps1 ^
+  -BuildDir .build\p28-kernel -DifferentialBuildDir .build\p28-differential-repro
+exit 0
+```
+
+| Step | Observed | Exit |
+|---|---|---|
+| kernel configure + build (warnings are errors) | `.build/p28-kernel`, Ninja, complete | 0 |
+| kernel unit tests | **108 run, 0 failed** | 0 |
+| kernel ctest (`ctest --test-dir .build\p28-kernel --output-on-failure`) | **100% tests passed out of 3** — `kernel_unit`, `kernel_conformance`, `kernel_p2_conformance` | 0 |
+| G1 conformance replay | **28/28 cases** | 0 |
+| P2 conformance + corruption self-check | **21/21 cases, corruption rejected** | 0 |
+| P0 deterministic baseline / corpus verifier | **clean** | 0 |
+| Rust suite, `--all-targets` | **283 passed, 0 failed, 11 targets** | 0 |
+| `high_s_signature` | **4 passed** | 0 |
+| `s5_boundary_probes` | **3 passed** | 0 |
+| differential build A / B | two independent empty directories, both complete | 0 |
+| reproducibility A vs B | **3/3 objects byte-identical**; `archive=differs; exe=differs` (container and link metadata; see §16.6 — byte-identical binaries were never claimed) | 0 |
+| differential ctest | `100% tests passed out of 1` | 0 |
+| differential verdicts | **117/117 match, none allowed** (6 accept, 111 reject) | 0 |
+| `p2_7_pubkey_encoding` (separate invocation) | **11 passed, 0 failed** | 0 |
+
+The Rust total rose 278 (P2.7) → 283: +4 from the widened integration file and
++1 from the new lib unit test. No existing test was weakened, skipped or deleted,
+and no fixture changed except the two lines in §18.5.
+
+### 18.8 G2c verdict and P3 status
+
+**G2c: NO-GO — unchanged.** P2.8 closes the differential-parity condition and the
+`0x05`-disposition condition. It does not close S5 (no signing oracle, no boundary
+proof), it takes no decision on `signature_der`, the vendored provenance is still
+non-reproducible from the repository (§17.9), and the backend is still not in the
+production verification path. A green matrix is one condition, not the gate.
+
+**P3: not started.** No Go networking, RPC, service layer or production crypto
+integration was performed in P2.8.
+
+### 18.9 Files changed and non-claims
+
+Production: `zerocoin/src/crypto/secp256k1.rs` (predicate + doc + one unit test).
+
+Tests and harness: `zerocoin/tests/p2_7_pubkey_encoding.rs` (11 tests),
+`zerocoin/tests/differential_vectors.rs` (corrected NOTE),
+`kernel/differential/vectors/ledger.sighash.differential.txt` (regenerated),
+`scripts/gate-p2-6.ps1` (empty allowance, fresh wording),
+`kernel/differential/CMakeLists.txt` (ctest flag removed),
+`kernel/tools/secp256k1_differential.py` (docstring only).
+
+Documents: `docs/consensus/PUBLIC_KEY_ENCODING_CONTRACT.md` (new),
+`docs/consensus/CONSENSUS_RULES.md` §8.4.1,
+`docs/consensus/CPP_PORT_REQUIREMENTS.md` C-53,
+`docs/architecture/INTERFACE_CONTRACTS.md` B1 + §3.3,
+`docs/architecture/CRYPTO_BACKEND_READINESS.md` §13, this section.
+
+Not changed: `Cargo.toml`, `Cargo.lock`, the vendored `secp256k1` tree, the
+signature equation, the high-S policy, DER parsing, the sighash preimage, block
+or transaction serialisation, the P0 corpus, `.publish` state, Git identity and
+remote configuration.
+
+Explicitly **not** claimed: that S5 is closed; that the backend is production
+ready or fully proven equivalent; that the DER policy is decided; that G2c, gate
+G2 or the P2 exit criteria are closed; that a production mainnet exists or that a
+chain split is impossible; that P3 has begun.

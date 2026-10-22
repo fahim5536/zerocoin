@@ -18,9 +18,10 @@
          wrapper.
 
     Step 7 is the only place a verdict may disagree, and only for the cases
-    listed on --known-divergence. That list is P2.6's finding, not an allowance:
-    the wrapper fails if any other case disagrees and fails again if the listed
-    case starts agreeing, so the pin cannot silently outlive the bug.
+    listed on --known-divergence. Since P2.8 that list is empty: the Rust
+    reference rejects SEC1 tag 0x05, so it agrees with libsecp256k1 on every
+    case. The wrapper still fails if any case disagrees and still fails on a
+    stale allowance, so an allowance can never silently outlive its divergence.
 
     Nothing here is advisory: each step is a command with an exit code, and the
     summary prints the measured count for each.
@@ -57,8 +58,11 @@ $P0Harness     = Join-Path $RepoRoot 'test\harness\run_vectors.py'
 $CrateManifest = Join-Path $RepoRoot 'zerocoin\Cargo.toml'
 $Toolchain     = '+stable-x86_64-pc-windows-gnu'
 
-# The P2.6 finding. See docs/architecture/CRYPTO_BACKEND_SELECTION_AUDIT.md.
-$KnownDivergences = @('V4.prefix_05')
+# P2.8 closed the only entry: `PublicKey::from_sec1` now rejects SEC1 tag 0x05, so
+# the Rust reference and libsecp256k1 agree on the whole corpus. Any divergence is
+# therefore unexplained and fails the gate. See
+# docs/consensus/PUBLIC_KEY_ENCODING_CONTRACT.md (rule P-1).
+$KnownDivergences = @()
 $ExpectedCases    = 117
 
 $BuildRoot = Join-Path $RepoRoot '.build'
@@ -385,8 +389,13 @@ Write-Host $diffText
 if ($diff.ExitCode -ne 0) { Fail 'differential verdicts' ('exit code ' + $diff.ExitCode) }
 $diffMatch = [regex]::Match($diffText, '(?m)^secp256k1 differential: (\d+)/(\d+) cases match')
 if (-not $diffMatch.Success) { Fail 'differential verdicts' 'summary line not found' }
+$pinned = if ($KnownDivergences.Count -eq 0) {
+    ', none allowed'
+} else {
+    ', ' + $KnownDivergences.Count + ' pinned (' + ($KnownDivergences -join ', ') + ')'
+}
 Add-Result 'differential verdicts' ($diffMatch.Groups[1].Value + '/' + $diffMatch.Groups[2].Value +
-    ' match, ' + $KnownDivergences.Count + ' pinned (' + ($KnownDivergences -join ', ') + ')')
+    ' match' + $pinned)
 
 # --- summary -----------------------------------------------------------------
 
@@ -395,6 +404,6 @@ foreach ($result in $results) {
     Write-Host ('  {0,-22} {1}' -f $result.Name, $result.Detail)
 }
 Write-Host ''
-Write-Host 'P2.6 gates: PASS (every step executed; 1 documented divergence pinned)' -ForegroundColor Green
-Write-Host 'G2c: NO-GO — V4.prefix_05 is consensus-relevant; see docs/architecture/CRYPTO_BACKEND_SELECTION_AUDIT.md'
+Write-Host 'P2.6 gates: PASS (every step executed; no divergence allowance)' -ForegroundColor Green
+Write-Host 'G2c: NO-GO — differential parity is one G2c condition, not the whole gate; see docs/architecture/CRYPTO_BACKEND_SELECTION_AUDIT.md'
 exit 0

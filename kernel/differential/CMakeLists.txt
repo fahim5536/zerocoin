@@ -105,12 +105,11 @@ zerocoin_enable_warnings(secp256k1_differential)
 # Vector-driven test. The fixture records the Rust verdict for every case; the
 # wrapper checks that the runner reproduced it and that no case was skipped.
 #
-# `--known-divergence V4.prefix_05` is not an allowance for sloppiness, it is
-# the recorded P2.6 finding: the Rust reference accepts a 33-byte public key
-# tagged 0x05 as if it were 0x02 (the `sec1` crate maps tag 5 to `Tag::Compact`
-# and `k256` decompacts it with an even y), while libsecp256k1 admits only
-# 0x02/0x03 for 33 bytes. The wrapper fails if any *other* case diverges, and it
-# also fails if this one starts matching, so the pin cannot outlive the bug.
+# P2.8 removed the only `--known-divergence` entry. `PublicKey::from_sec1` now
+# rejects SEC1 tag 0x05 before the curve is touched, matching libsecp256k1, so
+# the whole corpus must agree; `--known-divergence` remains available and the
+# wrapper still fails on a stale entry, which is the negative control that keeps
+# an allowance from outliving the divergence it was written for.
 # ---------------------------------------------------------------------------
 find_package(Python3 COMPONENTS Interpreter QUIET)
 
@@ -123,7 +122,6 @@ if(Python3_Interpreter_FOUND)
             --vectors "${CMAKE_CURRENT_SOURCE_DIR}/vectors/ledger.sighash.differential.txt"
             --runner "$<TARGET_FILE:secp256k1_differential>"
             --expect-cases 117
-            --known-divergence V4.prefix_05
   )
 else()
   message(WARNING "Python3 not found: the differential vector test is not registered.")

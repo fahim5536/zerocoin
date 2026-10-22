@@ -103,9 +103,9 @@ public key. Those are the backend's obligations.
 
 | # | Obligation | Source of the rule |
 |---|---|---|
-| B1 | Accept **only 33-byte compressed SEC1** public keys; reject 65-byte uncompressed, hybrid prefixes, wrong lengths, off-curve `x`, and the point at infinity | `src/crypto/secp256k1.rs` 112–121 |
-| B2 | Parse **strict DER** for the signature; reject non-minimal integers, negative values, zero `r`/`s`, out-of-range `r`/`s`, bad lengths and trailing bytes inside the DER portion | `src/crypto/secp256k1.rs` 176–190 |
-| B3 | Verify over the **32-byte digest as given**; no hashing, no truncation, no padding | `src/crypto/secp256k1.rs` 137–143 |
+| B1 | Accept **only 33-byte compressed SEC1** public keys, i.e. the leading tag is `0x02` or `0x03`; reject every other tag — `0x05` (SEC1 *compact*), `0x04` (uncompressed), `0x06`/`0x07` (hybrid), `0x00`, `0x01` and the rest — along with wrong lengths, off-curve `x`, and the point at infinity | `src/crypto/secp256k1.rs` 117–132; `CONSENSUS_RULES.md` §8.4.1 rule P-1 |
+| B2 | Parse **strict DER** for the signature; reject non-minimal integers, negative values, zero `r`/`s`, out-of-range `r`/`s`, bad lengths and trailing bytes inside the DER portion | `src/crypto/secp256k1.rs` 187–193 |
+| B3 | Verify over the **32-byte digest as given**; no hashing, no truncation, no padding | `src/crypto/secp256k1.rs` 148–154 |
 | B4 | **Reproduce the reference's high-S rejection; do not normalise.** `k256` rejects `s > n/2` inside `verify_prehashed`; the wrapper must return `false` for the same inputs and must not rewrite `s` | `k256-0.13.4/src/ecdsa.rs:201-208`; `CRYPTO_BACKEND_READINESS.md` §2 H1 |
 | B5 | Return `false` for every malformed input; never throw across the C++ boundary | C2 convention 2 |
 | B6 | Be re-entrant and thread-safe for concurrent verification with a shared immutable context | P5 node threads |
@@ -118,6 +118,14 @@ wrapper that normalises a copy before the call would **not** match: it would
 accept transactions the Rust node rejects. No normalisation step exists, and none
 may be added (`CRYPTO_BACKEND_DECISION.md` §7.3).
 
+B1 is a **tag-set** rule, not only a length rule. `0x02` and `0x03` are the whole of
+the *compressed* encoding space; `0x05` is SEC1 *compact*, which names the same
+curve point as `0x02 || x` with an even `y`. Admitting both would give one point
+two key hashes, because the P2PKH commitment is `hash160` over the 33 bytes and not
+over the point, so a backend that accepts `0x05` diverges on which scripts are
+spendable even though it verifies the same signatures. Neither side may re-encode,
+normalise or alias a non-canonical spelling into a canonical one.
+
 Parse-level strictness may exceed the reference **only where the excess cannot
 change a verdict**: a parse the reference accepts and then fails to verify may be
 rejected earlier, but a parse the reference accepts and verifies must never be
@@ -125,6 +133,16 @@ rejected. A backend that rejects `r = 0` at parse time is equivalent to one that
 verifies it and fails, because both produce `false`; a backend that rejects an
 unusual-but-valid encoding is not equivalent and is a defect. Where the boundary
 is unclear, a vector decides, not an argument.
+
+That paragraph constrains a backend **relative to the reference**; it does not
+license the reference to exceed B1. The reference's own accept-set is exactly B1's,
+because `PublicKey::from_sec1` rejects a 33-byte `0x05` encoding before the curve is
+consulted, so a backend that rejects `0x05` is not stricter than the reference — it
+is equal to it. Where the reference did accept `0x05` (its state before P2.8) the
+divergence was in the reference; the contract in
+`docs/consensus/PUBLIC_KEY_ENCODING_CONTRACT.md` closed it there rather than
+widening B1 to match. `CONSENSUS_RULES.md` §8.4.1 records the rule and the
+regression coverage that pins both verdicts.
 
 ### 3.4 Versioning of the seam
 

@@ -721,6 +721,9 @@ remains in force: **G2c is still NO-GO**, but for a measured reason rather than 
 absent backend. Full evidence is in
 `CRYPTO_BACKEND_SELECTION_AUDIT.md` §16.
 
+> **Superseded in part by §13.** The pinned `V4.prefix_05` divergence recorded in
+> this section was closed by P2.8; §13.2 lists what moved.
+
 ### 11.1 Acquisition and build `[VERIFIED]`
 
 libsecp256k1 `v0.8.0` was acquired as the annotated tag archive, verified with
@@ -857,6 +860,11 @@ remediation decision and changed no production code. Full detail is in
 `CRYPTO_BACKEND_SELECTION_AUDIT.md` §17; this section records only what moves
 *this* document.
 
+> **Superseded in part by §13.** Present-tense statements in §12 — "the reference
+> **accepts** `0x05` today", "B1 cites code that only enforces the length" —
+> describe the tree at `65a61cd`. P2.8 tightened the gate; §13 records the
+> resulting state.
+
 ### 12.1 What is now known
 
 | Question | Answer |
@@ -911,3 +919,65 @@ Two limitations are added:
 8. The recommended remediation has not been applied, so the reference and the
    backend still disagree on one of 117 cases. Any statement that the two
    implementations are compatible remains false until that case changes.
+
+## 13. P2.8 addendum — the gate is closed in the reference `[VERIFIED]`
+
+P2.7 recommended option A (tighten the Rust SEC1 gate) and stopped for an
+authorisation. P2.8 supplies both halves: a written contract
+(`docs/consensus/PUBLIC_KEY_ENCODING_CONTRACT.md`, rule **P-1**) and the
+remediation that implements it. This section records only what moves *this*
+document; the audit trail is in `CRYPTO_BACKEND_SELECTION_AUDIT.md` §18.
+
+### 13.1 B1 is now code, not only prose
+
+`PublicKey::from_sec1` (`zerocoin/src/crypto/secp256k1.rs:117-132`) rejects any
+33-byte value whose tag is not `0x02` or `0x03`, before
+`VerifyingKey::from_sec1_bytes` is called. B1's cited range now implements the
+whole obligation, tag half included, so the documentation defect recorded in
+§17.2 of the audit is closed by changing the code rather than the sentence.
+`INTERFACE_CONTRACTS.md` §3.3 also gains the reconciliation sentence that was
+missing: its parse-strictness paragraph constrains a backend *relative to the
+reference* and never licensed the reference to exceed B1.
+
+### 13.2 Which readiness findings move
+
+| §2 finding | Before P2.8 | After P2.8 |
+|---|---|---|
+| The reference accepted a `0x05` key the backend rejects (`V4.prefix_05`) | open divergence, pinned | **closed** — both reject; 117/117 cases agree |
+| B1 asserted a tag rule the code did not enforce | documentation defect | **closed** — the code enforces it |
+| S3's reject expectation described a target, not the reference | correct but aspirational | **closed** — it now describes the reference |
+
+Nothing else in §2 moves. B2 (strict DER), B3 (digest as given), B4 (high-S) and
+their vectors are untouched by P2.8.
+
+### 13.3 Effect on D1
+
+**D1 (G2c stays blocked, NO-GO) is unchanged**, because D1 never depended on this
+one case. §14's GO conditions additionally require a closed or waived S5, a
+separate decision on `signature_der`, and provenance evidence reproducible from
+the repository. What P2.8 does is satisfy the differential-parity condition and
+the seventh condition added in §17.11 (`0x05` disposition decided).
+
+| §14 condition | State after P2.8 |
+|---|---|
+| written authorisation naming one acquisition path | backend: as at P2.6; this fix: recorded in `PUBLIC_KEY_ENCODING_CONTRACT.md` |
+| pinned tag, archive SHA-256, GPG signature | unchanged from §12.4 item 7 — non-drift only |
+| wrapper gating SEC1 to 33 bytes / `0x02` / `0x03` | satisfied on both sides |
+| §9 V matrix green | **satisfied** — 117/117, no allowance |
+| S5 closed or explicitly waived | **not satisfied, not waived** |
+| separate decision for `signature_der` | **not taken** |
+| `0x05` disposition decided | **satisfied** — rule P-1, implemented and pinned |
+
+### 13.4 Limitations after P2.8
+
+Items 1–7 of §11.7 and §12.4 stand; item 8 of §12.4 is closed by §13.1.
+
+9. Green differential parity is **one** G2c condition. It is not evidence that
+   the backend is production-correct, that S5 is closed, or that the DER policy
+   has been decided.
+10. The backend remains outside the production verification path. No production
+    code calls into the kernel, and no `SigChecker` other than the built-in
+    `k256` one is reachable from `Chain`.
+11. Rules P-1 and B1 are enforced at `from_sec1`. A future backend that parses
+    public keys through its own path must reproduce the same tag set, and what
+    proves it does is the differential corpus, not the Rust source.
