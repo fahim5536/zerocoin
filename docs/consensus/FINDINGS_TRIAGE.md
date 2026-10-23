@@ -56,7 +56,7 @@ Class: **C** consensus-critical · **S** node stability · **N** non-consensus.
 | 2 | **F-6** | Confirmed | High | C | Safe | Safe | Safe | Cannot change without forking at every retarget | `next_difficulty_is_deterministic_and_branch_stable` (P1) |
 | 3 | **F-8** | Confirmed | High | C | Safe | Safe | Config-level fork if params ever vary while `engine_id` stays 1 | Same as above; hardening is API-internal | `f8_engine_id_does_not_commit_to_scratchpad_parameters` |
 | 4 | **F-4** | Confirmed | Medium | C | Safe | Safe | Safe | Changing the layout changes a consensus commitment (anchors) | `regtest_genesis_matches_the_pinned_anchors`, `state_root_is_independent_of_insertion_order` (P1) |
-| 5 | **F-1** | Confirmed (reachability claim corrected) | Medium | S | **Not reachable** (guarded at `node.rs:646-662`) | **Not reachable** (no block submission) | **Reachable panic** | Guard is behavior-preserving for valid blocks; previously-panicking inputs become typed errors | `f1_connect_block_panics_when_height_exceeds_chain_length` |
+| 5 | **F-1** | **Rust fixed in M-F1; C++ half deferred** | Medium | S | **Not reachable** (guarded at `node.rs:646-662`) | **Not reachable** (no block submission) | **Reachable panic → closed** (typed `BadHeight`) | Guard is behavior-preserving for valid blocks; previously-panicking inputs become typed errors | `f1_connect_block_rejects_an_unindexable_height` (+3 further F-1 tests) |
 | 6 | **F-3** | Confirmed | Medium | C | Not deliverable above 4 MiB (frame cap) | Not reachable (no block submission) | Reachable by a local miner; block accepted but unrelayable | Adding a limit **changes acceptance**; requires coordinated activation | `f3_a_block_larger_than_the_frame_cap_is_accepted` |
 | 7 | **F-7** | Confirmed | Low | S | Safe | Safe | Reachable helper panic, **not on validation path** | Helper API change only; no consensus effect | `f7_required_work_panics_when_target_is_max`, `f7_uint256_div_u64_panics_on_zero_divisor` |
 | 8 | **F-5** | Confirmed | Low | C (port parity) | Not reachable (wire format is JSON) | Not reachable (no raw-tx RPC) | Tooling only | Rust semantics can stay; a stricter port diverges on tooling input, not chain state | `trailing_bytes_after_a_transaction_are_ignored` (P1) |
@@ -66,8 +66,9 @@ Class: **C** consensus-critical · **S** node stability · **N** non-consensus.
 
 **Bottom line:** no finding is remotely exploitable on the current P2P/RPC surface.
 The high-severity items are all *port-correctness pins*: they are correct in Rust and
-must be copied exactly, not “fixed”. The only reachable defects are local-API hazards
-(F-1, F-7) and a locally constructible oversized block (F-3).
+must be copied exactly, not “fixed”. The remaining reachable defects are the local-API
+hazard F-7 and a locally constructible oversized block (F-3); F-1's reachable panic is
+**closed** by M-F1 (§3), and only its C++ counterpart stays open.
 
 ## 3. Detailed dispositions
 
@@ -147,6 +148,67 @@ must be copied exactly, not “fixed”. The only reachable defects are local-AP
        or the 121-case differential fixture changes;
     6. both gates green in fresh build directories, with the change recorded as
        non-consensus in `COMPONENT_OWNERSHIP.md` and `MIGRATION_ROADMAP.md`.
+
+- **M-F1 record (2026-10-23) — Rust guard implemented, C++ half deferred.** Criteria 1,
+  2, 3, 5 and 6 are met; criterion 4 is **not**, because the C++ side has nothing to test
+  yet. The limitation is recorded below rather than papered over.
+  - **What changed.** `Chain::connect_block` now calls
+    `Block::validate_header_identity(chain_id, next_height)` **before**
+    `required_bits(height)`, so an unindexable height returns the existing
+    `BlockError::BadHeight { expected, found }` (wrapped in `ChainError::Structure`)
+    instead of reaching `self.blocks[height - 1]`. The identity checks live in one
+    place: `validate_structure` calls the same method first, so the two call sites
+    cannot drift into different orders. `required_bits` keeps its signature; its
+    `# Panics` note now names the only remaining caller shape.
+  - **No new error type and no new rule.** `BadHeight` is reused. Error precedence is
+    unchanged — the chain id is still checked before the height, so `WrongChain` wins
+    over `BadHeight` — and every other `validate_structure` condition keeps its
+    position and its variant.
+  - **Behaviour at the documented boundaries.** `height == next_height()` → unchanged,
+    proceeds to full validation. `height == chain.height()` (the tip) → `BadHeight`.
+    `height > next_height()` → `BadHeight` (previously a panic when retargeting was
+    enabled). `height == 0` → `BadHeight`, exactly as before, because `required_bits(0)`
+    returned `genesis_bits` early and never indexed. Networks with
+    `allow_pow_retarget == false` were never affected.
+  - **No accepted block changes.** The guard only narrows inputs that already failed: it
+    adds no rule and rejects nothing that was previously accepted, so no P0 or
+    differential verdict moves.
+  - **Tests.** The `#[should_panic(expected = "index out of bounds")]` test is gone,
+    replaced by four typed-error tests in `zerocoin/tests/findings_regression.rs`:
+    `f1_connect_block_rejects_an_unindexable_height` (devnet, height 2 on a genesis-only
+    chain; asserts `BadHeight { expected: 1, found: 2 }` and that the chain is
+    untouched), `f1_an_extreme_height_is_rejected_without_touching_the_history`
+    (`u64::MAX`), `f1_the_chain_is_still_checked_before_the_height` (proves `WrongChain`
+    still precedes `BadHeight`) and
+    `f1_a_valid_next_height_block_still_connects_with_retargeting_enabled` (proves the
+    valid path still mines and accepts at height 1). No `#[should_panic]` remains for
+    this defect.
+  - **C++ half not delivered — exact limitation.** The kernel has **no block or chain
+    module and no structured-error type**: `kernel/CMakeLists.txt` builds only the
+    primitive translation units, `kernel/conformance/main.cpp` dispatches
+    script/sighash/encoding cases, and `COMPONENT_OWNERSHIP.md` §2.1 records both "Block
+    header and Merkle root" (P3) and "`connect_block` and chain replay" (P4) as "Not
+    started" with "—" in the C++ column. A C++ negative test for this boundary would
+    therefore require creating the block-validation module and its error system — the
+    P3 port — not a test. That is outside M-F1's scope, so **no C++ test was added and
+    the disposition is not restated as "identical"**; C-29 of
+    `CPP_PORT_REQUIREMENTS.md` stays a forward obligation, to be satisfied together with
+    the P3 block module.
+  - **Unchanged, as required.** The P0 corpus (117 cases) and the 121-case differential
+    fixture are untouched; no vector was created, edited or regenerated for this class.
+    `ledger.sighash.signature_der` remains deferred. The shipped node is still Rust-only
+    and links no C++ backend (`zerocoin/Cargo.toml` has no FFI, no `build.rs` link to
+    `kernel/`). Nothing here establishes public testnet or mainnet readiness.
+  - **Gate evidence (fresh directories).** Gate A `scripts/gate-p2-6.ps1` on
+    `.build/mf1-20261023a-kernel` / `-differential`: **exit 0** — kernel unit tests 115
+    run, 0 failed; G1 28/28; P2 22/22 with the corruption self-check rejecting all 22; P0
+    `PASS 112 / ANCHOR 5 / SKIP 0 / FAIL 0` over 117; Rust suite 290 passed across 11
+    targets; `high_s_signature` 4 and `s5_boundary_probes` 7 passed; differential
+    121/121 (8 accept, 113 reject) with no allowance. Gate B
+    `scripts/gate-p2-10-provenance.ps1` on `.build/mf1-20261023a-provenance`: **exit 0**
+    — pinned archive/signature sizes and SHA-256 agreed, `GOODSIG`/`VALIDSIG` for
+    fingerprint `6A8F9C266528E25AEB1D7731C2371D91CB716EA7`, 60/60 vendored files
+    byte-identical.
 
 ### F-2 — block `version` is never validated
 
@@ -385,6 +447,11 @@ be rewritten to assert the typed error/`Option`. F-2, F-5 and F-6 remain pinned 
 suite; F-4, F-9 and F-10 have no safe behavioral reproduction (their evidence is the
 pinned anchor/implementation, recorded above).
 
+> **M-F1 addendum (2026-10-23).** The F-1 row above is history. That test is deleted, not
+> merely rewritten: it was replaced by four typed-error tests in the same file, so the
+> suite now holds nine tests and no `#[should_panic]` remains for F-1. The two `f7_*`
+> tests keep the other `#[should_panic]`, pending R-4.
+
 ## 6. Verification
 
 Run on the P1.1 branch at `545cf08` + this milestone's two added files, with
@@ -402,10 +469,12 @@ No existing test was modified, skipped or weakened.
 
 ## 7. Unresolved risks / follow-ups
 
-1. **F-1 guard** — **decided in P2.11 (Option: separate milestone M-F1).** It remains
-   the only reachable panic on a local API path, and remote reachability is still not
-   established. Until M-F1 lands, the `#[should_panic]` test documents it; acceptance
-   criteria are in §3 F-1.
+1. **F-1 guard** — **implemented on the Rust side in M-F1 (2026-10-23).** An unindexable
+   height now returns the existing `BadHeight` before the schedule lookup, and the
+   `#[should_panic]` test is replaced by typed-error tests (§5 addendum). What stays open
+   is the port half: with no C++ block module there is nowhere to assert the same
+   rejection, so C-29 remains a P3 obligation and the disposition is **not** "identical".
+   Remote reachability remains unestablished, as before.
 2. **F-3 policy** — **decided in P2.11: Option A (no consensus limit; the 4 MiB cap is
    transport-only).** The misleading doc comment on `MAX_PLAINTEXT_BYTES` is corrected in the
    same milestone. The port must not add a size or weight rule (C-17).

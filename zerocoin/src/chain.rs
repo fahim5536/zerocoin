@@ -252,6 +252,14 @@ impl Chain {
     }
 
     /// The compact difficulty a block at `height` must carry.
+    ///
+    /// # Panics
+    ///
+    /// On a retargeting network (`allow_pow_retarget == true`) with
+    /// `height > self.next_height()`, the schedule is read from
+    /// `self.blocks[height - 1]`, which is out of bounds. [`Chain::connect_block`]
+    /// validates the height first, so only a direct caller that skips that check
+    /// can reach this (finding F-1).
     pub fn required_bits(&self, height: u64) -> u32 {
         if height == 0 || !self.params.allow_pow_retarget {
             return self.params.genesis_bits;
@@ -273,6 +281,15 @@ impl Chain {
     /// persisted; on any failure nothing changes.
     pub fn connect_block(&mut self, block: Block, now: u64) -> Result<Hash256, ChainError> {
         let height = block.header.height;
+
+        // The height comes from the untrusted header, and `required_bits` indexes
+        // the stored history by it (`blocks[height - 1]`), so the identity checks
+        // run before the schedule is computed. Without this ordering a height past
+        // the tip panicked on a retargeting network instead of returning
+        // `BadHeight` (finding F-1). `validate_structure` applies the same checks
+        // below; sharing one implementation is what keeps the order from drifting.
+        block.validate_header_identity(self.params.chain_id.0, self.next_height())?;
+
         let expected_previous = self.tip_hash();
         let expected_bits = self.required_bits(height);
 

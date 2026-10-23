@@ -127,6 +127,34 @@ impl Block {
         self.header.pow_hash(engine)
     }
 
+    /// The identity checks that do not depend on chain history: the header must
+    /// name this node's chain and the height this chain expects next.
+    ///
+    /// [`Block::validate_structure`] applies them first. A caller that needs the
+    /// expected difficulty — which is a function of the *untrusted* height — calls
+    /// them on their own, so the height can be rejected before it is ever used as
+    /// an index into the stored history (finding F-1). One implementation keeps
+    /// the two call sites from drifting apart.
+    pub fn validate_header_identity(
+        &self,
+        expected_chain: u32,
+        expected_height: u64,
+    ) -> Result<(), BlockError> {
+        if self.header.chain != expected_chain {
+            return Err(BlockError::WrongChain {
+                expected: expected_chain,
+                found: self.header.chain,
+            });
+        }
+        if self.header.height != expected_height {
+            return Err(BlockError::BadHeight {
+                expected: expected_height,
+                found: self.header.height,
+            });
+        }
+        Ok(())
+    }
+
     /// Structural and proof-of-work validation of an untrusted block.
     ///
     /// `median_time_past` is the median timestamp of the previous 11 blocks and
@@ -144,18 +172,7 @@ impl Block {
     ) -> Result<(), BlockError> {
         let h = &self.header;
 
-        if h.chain != expected_chain {
-            return Err(BlockError::WrongChain {
-                expected: expected_chain,
-                found: h.chain,
-            });
-        }
-        if h.height != expected_height {
-            return Err(BlockError::BadHeight {
-                expected: expected_height,
-                found: h.height,
-            });
-        }
+        self.validate_header_identity(expected_chain, expected_height)?;
         if &h.previous_hash != expected_previous {
             return Err(BlockError::BadPreviousHash);
         }

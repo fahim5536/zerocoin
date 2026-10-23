@@ -14,6 +14,17 @@ is removed. P2.1 created no service and started no phase.
 > criterion 3 is now satisfied by closure. The shipped node remains Rust-based
 > and P3 has not started.
 
+> **M-F1 addendum (2026-10-23).** The untrusted-height defect F-1 is fixed on the Rust
+> side: `Chain::connect_block` validates the chain id and height before it asks for the
+> difficulty schedule, so an unindexable height returns the existing `BadHeight` error
+> instead of reading `blocks[height - 1]`, and the panic-based regression test is replaced
+> by typed-error tests. This is a non-consensus stability fix: no parameter, vector,
+> serializer, hash, protocol message or acceptance rule changed, the 117-case P0 corpus
+> and the 121-case differential fixture are untouched, and `HEAD` still ships a Rust-only
+> node. The C++ half of the parity claim was **not** delivered — the kernel has no block
+> or chain module, so F-1's disposition is not restated as "identical" (see §8 and
+> `CPP_PORT_REQUIREMENTS.md` §10) — and P3 is still not started.
+
 Related: doc `03` (the original phase proposal), `COMPONENT_OWNERSHIP.md`,
 `THREE_LANGUAGE_ARCHITECTURE.md`, `INTERFACE_CONTRACTS.md`,
 `CRYPTO_BACKEND_DECISION.md`.
@@ -199,7 +210,7 @@ same change, and when the corresponding line in §5 is deleted in that change.
 |---|---|---|---|
 | G2c (closed in P2.10) | No longer open: C++ verification exists. Kept as history | Maintainers | `CRYPTO_BLOCKER_REGISTER.md` §6 — CB-5 CLOSED, G2c: GO |
 | P2.2 NO-GO (superseded by P2.10) | The P2.2 plan normalised high-S; it was withdrawn, not implemented, and the wrapper reproduces the reference | Maintainers | `CRYPTO_BACKEND_DECISION.md` §15 |
-| F-1 untrusted-height panic in Rust `connect_block` | A local-API panic for `height > next_height()` when retargeting is enabled; remote reachability is **not** established | Maintainers | Separate follow-up milestone M-F1, scoped in `FINDINGS_TRIAGE.md` F-1 |
+| F-1 untrusted-height panic in Rust `connect_block` | **Closed on the Rust side in M-F1 (2026-10-23):** `height > next_height()` no longer reaches the history index on a retargeting network; it returns `BadHeight`. Remote reachability remains **not** established. The C++ counterpart stays open with P3 | Maintainers | `FINDINGS_TRIAGE.md` F-1 (M-F1 record); C++ side needs the P3 block module |
 | F-3 block-size policy | Decided in P2.11: no consensus size rule; the 4 MiB cap is transport-only | Documentation | `FINDINGS_TRIAGE.md` F-3, `CPP_PORT_REQUIREMENTS.md` §10 |
 | Doc `03` G2 wording (low-S) | A literal reading is ambiguous about normalisation | Documentation | §4 amendment recorded |
 | High-S rule lives in `k256`, not in ZeroCoin tests | A dependency update could change consensus unnoticed | Maintainers | Add Rust-side high-S vectors; pin `k256` exactly (readiness §7 R1/R2) |

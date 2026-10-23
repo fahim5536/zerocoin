@@ -152,11 +152,14 @@ reported error).
 `prev.timestamp - first.timestamp` across the 1440-block window with saturating subtraction,
 and MUST be disabled entirely when `allow_pow_retarget == false` (regtest).
 
-**C-29** — The port MUST NOT compute the schedule from an unvalidated height. Where the Rust
-code indexes `blocks[height-1]` before validating `height` (F-1), the port MUST validate the
-height first. This is a **documented divergence** in failure mode (a clean rejection instead
-of a panic/out-of-bounds); it MUST NOT change any accepted or rejected-by-rule block, and it
-MUST be recorded in the port's compatibility notes and covered by a test.
+**C-29** — The port MUST NOT compute the schedule from an unvalidated height. It MUST
+validate the height first and return the structured `BadHeight` rejection — never an abort,
+a negative index or an out-of-bounds read — keeping the owner's precedence (chain id, then
+height, then previous hash). Since M-F1 the owner does the same: `Chain::connect_block`
+runs `Block::validate_header_identity` before `required_bits`, so this is a **reproduce**
+requirement, not a safety divergence. It MUST NOT change any accepted or
+rejected-by-rule block, and the matching C++ negative test MUST assert the rejection kind,
+not merely the absence of a crash.
 
 ---
 
@@ -283,7 +286,7 @@ The port MUST take an explicit, recorded position on each finding. Default: repr
 
 | Finding | Rust behavior | Port requirement |
 |---|---|---|
-| F-1 | `required_bits` called with untrusted height → out-of-bounds panic on retarget networks | **Diverge (safety):** validate height first (C-29). Document; test both. **P2.11:** the invalid class (`allow_pow_retarget && height > next_height()`) is excluded from the differential corpus; it is pinned by a matching C++ negative test plus follow-up M-F1 (`FINDINGS_TRIAGE.md` F-1), after which this row becomes "identical". |
+| F-1 | `connect_block` validates the header identity (chain id, height) before `required_bits`, so an unindexable height returns `BadHeight` instead of indexing the history — **fixed in M-F1**; before that it was an out-of-bounds panic on retarget networks | **Deferred (untestable), not "identical":** the port MUST reproduce the typed rejection and the precedence once a block module exists (C-29), but no C++ block or chain module has been started (P3/P4), so there is nothing to assert against yet. The invalid class stays excluded from the differential corpus. |
 | F-2 | `header.version` never validated | Reproduce. Do not add a version rule (C-17). |
 | F-3 | No block size/weight limit | Reproduce. Do not add one (C-17). **P2.11 decision:** there is no consensus size or weight rule; the 4 MiB `MAX_PLAINTEXT_BYTES` is a transport bound and MUST NOT be reproduced as a block-validity rule (`FINDINGS_TRIAGE.md` F-3). |
 | F-4 | `state_root` is a flat hash, not a Merkle tree | Reproduce bytes exactly (C-42). |
@@ -304,6 +307,14 @@ but **not implemented**: the port validates height first under C-29, the class i
 from the differential corpus, and the Rust guard is a separate non-consensus milestone
 (M-F1) with acceptance criteria in `FINDINGS_TRIAGE.md` F-1. Neither decision changes a
 frame limit, a validity rule, consensus behaviour or the network protocol.
+
+**M-F1 note (2026-10-23).** The Rust half is implemented: `connect_block` rejects an
+unindexable height with the existing `BadHeight` before the schedule is read, and the
+panic-based regression test is replaced by typed-error tests. The port half is **not**
+implemented and cannot be tested: `kernel/CMakeLists.txt` builds only the primitive
+translation units, and there is no block or chain module to hold such a test. Consequently
+C-29's obligation stands, the F-1 row above reads "deferred" rather than "identical", and
+nothing here changes a validity rule, a vector or a consensus parameter.
 
 ---
 
@@ -331,8 +342,9 @@ The C++ port milestone is not complete until all four layers pass.
   They are decided by contract rule P-1 (the 33-byte key gate), not by raw-backend
   behaviour, and MUST NOT be cited as library-parity evidence.
 - The F-1 invalid-height class is **excluded** from the corpus: a differential row over it
-  would encode a Rust panic as expected behaviour. It is covered by the negative tests of
-  M-F1 instead.
+  would have encoded a Rust panic as expected behaviour. M-F1 supplies the Rust negative
+  tests (`findings_regression.rs`); the matching C++ test stays deferred with the P3 block
+  module (§10), so the exclusion currently has no C++ counterpart.
 
 ### 11.3 Differential fuzzing (mandatory before mainnet use)
 

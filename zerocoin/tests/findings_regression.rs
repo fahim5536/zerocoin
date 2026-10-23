@@ -1,14 +1,18 @@
 //! P1.1 regression tests for triaged consensus findings.
 //!
 //! Each test reproduces one finding from `docs/consensus/CONSENSUS_RULES.md`
-//! §14 exactly as documented in `docs/consensus/FINDINGS_TRIAGE.md`. They are
+//! §14 exactly as documented in `docs/consensus/FINDINGS_TRIAGE.md`. Most are
 //! **behavior pins**, not fixes: production code is unchanged, so a test that
 //! expects a panic today must be rewritten to expect the typed error once the
-//! corresponding remediation lands.
+//! corresponding remediation lands. F-1 is the one finding whose remediation has
+//! landed (M-F1), so its test now asserts the typed rejection directly.
 //!
 //! | Test | Finding | What it pins |
 //! |------|---------|--------------|
-//! | `f1_connect_block_panics_when_height_exceeds_chain_length` | F-1 | `required_bits` runs before the height check |
+//! | `f1_connect_block_rejects_an_unindexable_height` | F-1 | `BadHeight` before the schedule lookup |
+//! | `f1_an_extreme_height_is_rejected_without_touching_the_history` | F-1 | no index is ever formed |
+//! | `f1_the_chain_is_still_checked_before_the_height` | F-1 | error precedence preserved |
+//! | `f1_a_valid_next_height_block_still_connects_with_retargeting_enabled` | F-1 | the valid path is unchanged |
 //! | `f3_a_block_larger_than_the_frame_cap_is_accepted` | F-3 | no consensus block-size limit |
 //! | `f7_required_work_panics_when_target_is_max` | F-7 | `target + 1` wraps to a zero divisor |
 //! | `f7_uint256_div_u64_panics_on_zero_divisor` | F-7 | `div_u64` asserts rather than returning an error |
@@ -20,8 +24,8 @@
 //! `next_difficulty_is_deterministic_and_branch_stable`); F-4, F-9 and F-10 are
 //! documentation/robustness observations without a safe behavioral reproduction.
 
-use zerocoin::chain::Chain;
-use zerocoin::consensus::block::{Block, BlockHeader, BLOCK_VERSION};
+use zerocoin::chain::{Chain, ChainError};
+use zerocoin::consensus::block::{Block, BlockError, BlockHeader, BLOCK_VERSION};
 use zerocoin::consensus::difficulty::{hash_meets_target, required_work};
 use zerocoin::consensus::pow::{PowEngine, ScratchPadEngine, ENGINE_ID_SCRATCHPAD};
 use zerocoin::consensus::Uint256;
@@ -54,46 +58,142 @@ fn sign_input(chain: &Chain, sk: &PrivateKey, tx: &mut Transaction, script_code:
 }
 
 // ---------------------------------------------------------------------------
-// F-1: `connect_block` reads untrusted height before validating it
+// F-1: `connect_block` rejects an unindexable height before the schedule lookup
 // ---------------------------------------------------------------------------
 
-/// F-1 (confirmed). `Chain::connect_block` calls `required_bits(block.height)`
-/// (`src/chain.rs:277`) before `validate_structure` checks the height
-/// (`src/consensus/block.rs:153`). On a retarget-enabled network `required_bits`
-/// indexes `self.blocks[(height - 1) as usize]` (`src/chain.rs:260`), so a height
-/// past the stored chain panics with an index-out-of-bounds instead of returning
-/// `BlockError::BadHeight`.
-///
-/// Reachability: only local library callers. The P2P handler
-/// (`src/node.rs:646-668`) forwards a block only when `height == next_height()`
-/// and `previous_hash == tip`, and no RPC, GUI or session method accepts a block.
-///
-/// When the height guard moves ahead of `required_bits`, replace this test with
-/// one asserting `BlockError::BadHeight`.
-#[test]
-#[should_panic(expected = "index out of bounds")]
-fn f1_connect_block_panics_when_height_exceeds_chain_length() {
-    let params = ChainParams::devnet(); // retargeting enabled
-    let chain_id = params.chain_id.0;
-    let genesis_bits = params.genesis_bits;
-    let mut chain = Chain::in_memory(params).expect("devnet chain opens");
-
-    // The chain holds only genesis (index 0); height 2 asks for `blocks[1]`.
-    let block = Block {
+/// A header-only block: enough to reach the height checks, with no transactions
+/// so any later rule cannot mask a height rejection. Used to probe the order in
+/// which `connect_block` rejects an invalid block.
+fn header_only_block(chain: u32, height: u64, previous_hash: Hash256, bits: u32) -> Block {
+    Block {
         header: BlockHeader {
             version: BLOCK_VERSION,
-            chain: chain_id,
-            height: 2,
-            previous_hash: chain.tip_hash(),
+            chain,
+            height,
+            previous_hash,
             merkle_root: Hash256::ZERO,
             timestamp: GENESIS_TIMESTAMP + 1_000,
-            difficulty_bits: genesis_bits,
+            difficulty_bits: bits,
             engine_id: ENGINE_ID_SCRATCHPAD,
             nonce: 0,
         },
         transactions: Vec::new(),
-    };
-    let _ = chain.connect_block(block, GENESIS_TIMESTAMP + 1_000);
+    }
+}
+
+/// F-1 (fixed in M-F1). `connect_block` used to compute
+/// `expected_bits = required_bits(height)` before `validate_structure` checked the
+/// height. On a retarget-enabled network `required_bits` indexes
+/// `self.blocks[(height - 1) as usize]`, so a height past the stored chain
+/// panicked with an index-out-of-bounds instead of returning
+/// `BlockError::BadHeight`.
+///
+/// `connect_block` now applies `Block::validate_header_identity` — the same
+/// chain-id and height checks `validate_structure` performs — before the schedule
+/// is read. A height the chain cannot index is a typed rejection.
+///
+/// Reachability is unchanged: only local library callers can pass an arbitrary
+/// height. The P2P handler (`src/node.rs:646-668`) forwards a block only when
+/// `height == next_height()` and `previous_hash == tip`, and no RPC, GUI or
+/// session method accepts a block.
+#[test]
+fn f1_connect_block_rejects_an_unindexable_height() {
+    let params = ChainParams::devnet(); // retargeting enabled
+    let mut chain = Chain::in_memory(params).expect("devnet chain opens");
+    assert_eq!(chain.next_height(), 1, "the chain holds genesis only");
+
+    // Height 2 asks the schedule for `blocks[1]`, which does not exist.
+    let block = header_only_block(params.chain_id.0, 2, chain.tip_hash(), params.genesis_bits);
+    let err = chain
+        .connect_block(block, GENESIS_TIMESTAMP + 1_000)
+        .expect_err("an unindexable height must be rejected");
+    assert!(
+        matches!(
+            err,
+            ChainError::Structure(BlockError::BadHeight {
+                expected: 1,
+                found: 2
+            })
+        ),
+        "expected the typed BadHeight rejection, got {err:?}"
+    );
+    assert_eq!(
+        chain.height(),
+        0,
+        "a rejected block leaves the chain untouched"
+    );
+}
+
+/// F-1 (fixed in M-F1). The height is far outside any representable index, so a
+/// typed rejection proves no schedule lookup was attempted: the panic this test
+/// replaces came from forming exactly that index.
+#[test]
+fn f1_an_extreme_height_is_rejected_without_touching_the_history() {
+    let params = ChainParams::devnet();
+    let mut chain = Chain::in_memory(params).expect("devnet chain opens");
+
+    let block = header_only_block(
+        params.chain_id.0,
+        u64::MAX,
+        chain.tip_hash(),
+        params.genesis_bits,
+    );
+    let err = chain
+        .connect_block(block, GENESIS_TIMESTAMP + 1_000)
+        .expect_err("an unindexable height must be rejected");
+    assert!(
+        matches!(
+            err,
+            ChainError::Structure(BlockError::BadHeight {
+                expected: 1,
+                found: u64::MAX
+            })
+        ),
+        "expected the typed BadHeight rejection, got {err:?}"
+    );
+    assert_eq!(chain.height(), 0);
+}
+
+/// F-1 (fixed in M-F1). Moving the height check ahead of the schedule lookup must
+/// not reorder the other structural errors: a foreign-chain block is still
+/// reported as `WrongChain`, exactly as `validate_structure` decided before.
+#[test]
+fn f1_the_chain_is_still_checked_before_the_height() {
+    let params = ChainParams::devnet();
+    let mut chain = Chain::in_memory(params).expect("devnet chain opens");
+
+    // Both fields are wrong on purpose.
+    let block = header_only_block(
+        ChainParams::regtest().chain_id.0,
+        2,
+        chain.tip_hash(),
+        params.genesis_bits,
+    );
+    let err = chain
+        .connect_block(block, GENESIS_TIMESTAMP + 1_000)
+        .expect_err("a foreign chain must be rejected");
+    assert!(
+        matches!(err, ChainError::Structure(BlockError::WrongChain { .. })),
+        "expected WrongChain to keep precedence, got {err:?}"
+    );
+}
+
+/// F-1 (fixed in M-F1). The guard must not disturb the accepting path: a block at
+/// the next height still connects on a network whose difficulty *does* retarget,
+/// which is the configuration the old defect needed.
+#[test]
+fn f1_a_valid_next_height_block_still_connects_with_retargeting_enabled() {
+    let params = ChainParams::devnet();
+    let mut chain = Chain::in_memory(params).expect("devnet chain opens");
+    let pk = key(31).public_key();
+
+    let block = chain
+        .mine_block(&pk, vec![], GENESIS_TIMESTAMP + 1_000)
+        .expect("height 1 connects");
+    assert_eq!(block.header.height, 1);
+    assert_eq!(chain.height(), 1);
+    // Height 1 is not a retarget boundary, so the schedule inherits `blocks[0]`.
+    assert_eq!(block.header.difficulty_bits, params.genesis_bits);
 }
 
 // ---------------------------------------------------------------------------

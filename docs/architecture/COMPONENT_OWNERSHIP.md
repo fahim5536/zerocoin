@@ -10,6 +10,15 @@ changes no code, no vector and no consensus rule.
 > remains Rust-based; the C++ kernel is a derived implementation. P3 rows are
 > still "Not started".
 
+> **M-F1 addendum (2026-10-23).** F-1 is fixed inside the Rust owner and ownership is
+> unchanged: `Block::validate_header_identity` is now the single implementation of the
+> chain-id and height checks, called by `validate_structure` and — for the ordering fix —
+> by `Chain::connect_block` before `required_bits` is reached. This is a non-consensus
+> ordering change inside existing modules: no subsystem changed owner and no phase moved.
+> The C++ column below still reads "—" for "Block header and Merkle root" (P3) and
+> "`connect_block` and chain replay" (P4), so F-1 has no tested C++ counterpart and the
+> port-side guard (`CPP_PORT_REQUIREMENTS.md` C-29) remains a P3 obligation.
+
 Related: `THREE_LANGUAGE_ARCHITECTURE.md` (what each language may do),
 `INTERFACE_CONTRACTS.md` (the interfaces owners expose),
 `MIGRATION_ROADMAP.md` (when derived implementations are removed), and
