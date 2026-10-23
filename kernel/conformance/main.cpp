@@ -1,7 +1,8 @@
-// Replays the G1 corpus. The fixture is generated from test/vectors/*.json by
-// tools/g1_conformance.py, which also checks the runner's answers: this binary
-// knows nothing about the Rust source and nothing about JSON, so a passing run
-// means the C++ kernel reproduced bytes that the Rust reference produced.
+// Replays the conformance corpora. Each fixture is generated from
+// test/vectors/*.json by one of the tools/*_conformance.py wrappers, which also
+// check the runner's answers: this binary knows nothing about the Rust source
+// and nothing about JSON, so a passing run means the C++ kernel reproduced
+// bytes that the Rust reference produced.
 //
 // Fixture grammar (one directive per line, `value` is everything after the
 // first '=' so empty values are unambiguous):
@@ -32,6 +33,7 @@
 #include <utility>
 #include <vector>
 
+#include "zerocoin/difficulty.h"
 #include "zerocoin/hash.h"
 #include "zerocoin/hex.h"
 #include "zerocoin/script.h"
@@ -130,6 +132,14 @@ std::uint32_t parse_u32(const std::string& text, const std::string& what) {
     fail(what + ": does not fit in 32 bits: " + text);
   }
   return static_cast<std::uint32_t>(value);
+}
+
+std::uint32_t parse_bits_u32(const std::string& text) {
+  const std::uint64_t bits = parse_bits(text);
+  if (bits > 0xffff'ffffull) {
+    fail("bits: does not fit in 32 bits: " + text);
+  }
+  return static_cast<std::uint32_t>(bits);
 }
 
 std::vector<std::uint8_t> bytes_of(const std::string& hex, const std::string& what) {
@@ -469,6 +479,67 @@ Produced op_sighash_distinct(const Case& c) {
   return produced;
 }
 
+// --- P3: difficulty policy ---------------------------------------------------
+
+Produced op_difficulty_params(const Case& /*c*/) {
+  const zk::DifficultyParams& params = zk::kDifficultyParams;
+  return {
+      {"target_spacing_seconds", std::to_string(params.target_spacing_seconds)},
+      {"retarget_interval", std::to_string(params.retarget_interval)},
+      {"max_adjustment_factor", std::to_string(params.max_adjustment_factor)},
+      {"pow_limit_bits", std::to_string(params.pow_limit_bits)},
+      {"target_window_seconds", std::to_string(params.target_window_seconds())},
+  };
+}
+
+Produced op_difficulty_validate_bits(const Case& c) {
+  zk::DifficultyParams params = zk::kDifficultyParams;
+  params.pow_limit_bits = parse_u32(c.one("pow_limit_bits"), "pow_limit_bits");
+  const std::uint32_t bits = parse_bits_u32(c.one("bits"));
+  const zk::DifficultyError error = zk::validate_bits(bits, params);
+  return {
+      {"bits", std::to_string(bits)},
+      {"error_kind", zk::difficulty_error_kind_name(error.kind)},
+      {"ok", bool_text(error.ok())},
+  };
+}
+
+Produced op_difficulty_hash_meets_target(const Case& c) {
+  const Uint256 target = zk::block_target(parse_bits_u32(c.one("bits")));
+  std::array<std::uint8_t, Hash256::kWidth> all_ones{};
+  all_ones.fill(0xff);
+  return {
+      {"all_ones_hash", bool_text(zk::hash_meets_target(Hash256(all_ones), target))},
+      {"equal_to_target",
+       bool_text(zk::hash_meets_target(Hash256(target.to_be_bytes()), target))},
+      {"zero_hash", bool_text(zk::hash_meets_target(Hash256::zero(), target))},
+  };
+}
+
+Produced op_difficulty_required_work(const Case& c) {
+  const std::optional<Uint256> work =
+      zk::required_work(zk::block_target(parse_bits_u32(c.one("bits"))));
+  if (!work.has_value()) {
+    // F-7: the reference divides by zero at Uint256::MAX. No corpus case reaches
+    // it; naming the trap keeps the fixture honest if one ever does.
+    return {{"work_be_hex", "trap"}};
+  }
+  const auto be = work->to_be_bytes();
+  return {{"work_be_hex", zk::to_hex(be.data(), be.size())}};
+}
+
+Produced op_difficulty_next(const Case& c) {
+  const std::uint32_t prev_bits = parse_bits_u32(c.one("prev_bits"));
+  const std::uint64_t window = parse_u64(c.one("actual_window_seconds"), "actual_window_seconds");
+  const zk::RetargetResult result =
+      zk::next_difficulty_target(prev_bits, window, zk::kDifficultyParams);
+  const auto be = result.target.to_be_bytes();
+  return {
+      {"next_bits", std::to_string(result.bits)},
+      {"next_target_be_hex", zk::to_hex(be.data(), be.size())},
+  };
+}
+
 Produced execute(const Case& c) {
   if (c.op == "sha256_utf8") return op_sha256_utf8(c);
   if (c.op == "sha256d_utf8") return op_sha256d_utf8(c);
@@ -486,6 +557,11 @@ Produced execute(const Case& c) {
     if (c.op == "p2pkh_spend") return op_p2pkh_spend(c);
     if (c.op == "sighash") return op_sighash(c);
     if (c.op == "sighash_distinct") return op_sighash_distinct(c);
+    if (c.op == "difficulty_params") return op_difficulty_params(c);
+    if (c.op == "difficulty_validate_bits") return op_difficulty_validate_bits(c);
+    if (c.op == "difficulty_hash_meets_target") return op_difficulty_hash_meets_target(c);
+    if (c.op == "difficulty_required_work") return op_difficulty_required_work(c);
+    if (c.op == "difficulty_next") return op_difficulty_next(c);
   fail("unknown OP: " + c.op);
 }
 

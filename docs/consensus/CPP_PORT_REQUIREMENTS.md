@@ -161,6 +161,15 @@ requirement, not a safety divergence. It MUST NOT change any accepted or
 rejected-by-rule block, and the matching C++ negative test MUST assert the rejection kind,
 not merely the absence of a crash.
 
+**Implementation status (P3.0, 2026-10-23).** `kernel/src/difficulty.cpp` implements C-26
+and C-27, and both are exercised: `kernel/tools/p3_conformance.py` replays the
+`difficulty.validate_bits` and `difficulty.retarget.*` corpus cases, while
+`kernel/tests/test_difficulty.cpp` covers what the corpus cannot express — the F-6 branch
+(via a synthetic parameter set, because the second arm is unreachable under the shipped
+pow limit), the clamp boundaries and the zero-before-limit order. C-28 and C-29 are still
+unimplemented: both are block/chain obligations and the kernel has no block or chain
+module, so the F-1 row in §10 keeps reading "deferred", never "identical".
+
 ---
 
 ## 6. Rewards and coinbase

@@ -25,6 +25,18 @@ is removed. P2.1 created no service and started no phase.
 > or chain module, so F-1's disposition is not restated as "identical" (see §8 and
 > `CPP_PORT_REQUIREMENTS.md` §10) — and P3 is still not started.
 
+> **P3.0 addendum (2026-10-23).** P3 has started with exactly **one** component. The
+> **difficulty retarget** port (`kernel/src/difficulty.cpp`, mirroring the owner
+> `src/consensus/difficulty.rs`) is delivered with 16 focused tests and a new
+> `kernel_p3_conformance` target that replays the six corpus cases `g1_conformance.py`
+> names as deferred to G3, expanded to 18 fixture cases, against
+> `source_commit 7cb9017c`. The other seven P3 rows — header and Merkle, proof of work,
+> reward, anchors, params, genesis — are **not** started, and P4 (`connect_block`, chain
+> replay) was not pulled forward. No vector changed, so the 117-case P0 corpus, the
+> 121-case differential fixture, G1 28/28 and P2 22/22 are untouched. F-1 remains
+> **deferred**, not identical: the typed height rejection (C-29) still needs a block
+> module.
+
 Related: doc `03` (the original phase proposal), `COMPONENT_OWNERSHIP.md`,
 `THREE_LANGUAGE_ARCHITECTURE.md`, `INTERFACE_CONTRACTS.md`,
 `CRYPTO_BACKEND_DECISION.md`.
@@ -63,7 +75,7 @@ Nothing in this table is restated in prose elsewhere; the gate regenerates it
 | **P2** | Script, sighash, signature verification | G2 | **Partial** at this snapshot — script and sighash complete; ECDSA blocked as G2c. Closed in P2.10: 22/22 with one signing deferral |
 | **P2.1** | Backend investigation, three-language architecture | none (documentation) | **Complete in this change** |
 | **P2.2–P2.10** | Backend evidence, provenance, integration, conformance, gate closure | G2 | **Complete** — CB-1…CB-4 RESOLVED, CB-5 CLOSED; G2c: GO (`CRYPTO_BLOCKER_REGISTER.md` §6) |
-| **P3** | Header, Merkle, difficulty, PoW, reward, anchors, params, genesis | G3 | Not started |
+| **P3** | Header, Merkle, difficulty, PoW, reward, anchors, params, genesis | G3 | In progress — P3.0 delivered difficulty (1 of 8); seven rows remain |
 | **P4** | UTXO apply, `connect_block`, storage read | G4 | Not started |
 | **P5** | Storage write, P2P, RPC, wallet, keystore, CLI | G5 | Not started |
 | **P6** | Differential soak | G6 | Not started |

@@ -328,6 +328,14 @@ hazard F-7 and a locally constructible oversized block (F-3); F-1's reachable pa
 - **Proposed direction:** the port must reproduce the branch and the truncation order
   exactly. The P0 `difficulty/retarget.json` vectors are the cross-language oracle;
   extend them at the C++ milestone if needed.
+- **Port status (P3.0, 2026-10-23):** reproduced with the branch and the truncation order
+  intact in `kernel/src/difficulty.cpp` (`next_difficulty_target`), pinned by
+  `difficulty_retarget_multiplies_first_below_the_f6_threshold` and
+  `difficulty_retarget_divides_first_above_the_f6_threshold`, plus the
+  `difficulty.retarget.*` corpus cases. No vector was extended, because under the shipped
+  `0x1e00ffff` limit the `div → mul` arm is unobservable — any previous target with fewer
+  than 20 leading zeros already exceeds the limit, so the cap decides first. The branch is
+  therefore exercised through a synthetic parameter set in the unit test.
 
 ### F-7 — division helpers panic; `required_work` can wrap
 
@@ -347,6 +355,14 @@ hazard F-7 and a locally constructible oversized block (F-3); F-1's reachable pa
   `checked_divmod` (or return `Option`) and special-case `target == Uint256::MAX` in
   `required_work`; keep the `assert!` variants for debug-only callers, or migrate callers
   and delete them. The port must not expose these helpers on any consensus path.
+- **Port status (P3.0, 2026-10-23):** `zk::required_work` returns
+  `std::optional<Uint256>` and reports `std::nullopt` at `Uint256::MAX` instead of
+  reproducing the divide-by-zero, pinned by
+  `difficulty_required_work_handles_the_endpoints`. This is a deliberate, documented
+  divergence rather than a fix to the Rust owner: the helper is not on the acceptance
+  path, and the C++ interface has no panic channel (`INTERFACE_CONTRACTS.md` §2). The
+  `div_u64` zero-divisor hazard has no counterpart — the port's only divisor is
+  `expected`, which it forces to at least 1.
 
 ### F-8 — engine parameters are not committed by `engine_id`
 
@@ -414,6 +430,11 @@ hazard F-7 and a locally constructible oversized block (F-3); F-1's reachable pa
   proofs — a new chain. Not viable.
 - **Proposed direction:** the port must compare big-endian with `<=`. Do not adopt
   Bitcoin's reversed display order.
+- **Port status (P3.0, 2026-10-23):** reproduced in `zk::hash_meets_target`
+  (`kernel/src/difficulty.cpp`) as `Uint256::from_be_bytes(pow_hash.bytes) <= target`,
+  pinned by `difficulty_hash_meets_target_is_inclusive` and
+  `difficulty_hash_meets_target_reads_the_digest_big_endian` — the latter rejects a digest
+  whose first byte is large, which a reversed reading would accept.
 
 ## 4. Corrections to `CONSENSUS_RULES.md` §14
 

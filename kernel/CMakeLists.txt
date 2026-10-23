@@ -67,6 +67,7 @@ add_library(zerocoin_kernel STATIC
   src/sha256.cpp
   src/ripemd160.cpp
   src/uint256.cpp
+  src/difficulty.cpp
   src/varint.cpp
   src/transaction.cpp
   src/script.cpp
@@ -97,6 +98,7 @@ add_executable(kernel_tests
   tests/test_hex.cpp
   tests/test_hash.cpp
   tests/test_uint256.cpp
+  tests/test_difficulty.cpp
   tests/test_varint.cpp
   tests/test_transaction.cpp
   tests/test_script.cpp
@@ -129,5 +131,14 @@ add_test(NAME kernel_conformance
 add_test(NAME kernel_p2_conformance
   COMMAND ${PYTHON_EXECUTABLE}
           ${CMAKE_CURRENT_SOURCE_DIR}/tools/p2_conformance.py
+          --vectors ${CMAKE_CURRENT_SOURCE_DIR}/../test/vectors
+          --runner $<TARGET_FILE:kernel_conformance>)
+
+# P3 replays the six difficulty cases g1_conformance.py names as deferred to G3
+# (params, validate_bits, hash_meets_target, required_work, retarget). A separate
+# test for the same reason as P2: the G1 guard keeps its own count.
+add_test(NAME kernel_p3_conformance
+  COMMAND ${PYTHON_EXECUTABLE}
+          ${CMAKE_CURRENT_SOURCE_DIR}/tools/p3_conformance.py
           --vectors ${CMAKE_CURRENT_SOURCE_DIR}/../test/vectors
           --runner $<TARGET_FILE:kernel_conformance>)

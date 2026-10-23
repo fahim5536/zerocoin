@@ -19,6 +19,19 @@ changes no code, no vector and no consensus rule.
 > "`connect_block` and chain replay" (P4), so F-1 has no tested C++ counterpart and the
 > port-side guard (`CPP_PORT_REQUIREMENTS.md` C-29) remains a P3 obligation.
 
+> **P3.0 addendum (2026-10-23).** The first P3 derived implementation is registered:
+> **difficulty retarget**, mirroring the owner row `src/consensus/difficulty.rs`.
+> The C++ column is `kernel/src/difficulty.cpp`; the gate that proves equivalence is
+> `kernel_p3_conformance` (`kernel/tools/p3_conformance.py`, 18 cases derived from the
+> six corpus cases `g1_conformance.py` defers to G3) plus 16 focused unit tests. The
+> port reproduces **F-6** (the magnitude-dependent multiply/divide order) and **F-11**
+> (the inclusive big-endian comparison), and diverges deliberately only on **F-7**
+> (`required_work` reports the `Uint256::MAX` trap instead of dividing by zero; it is
+> not on the acceptance path). Ownership has not moved and no phase moved: Rust is
+> still the oracle and the vector file was not touched. This addendum supersedes the
+> single clause in the P2.11 addendum that all P3 rows are "Not started"; the other
+> seven P3 rows are unchanged, and F-1 still has no tested C++ counterpart.
+
 Related: `THREE_LANGUAGE_ARCHITECTURE.md` (what each language may do),
 `INTERFACE_CONTRACTS.md` (the interfaces owners expose),
 `MIGRATION_ROADMAP.md` (when derived implementations are removed), and
@@ -66,7 +79,7 @@ file the phase produced or will produce; "—" means no C++ module exists yet.
 | Sighash preimage and digest | `src/ledger/sighash.rs` | `kernel/src/sighash.cpp` | P2 | Done |
 | ECDSA verification, SEC1, DER | `src/crypto/secp256k1.rs` (`k256 0.13.4`) | `kernel/src/secp256k1_verifier.cpp` (vendored libsecp256k1 0.8.0, PRIVATE link) | P2 / G2c | Done in P2.10 — verification only, signing stays Rust/test-only; `CRYPTO_BACKEND_SELECTION_AUDIT.md` §20 |
 | Block header and Merkle root | `src/consensus/block.rs` | — | P3 | Not started |
-| Difficulty retarget | `src/consensus/difficulty.rs` | — | P3 | Not started |
+| Difficulty retarget | `src/consensus/difficulty.rs` | `kernel/src/difficulty.cpp` | P3 | Done in P3.0; reproduces F-6 and F-11, diverges deliberately on F-7 |
 | Proof of work | `src/consensus/pow.rs` | — | P3 | Not started |
 | Subsidy, maturity, coinbase split | `src/consensus/reward.rs` | — | P3 | Not started |
 | Anchors and state-root probe | `src/consensus/immutability.rs` | — | P3 | Not started |
@@ -113,7 +126,8 @@ consensus code.
 | Golden vectors (`test/vectors/**`) | Python capture tooling: `test/harness/zro_vectors.py`, `run_vectors.py` | The bytes are generated from the Rust reference and pinned to `source_commit`; hand edits are forbidden | 117 cases (112 PASS, 5 ANCHOR) |
 | G1 conformance mapping | `kernel/tools/g1_conformance.py` | Owns case selection, provenance and exit code | 28 cases |
 | P2 conformance mapping | `kernel/tools/p2_conformance.py` | Owns the deferral list, provenance and corruption self-check | 22 cases + 1 deferred (signing) |
-| Conformance runner protocol | `kernel/conformance/main.cpp` | Owns the 16 verbs and `SUMMARY` output | Stable |
+| P3 conformance mapping | `kernel/tools/p3_conformance.py` | Owns the P3 slice, the corpus classification and the corruption self-check | 18 cases (6 corpus cases) |
+| Conformance runner protocol | `kernel/conformance/main.cpp` | Owns the 21 verbs and `SUMMARY` output | Stable |
 | Build and gate | `kernel/CMakeLists.txt`, `scripts/gate-g1.ps1`, `scripts/gate-p2-6.ps1`, `scripts/gate-p2-10-provenance.ps1` | Exit code is the verdict (doc `03` §1 rule 5) | Green |
 | Rust dependency set | `Cargo.toml`, `Cargo.lock` | `k256 0.13.4` is the curve implementation actually shipped | Locked |
 | Architecture records | `docs/architecture/**` | This set; decisions are recorded here, not in chat | New |
