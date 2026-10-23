@@ -1,9 +1,18 @@
 # Migration roadmap
 
-Status: **as-built** at commit `e8fda7e` (2026-10-18), written during P2.1.
-Records where the migration actually stands, what closes the one open item, and
-the conditions under which every temporary compatibility surface is removed.
-P2.1 creates no service and starts no phase.
+Status: **snapshot** as-built at commit `e8fda7e` (2026-10-18), written during
+P2.1. Records where the migration stood at that commit, what would close the one
+open item, and the conditions under which every temporary compatibility surface
+is removed. P2.1 created no service and started no phase.
+
+> **Current status (P2.11 addendum, 2026-10-23).** G2c was closed in P2.10 and the
+> C++ verification backend is integrated into the C++ kernel. The executed P2
+> result is **22/22** with one named deferral (`ledger.sighash.signature_der`);
+> the differential fixture measures **121 cases** (groups V1–V8) and the P0
+> corpus stays at **117 cases** — two different artifacts. §1–§8 below are the
+> `e8fda7e` record and are preserved as history. §9 is the operative P3 gate; its
+> criterion 3 is now satisfied by closure. The shipped node remains Rust-based
+> and P3 has not started.
 
 Related: doc `03` (the original phase proposal), `COMPONENT_OWNERSHIP.md`,
 `THREE_LANGUAGE_ARCHITECTURE.md`, `INTERFACE_CONTRACTS.md`,
@@ -40,8 +49,9 @@ Nothing in this table is restated in prose elsewhere; the gate regenerates it
 |---|---|---|---|
 | **P0** | Harness, corpus capture from Rust | G0 | **Complete** — 117 cases, `source_commit` recorded |
 | **P1** | Hex, hash, varint, `uint256`, transaction | G1 | **Complete** — 28/28, 108 unit, F3/F4/F19 covered |
-| **P2** | Script, sighash, signature verification | G2 | **Partial** — script and sighash complete; ECDSA blocked as G2c |
+| **P2** | Script, sighash, signature verification | G2 | **Partial** at this snapshot — script and sighash complete; ECDSA blocked as G2c. Closed in P2.10: 22/22 with one signing deferral |
 | **P2.1** | Backend investigation, three-language architecture | none (documentation) | **Complete in this change** |
+| **P2.2–P2.10** | Backend evidence, provenance, integration, conformance, gate closure | G2 | **Complete** — CB-1…CB-4 RESOLVED, CB-5 CLOSED; G2c: GO (`CRYPTO_BLOCKER_REGISTER.md` §6) |
 | **P3** | Header, Merkle, difficulty, PoW, reward, anchors, params, genesis | G3 | Not started |
 | **P4** | UTXO apply, `connect_block`, storage read | G4 | Not started |
 | **P5** | Storage write, P2P, RPC, wallet, keystore, CLI | G5 | Not started |
@@ -52,6 +62,11 @@ Nothing in this table is restated in prose elsewhere; the gate regenerates it
 P2 cannot be declared complete while G2c is open. The two deferred cases are the
 only evidence needed to see that: `ledger.script.p2pkh_spend_accepted` and
 `ledger.sighash.signature_der` require a curve backend by name.
+
+> **Superseded by P2.10 (2026-10-23).** G2c is closed and P2 is complete. Of the
+> two cases named above, `ledger.script.p2pkh_spend_accepted` is replayed against
+> the real verifier; `ledger.sighash.signature_der` remains deferred for
+> **signing** (C-52), by name and counted (`deferred=1`).
 
 ---
 
@@ -80,6 +95,15 @@ If the authorisation never arrives, G2c stays open, the deferral list stays
 non-empty, and the kernel keeps failing closed. That is a valid steady state; it
 is not a signature-compatibility claim.
 
+> **Executed in P2.3–P2.10 (2026-10-23).** Authorisation arrived; steps 1–6 were
+> executed and step 7 is recorded as the standing single deferral. The exit
+> condition is met: every row of `CRYPTO_BACKEND_DECISION.md` §9 passes, the
+> kernel's dependency set holds exactly one third-party library, and the only
+> remaining deferral is `ledger.sighash.signature_der` for signing. The step 8
+> counts are re-measured in every gate: G1 28/28 and P0 117 unchanged, Rust suite
+> grown from 263 to 287 **additive** tests (`CRYPTO_BLOCKER_REGISTER.md` §6). The
+> steady state described above did not occur.
+
 ---
 
 ## 4. Amendment to gate G2's wording
@@ -105,6 +129,11 @@ This is the only amendment. It does not relax the gate; it makes the gate
 describe the reference instead of an assumption about the reference. The gate is
 still unmet until G2c closes, because no C++ verification exists.
 
+> **Superseded by P2.10 (2026-10-23).** C++ verification exists and the amended
+> gate is met with executed evidence: 22/22 conformance, 121/121 differential
+> matches with two documented adapter-load-bearing rows, high-S rejected on both
+> sides and no normalisation added.
+
 ---
 
 ## 5. Temporary compatibility register
@@ -115,8 +144,8 @@ failure.
 
 | # | Surface | Reason it exists | Removal condition | Owner |
 |---|---|---|---|---|
-| T1 | `TxSigChecker` with a null `SigVerifier` returns `false` | Fail closed while no backend exists | Replaced by a real verifier; the test asserting failure becomes a test asserting a call | Kernel |
-| T2 | Deferred cases `ledger.script.p2pkh_spend_accepted`, `ledger.sighash.signature_der` | The first needs secp256k1 verification; the second needs RFC 6979 signing | First re-enabled when G2c closes (22/23); second only under a separate signing decision | Kernel tools |
+| T1 | `TxSigChecker` with a null `SigVerifier` returns `false` | Fail closed when no verifier is supplied. The original reason — no backend exists — ended in P2.10; the null path is now a defensive guard | `TxSigChecker(..., nullptr)` call sites retire once every script test runs against the real verifier; the fail-closed behaviour stays | Kernel |
+| T2 | Deferred case `ledger.sighash.signature_der` | It needs RFC 6979 **signing**; the runner is verify-only (C-52). The verification case `ledger.script.p2pkh_spend_accepted` was re-enabled in P2.10 | Only under a separate signing decision outside the kernel; **not** by closing G2c | Kernel tools |
 | T3 | The deferral list in `p2_conformance.py` | Makes the gap visible in code and in output | Deleted when empty | Kernel tools |
 | T4 | The C++ kernel itself | Compatibility proof for a possible cutover | G8: ship, keep as candidate, or delete `kernel/` | Maintainers |
 | T5 | Doc `03`'s proposed `cpp/` layout | Historical plan written before code existed | Superseded in writing by `THREE_LANGUAGE_ARCHITECTURE.md` §9; no code move | Documentation |
@@ -143,6 +172,10 @@ removes the proof.
 A removal is only allowed when the gate that covered the surface is green in the
 same change, and when the corresponding line in §5 is deleted in that change.
 
+> **P2.10 removal record.** T2's verification half was removed when G2c closed:
+> `ledger.script.p2pkh_spend_accepted` left the deferral list. T1, T2's signing
+> case and T3 remain live surfaces.
+
 ---
 
 ## 7. Rollback
@@ -164,8 +197,10 @@ same change, and when the corresponding line in §5 is deleted in that change.
 
 | Item | Impact | Owner | Exit |
 |---|---|---|---|
-| G2c blocked | G2 incomplete; no signature compatibility | Maintainers | §3 |
-| P2.2 NO-GO | The documented plan normalised high-S, which the reference rejects; one fixture needs signing | Maintainers | `CRYPTO_BACKEND_READINESS.md` §5 conditions |
+| G2c (closed in P2.10) | No longer open: C++ verification exists. Kept as history | Maintainers | `CRYPTO_BLOCKER_REGISTER.md` §6 — CB-5 CLOSED, G2c: GO |
+| P2.2 NO-GO (superseded by P2.10) | The P2.2 plan normalised high-S; it was withdrawn, not implemented, and the wrapper reproduces the reference | Maintainers | `CRYPTO_BACKEND_DECISION.md` §15 |
+| F-1 untrusted-height panic in Rust `connect_block` | A local-API panic for `height > next_height()` when retargeting is enabled; remote reachability is **not** established | Maintainers | Separate follow-up milestone M-F1, scoped in `FINDINGS_TRIAGE.md` F-1 |
+| F-3 block-size policy | Decided in P2.11: no consensus size rule; the 4 MiB cap is transport-only | Documentation | `FINDINGS_TRIAGE.md` F-3, `CPP_PORT_REQUIREMENTS.md` §10 |
 | Doc `03` G2 wording (low-S) | A literal reading is ambiguous about normalisation | Documentation | §4 amendment recorded |
 | High-S rule lives in `k256`, not in ZeroCoin tests | A dependency update could change consensus unnoticed | Maintainers | Add Rust-side high-S vectors; pin `k256` exactly (readiness §7 R1/R2) |
 | `kernel/` vs `cpp/` | Reviewers may look for the wrong path | Documentation | `THREE_LANGUAGE_ARCHITECTURE.md` §9 |
@@ -197,6 +232,13 @@ If G2c is still open, the honest P3 scope is: header, Merkle, difficulty,
 subsidy, anchors, params and genesis — everything whose vectors do not require a
 signature — with the gate explicitly reporting the deferred spend cases. That is
 a maintainer decision, not a default.
+
+> **P2.11 note (2026-10-23).** Criterion 3 is satisfied by closure, not by
+> waiver: G2c is GO, so the reduced-scope branch above does not apply. Criterion
+> 4 still takes P3 scope from doc `03` §4 — where the header preimage is now
+> stated as the measured **107 bytes** (corrected in P2.11; it previously read
+> 108). Criteria 1, 2, 5 and 6 are unchanged and must be re-verified when P3
+> starts.
 
 ---
 

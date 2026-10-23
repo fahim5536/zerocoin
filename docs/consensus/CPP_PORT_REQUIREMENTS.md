@@ -283,9 +283,9 @@ The port MUST take an explicit, recorded position on each finding. Default: repr
 
 | Finding | Rust behavior | Port requirement |
 |---|---|---|
-| F-1 | `required_bits` called with untrusted height → out-of-bounds panic on retarget networks | **Diverge (safety):** validate height first (C-29). Document; test both. |
+| F-1 | `required_bits` called with untrusted height → out-of-bounds panic on retarget networks | **Diverge (safety):** validate height first (C-29). Document; test both. **P2.11:** the invalid class (`allow_pow_retarget && height > next_height()`) is excluded from the differential corpus; it is pinned by a matching C++ negative test plus follow-up M-F1 (`FINDINGS_TRIAGE.md` F-1), after which this row becomes "identical". |
 | F-2 | `header.version` never validated | Reproduce. Do not add a version rule (C-17). |
-| F-3 | No block size/weight limit | Reproduce. Do not add one (C-17). |
+| F-3 | No block size/weight limit | Reproduce. Do not add one (C-17). **P2.11 decision:** there is no consensus size or weight rule; the 4 MiB `MAX_PLAINTEXT_BYTES` is a transport bound and MUST NOT be reproduced as a block-validity rule (`FINDINGS_TRIAGE.md` F-3). |
 | F-4 | `state_root` is a flat hash, not a Merkle tree | Reproduce bytes exactly (C-42). |
 | F-5 | Trailing bytes after a tx are ignored | Reproduce (C-37). |
 | F-6 | Magnitude-dependent retarget arithmetic | Reproduce exactly (C-26). |
@@ -297,6 +297,13 @@ The port MUST take an explicit, recorded position on each finding. Default: repr
 
 Any divergence beyond F-1/F-7/F-8 robustness MUST be treated as a consensus change and MUST
 NOT be merged under the "port" label.
+
+**P2.11 dispositions (2026-10-23).** F-3 is decided: no consensus limit (Option A of
+`FINDINGS_TRIAGE.md` F-3), and the transport frame cap stays transport-only. F-1 is decided
+but **not implemented**: the port validates height first under C-29, the class is excluded
+from the differential corpus, and the Rust guard is a separate non-consensus milestone
+(M-F1) with acceptance criteria in `FINDINGS_TRIAGE.md` F-1. Neither decision changes a
+frame limit, a validity rule, consensus behaviour or the network protocol.
 
 ---
 
@@ -317,6 +324,15 @@ The C++ port milestone is not complete until all four layers pass.
   every field of §2 byte-for-byte, plus the acceptance outcome and error kind of §3.
 - At minimum: all 117 P0 cases, the genesis of all three networks, and the regression
   scenarios of `zerocoin/tests/consensus_rules.rs`.
+- The current differential fixture measures **121 cases** in groups V1–V8 (V1=2, V2=3,
+  V3=18, V4=11, V5=5, V6=2, V7=76, V8=4). It is a **different artifact** from the 117-case
+  P0 corpus above; neither total substitutes for the other.
+- Two rows are **adapter-load-bearing**: `V4.uncompressed_65` and `V4.hybrid_prefix_06`.
+  They are decided by contract rule P-1 (the 33-byte key gate), not by raw-backend
+  behaviour, and MUST NOT be cited as library-parity evidence.
+- The F-1 invalid-height class is **excluded** from the corpus: a differential row over it
+  would encode a Rust panic as expected behaviour. It is covered by the negative tests of
+  M-F1 instead.
 
 ### 11.3 Differential fuzzing (mandatory before mainnet use)
 

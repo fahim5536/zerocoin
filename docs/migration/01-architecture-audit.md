@@ -222,7 +222,7 @@ txid; both are pinned separately in `immutability.rs`.
 ### 4.3 Block header and PoW preimage `[VERIFIED]` (`src/consensus/block.rs`)
 
 ```
-preimage = HEADER_TAG                        15 bytes  "ZRO/header/v1\0"
+preimage = HEADER_TAG                        14 bytes  "ZRO/header/v1\0"
          || version           u32 LE          4
          || chain             u32 LE          4
          || height            u64 LE          8
@@ -231,12 +231,22 @@ preimage = HEADER_TAG                        15 bytes  "ZRO/header/v1\0"
          || timestamp         u64 LE          8
          || difficulty_bits   u32 LE          4
          || engine_id         u8              1
-                                               = 108 bytes
+                                               = 107 bytes
 ```
 
 The engine appends the nonce itself. `TrivialEngine` appends `nonce` as `u64 LE`
-and returns `sha256d(preimage || nonce)`, i.e. 116 bytes hashed. Neither the tag
+and returns `sha256d(preimage || nonce)`, i.e. 115 bytes hashed. Neither the tag
 nor the field order may change: one byte changes every block hash on every network.
+
+> **Corrected in P2.11 (2026-10-23).** This block previously counted the tag as
+> 15 bytes and totalled 108 (116 hashed). The tag `"ZRO/header/v1\0"` is 14
+> bytes, so the preimage is 107 and the hashed input 115. Verified against
+> `BlockHeader::preimage()`, `test/vectors/chain/header.json`
+> (`preimage_len: 107`, 214 hex characters) and the frozen assertion
+> `assert_eq!(preimage.len(), 107)` in `zerocoin/tests/consensus_rules.rs`. The
+> error had propagated to `INTERFACE_CONTRACTS.md` §11 and to docs `02`, `03`
+> and `05`; all were corrected the same day. The original finding — the layout is
+> frozen and must be copied byte-for-byte — is unaffected.
 
 `Block::compute_merkle_root` duplicates a trailing odd leaf, and
 `merkle_root(&[])` is `sha256d("ZRO/merkle:empty\0")`. A single-leaf tree returns
@@ -748,8 +758,8 @@ This is the equivalence surface, extracted from the rules above. It is the input
 - the six pinned anchors and the state-root probe.
 
 **Byte layouts**
-- 108-byte header preimage and the engine-specific nonce append;
-- the 116-byte trivial-engine hash input;
+- 107-byte header preimage and the engine-specific nonce append;
+- the 115-byte trivial-engine hash input;
 - transaction serialisation and minimal-varint rules;
 - the sighash preimage, including the chain id;
 - the state-root concatenation;

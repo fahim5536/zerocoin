@@ -1,10 +1,11 @@
 # Crypto backend readiness review (P2.2)
 
-Status: **NO-GO for G2c.** The proposed `libsecp256k1` integration plan is not
-compatible with the pinned Rust reference as written, one of the two deferred
-corpus cases cannot be closed by a verification-only backend, and no dependency
-is pinned by tag or archive hash. Nothing was downloaded, vendored, installed or
-enabled in this phase.
+Status: **G2c: GO — closed in P2.10; see §15.** The paragraph below is the P2.2
+finding and is preserved as history. As of P2.2 the proposed `libsecp256k1`
+integration plan was not compatible with the pinned Rust reference as written,
+one of the two deferred corpus cases could not be closed by a verification-only
+backend, and no dependency was pinned by tag or archive hash. Nothing had been
+downloaded, vendored, installed or enabled in that phase.
 
 Baseline: commit `3044af42a46e98d93f0d8efff3b33cb817b65228`, clean working tree,
 `HEAD == origin/main`. This document changes documentation only. It authorises no

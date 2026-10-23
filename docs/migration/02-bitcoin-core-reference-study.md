@@ -171,7 +171,7 @@ would be wrong.
 | Emission | 210,000 blocks per halving at 10 min ≈ 4 years | 210,000 blocks per halving at 60 s ≈ **146 days** | Same 21 M cap, **4× faster** in wall-clock time. Never quote Bitcoin's emission calendar |
 | PoW | SHA-256d | **scratchpad, memory-hard** (2 MiB / 4,096 rounds on mainnet) | Entirely different hash; no shared test vectors |
 | Target encoding | compact `0x1d00ffff` style | compact, but limits are `0x1e00ffff` (mainnet) and `0x207fffff` (devnet/regtest) | A hard-coded Bitcoin limit rejects every ZeroCoin block |
-| Header | 80 bytes, version/prev/merkle/time/bits/nonce | **108-byte preimage** with chain id, height, engine id, `u64` height and timestamp | No header-level compatibility at all |
+| Header | 80 bytes, version/prev/merkle/time/bits/nonce | **107-byte preimage** with chain id, height, engine id, `u64` height and timestamp | No header-level compatibility at all |
 | Merkle | Bitcoin's CVE-2012-2459 duplicate rule | duplicate-last, and a **single-leaf tree is the leaf itself** | Subtle root mismatches on 1-transaction blocks |
 | Transaction | version/inputs/outputs/locktime, witness optional | legacy shape, **no witness**, minimal varints enforced, 1 MB / 10k / 10k limits | Segwit parsing would mis-read every transaction |
 | Signature hash | BIP-143 and legacy variants | **one** variant, `SIGHASH_ALL`, with the chain id inside the preimage | A Bitcoin-style signature never validates |

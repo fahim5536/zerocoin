@@ -65,9 +65,11 @@ pub const HEADER_LEN: usize = MAGIC_LEN + SEQ_LEN + LEN_LEN;
 /// Bytes of framing wrapped around every plaintext payload.
 pub const FRAME_OVERHEAD: usize = HEADER_LEN + NONCE_LEN + GCM_TAG_LEN + MAC_LEN;
 
-/// Largest plaintext one frame may carry (4 MiB). Blocks are bounded well below
-/// this; the cap exists so a hostile length field cannot make a peer allocate an
-/// unbounded buffer before the frame is authenticated.
+/// Largest plaintext one frame may carry (4 MiB). This is a transport bound, not
+/// a consensus rule: block validation applies no size or weight limit, so a block
+/// may be consensus-valid yet too large to relay (F-3). The cap exists so a
+/// hostile length field cannot make a peer allocate an unbounded buffer before
+/// the frame is authenticated.
 pub const MAX_PLAINTEXT_BYTES: usize = 4 * 1024 * 1024;
 /// The matching cap on the AES-GCM output (plaintext + tag).
 pub const MAX_CIPHER_BYTES: usize = MAX_PLAINTEXT_BYTES + GCM_TAG_LEN;

@@ -404,7 +404,17 @@ All limits are consensus, not policy. Each has one owner and one test.
 | Script length in a tx | bounded by the decoder | `transaction.h` | `transaction_decoder_bounds_the_script_length` |
 | Transaction envelope | 1 MB | reference validation | doc `03` §3.1 |
 | P2P frame overhead | 76 bytes | reference `network/frame.rs` | P5 |
-| Header preimage | 108 bytes | reference `consensus/block.rs` | P3 |
+| Header preimage | 107 bytes | reference `consensus/block.rs` `preimage()` | `consensus_rules.rs` frozen-length assertion |
+
+> **Corrected in P2.11.** This row read 108 bytes. The tag `"ZRO/header/v1\0"` is
+> 14 bytes, not 15, so the preimage is 14 + 4 + 4 + 8 + 32 + 32 + 8 + 4 + 1 =
+> **107 bytes**. Three independent artifacts agree: `BlockHeader::preimage()`
+> itself, `test/vectors/chain/header.json` (`preimage_len: 107`, 214 hex
+> characters, tag prefix `5a524f2f6865616465722f763100`), and the frozen
+> assertion `assert_eq!(preimage.len(), 107)` in
+> `zerocoin/tests/consensus_rules.rs`. The engine appends the `u64` nonce, so
+> 115 bytes are hashed. `docs/migration/01-architecture-audit.md` §4.3 carried
+> the same 15-byte tag miscount; it is corrected there with a dated note.
 
 A test that asserts a limit must assert both sides: at the boundary (accepted)
 and one past it (rejected). A one-sided limit test cannot detect a widened limit.
@@ -418,8 +428,8 @@ permanent guard. Each has an owner and a written removal condition.
 
 | Surface | Why it exists | Removal condition | What must stay true |
 |---|---|---|---|
-| `TxSigChecker` with a null `SigVerifier` returning `false` | No backend exists (G2c); failing closed is safer than guessing | Removed when a backend is registered and every script test runs against it | No spend may be accepted without a real verification |
-| Two deferred corpus cases (`ledger.script.p2pkh_spend_accepted`, `ledger.sighash.signature_der`) | They need secp256k1 | Re-enabled by `p2_conformance.py` when G2c closes; counts rise, never fall | The deferral list must stay explicit and printed |
+| `TxSigChecker` with a null `SigVerifier` returning `false` | Fails closed when no verifier is supplied. It was introduced because no backend existed (G2c); since P2.10 a real backend is registered (`zk::Secp256k1Verifier`), so the null case is a defensive guard, not the production path | Keep as fail-closed behaviour; `TxSigChecker(..., nullptr)` call sites may be retired once every script test runs against the real verifier | No spend may be accepted without a real verification |
+| One deferred corpus case (`ledger.sighash.signature_der`) | It needs ECDSA **signing**; the runner is verify-only (C-52) | Not re-enabled by closing G2c — it needs a separate signing decision outside the kernel (`CRYPTO_BACKEND_DECISION.md` §9.1, §15.3). `ledger.script.p2pkh_spend_accepted` was re-enabled in P2.10 when the backend landed | The deferral list must stay explicit and printed; it is exactly one counted entry, so counts can rise but never fall silently |
 | The deferral list itself in `p2_conformance.py` | Documents the gap in code | Deleted when the list is empty | A missing case still fails the wrapper |
 | The C++ kernel as a whole | Compatibility proof for a possible cutover | G8 decision: ship it, keep it as a candidate, or archive `kernel/` | Rust is never modified by the removal |
 | Doc `03`'s `cpp/` proposal | Historical plan | Superseded in writing by `THREE_LANGUAGE_ARCHITECTURE.md` §9 | No code move is implied |

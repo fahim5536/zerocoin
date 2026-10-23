@@ -102,6 +102,52 @@ must be copied exactly, not “fixed”. The only reachable defects are local-AP
   assertion at that time. Prefer reusing the existing `BadHeight` error to avoid a new
   public API surface.
 
+- **P2.11 decision (2026-10-23) — disposition recorded, nothing implemented.** The
+  defect is pinned exactly, the port does not inherit it, and a Rust guard is
+  scheduled as a separate milestone.
+  - **Invalid-height condition (precise).** `allow_pow_retarget == true` **and**
+    `height > self.next_height()` — equivalently `(height - 1) as usize >=
+    self.blocks.len()`. `height == 0` returns early, and a network with
+    `allow_pow_retarget == false` can never reach the index. Every
+    `height <= next_height()` is safe, including `height == 1` on a
+    genesis-only chain.
+  - **Panic path (proven).** `connect_block` → `required_bits(height)`
+    (`src/chain.rs:277`) → `self.blocks[(height - 1) as usize]`
+    (`src/chain.rs:260`), **before** `validate_structure` (`:280`) can return
+    `BadHeight`. Proven by
+    `f1_connect_block_panics_when_height_exceeds_chain_length`, which carries
+    `#[should_panic(expected = "index out of bounds")]`.
+  - **Remote reachability: not established, and none claimed.** The only non-test
+    caller outside `chain.rs` is `node.rs:668`, gated by `extends_tip`
+    (`node.rs:646`); `mine_block_with_coinbase` passes `next_height()`; no RPC,
+    GUI, session or CLI path accepts a block. This is a local-API hazard, **not**
+    a remotely exploitable one.
+  - **Port implication.** A C++ port with the same call order would read the
+    schedule from an unvalidated height. `CPP_PORT_REQUIREMENTS.md` C-29
+    therefore allows the port to **diverge for safety** by validating the height
+    first. This input class is consequently **excluded from the differential
+    corpus**: a differential row over it would encode a Rust panic as expected
+    behaviour. No vector is created or regenerated for it.
+  - **Selected strategy.** (a) leave Rust behaviour unchanged; (b) pin both
+    implementations with targeted robustness tests in the follow-up, not in the
+    differential fixture; (c) implement the Rust bounds guard as a separate,
+    explicitly scoped **non-consensus** milestone.
+  - **Follow-up milestone M-F1 — acceptance criteria** (no consensus change, no
+    vector regeneration):
+    1. `connect_block` returns the existing `BadHeight` error before
+       `required_bits` is called for any height the chain cannot index;
+    2. `required_bits` keeps its signature, or a new fallible signature is
+       carried through every caller in the same change;
+    3. the `#[should_panic]` regression is replaced by an assertion on the typed
+       error, and the panic path is no longer reachable;
+    4. a matching C++ negative test asserts the same typed rejection, so the
+       exemption becomes a tested equivalence; `CPP_PORT_REQUIREMENTS.md` §10's
+       F-1 row changes from "Diverge (safety)" to "identical";
+    5. no block accepted today becomes rejected, and no verdict in the P0 corpus
+       or the 121-case differential fixture changes;
+    6. both gates green in fresh build directories, with the change recorded as
+       non-consensus in `COMPONENT_OWNERSHIP.md` and `MIGRATION_ROADMAP.md`.
+
 ### F-2 — block `version` is never validated
 
 - **Disposition: Confirmed.**
@@ -127,7 +173,7 @@ must be copied exactly, not “fixed”. The only reachable defects are local-AP
   `MAX_TX_BYTES`/input/output counts at deserialization (`src/ledger/transaction.rs:20-23`),
   and `UtxoSet::apply_transaction` (`src/ledger/utxo.rs:191-257`) never checks an output
   script's size. The only size ceiling is the 4 MiB transport plaintext cap
-  (`src/network/frame.rs:71`).
+  (`MAX_PLAINTEXT_BYTES` in `src/network/frame.rs`).
   Reproduction: `f3_a_block_larger_than_the_frame_cap_is_accepted` builds a spend whose
   single output `script_pubkey` is ~4.7 MB, mines it on regtest, and `connect_block`
   accepts it — the transaction alone is larger than `MAX_PLAINTEXT_BYTES`.
@@ -138,14 +184,35 @@ must be copied exactly, not “fixed”. The only reachable defects are local-AP
 - **Compatibility of a fix:** adding any limit rejects blocks that are accepted today;
   it is a hard-fork-class change and must be coordinated. Shipping the port with “no
   limit” reproduces Rust exactly.
-- **Proposed remediation (R-2, decision required, not implemented):**
+- **Remediation options (R-2; decision taken in P2.11, recorded below):**
   - **Option A (status quo, recommended until a fork is scheduled):** document “no block
-    size limit” as a rule; correct the misleading comment at `frame.rs:68-70` (“Blocks are
-    bounded well below this” is false); the C++ node must not add a limit on its own.
+    size limit” as a rule; correct the misleading comment in `src/network/frame.rs`
+    (“Blocks are bounded well below this” is false); the C++ node must not add a limit on its own.
   - **Option B (future hardening milestone):** define a serialized-size limit below the
     frame cap, enforce it in `validate_structure` before transaction replay, and activate
     it at a coordinated height. Requires a protocol/consensus change plan, not this
     milestone. The F-3 test then flips from “accepted” to a typed rejection.
+
+- **P2.11 decision (2026-10-23): Option A adopted.** There is **no consensus
+  block-size or block-weight rule**, and the port may not add one. The 4 MiB
+  `MAX_PLAINTEXT_BYTES` (defined in `src/network/frame.rs`) is a **transport** bound: it
+  caps one frame's plaintext before authentication so a hostile length field
+  cannot force an unbounded allocation. It is not a validity rule, and
+  `connect_block` never consults it —
+  `f3_a_block_larger_than_the_frame_cap_is_accepted` proves that a block whose
+  single transaction alone exceeds the cap is accepted.
+  - **What the port must do:** reproduce "no limit" (C-17), never reject a block
+    because it would not fit a frame, and never derive a validity rule from a
+    transport constant.
+  - **What must not be claimed:** that a block which cannot be relayed is
+    invalid. Such a block is consensus-valid but unrelayable; the local-miner
+    scenario is self-inflicted, not a remote DoS.
+  - **Documentation correction:** the doc comment on `MAX_PLAINTEXT_BYTES` is corrected in
+    P2.11 to say the cap is transport-only. Frame limits, transaction/block
+    validity and protocol behaviour are unchanged.
+  - **Option B** remains a possible future hardening milestone: it needs a
+    coordinated activation height, a protocol/consensus plan and regenerated
+    vectors. It is not part of P2.11 and not part of P3.
 
 ### F-4 — `state_root` is documented as a Merkle root but is a flat hash
 
@@ -335,11 +402,13 @@ No existing test was modified, skipped or weakened.
 
 ## 7. Unresolved risks / follow-ups
 
-1. **F-1 guard** is the only reachable panic on a local API path; schedule R-1 as a
-   non-consensus stability fix. Until then, the `#[should_panic]` test documents it.
-2. **F-3 policy** must be decided *before* the C++ port: either “no limit” (status quo,
-   document it) or a coordinated limit. The current comment at `frame.rs:68-70` wrongly
-   implies blocks are bounded below the frame.
+1. **F-1 guard** — **decided in P2.11 (Option: separate milestone M-F1).** It remains
+   the only reachable panic on a local API path, and remote reachability is still not
+   established. Until M-F1 lands, the `#[should_panic]` test documents it; acceptance
+   criteria are in §3 F-1.
+2. **F-3 policy** — **decided in P2.11: Option A (no consensus limit; the 4 MiB cap is
+   transport-only).** The misleading doc comment on `MAX_PLAINTEXT_BYTES` is corrected in the
+   same milestone. The port must not add a size or weight rule (C-17).
 3. **F-8** has no runtime enforcement that the local engine matches the network; a
    misconfigured node forks silently. A startup parameter-fingerprint check is a
    non-consensus hardening candidate.

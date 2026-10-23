@@ -37,10 +37,15 @@ Sources searched at `b0a4292` with a clean working tree:
 - Code search for `TODO|FIXME` in `kernel/` and `zerocoin/src/`: **zero
   matches**.
 - The differential fixture
-  `kernel/differential/vectors/ledger.sighash.differential.txt`
-  (META cases=117; groups V1=2, V2=3, V3=18, V4=11, V5=5, V6=2, V7=76) and the
-  P0 corpus manifest (`test/vectors/manifest.json`: 117 cases, 13 groups,
-  `source_commit 7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c`).
+  `kernel/differential/vectors/ledger.sighash.differential.txt`. At the `b0a4292`
+  entry state read here its META was `cases=117` with groups V1=2, V2=3, V3=18,
+  V4=11, V5=5, V6=2, V7=76. After P2.10 the same file reads **`cases=121`** with
+  **V1=2, V2=3, V3=18, V4=11, V5=5, V6=2, V7=76, V8=4**, 8 accept / 113 reject
+  (measured in P2.11; see §6). This fixture is **not** the P0 corpus manifest
+  (`test/vectors/manifest.json`: 117 cases, 13 groups,
+  `source_commit 7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c`), which is unchanged
+  and is a different artifact. A 121-case differential total and a 117-case
+  corpus total must never be substituted for one another.
 - `kernel/third_party/secp256k1/SHA256SUMS` recomputed this milestone:
   **60/60 vendored files match**; the remaining line is the documented
   non-vendored archive placeholder.
@@ -51,6 +56,10 @@ the closing evidence, never as an open blocker.
 ---
 
 ## 2. Open blockers
+
+> **Read §6 first for the outcome.** Every `Status | **OPEN**` field below is the
+> verified *entry* state of P2.10 at `b0a4292`, not the current state. §6 records
+> the final dispositions: CB-1…CB-4 **RESOLVED**, CB-5 **CLOSED — G2c: GO**.
 
 ### CB-1 — `ledger.sighash.signature_der` DER signing parity is unmeasured
 
@@ -117,15 +126,15 @@ the closing evidence, never as an open blocker.
 | Item | Location | Why it is not a blocker |
 |---|---|---|
 | Adapter-load-bearing rows `V4.uncompressed_65`, `V4.hybrid_prefix_06` (`rust=reject`, `backend=accept`, seam rejects) | Differential fixture V4; audit §16.4 (semantics) and §16.12 (per-case matrix) | The 33-byte compressed-only gate (contract P-1) — not the libsecp256k1 parser — produces the verdict on 65-byte and hybrid keys. Recorded precisely so these rows are never cited as library-parity evidence |
-| P2 conformance deferrals `ledger.script.p2pkh_spend_accepted` (needs verification) and `ledger.sighash.signature_der` (needs signing) | `MIGRATION_ROADMAP.md` §5 T2/T3; kernel conformance runner | The visible surface of CB-4 and CB-1: the first re-enables when G2c closes (22/23), the second only under a separate signing decision |
+| P2 conformance deferrals `ledger.script.p2pkh_spend_accepted` (needs verification) and `ledger.sighash.signature_der` (needs signing) | `MIGRATION_ROADMAP.md` §5 T2/T3; kernel conformance runner | The visible surface of CB-4 and CB-1: the first was re-enabled when G2c closed in P2.10 (22/22 executed), the second remains deferred under a separate signing decision |
 
 ## 4. Resolved or superseded (kept as evidence; not current blockers)
 
 | Item | Closed by | Evidence |
 |---|---|---|
-| `V4.prefix_05` divergence (Rust accepted SEC1 tag `0x05`; backend rejected) | P2.8 — contract `PUBLIC_KEY_ENCODING_CONTRACT.md` rule P-1 plus the tightened `PublicKey::from_sec1` gate | Fixture row now `RUST reject`; differential 117/117 match, no allowance; regressions in `zerocoin/tests/p2_7_pubkey_encoding.rs` and the V4 group. Must be preserved, not re-opened |
+| `V4.prefix_05` divergence (Rust accepted SEC1 tag `0x05`; backend rejected) | P2.8 — contract `PUBLIC_KEY_ENCODING_CONTRACT.md` rule P-1 plus the tightened `PublicKey::from_sec1` gate | Fixture row now `RUST reject`; differential 117/117 match at P2.8, no allowance (the fixture has since grown to 121 cases, §1); regressions in `zerocoin/tests/p2_7_pubkey_encoding.rs` and the V4 group. Must be preserved, not re-opened |
 | High-S normalisation plan (the P2.2 plan normalised `s`; the reference rejects high-S) | P2.2 amendment — plan withdrawn | Wrapper must verify the parsed signature unchanged; pinned by `zerocoin/tests/high_s_signature.rs` (4 tests) and the V2 group |
-| "23/23" P2 corpus goal | Superseded by the split deferral reasons | 22/23 on verification + a separate `signature_der` signing decision (readiness §3/§5; decision record §9.1) |
+| "23/23" P2 corpus goal | Superseded by the split deferral reasons | Executed result after P2.10: **22/22** on verification (`failures=0`) plus one separate `signature_der` signing decision, deferred by name and counted. The group holds 23 cases; 22 run, 1 is deferred (readiness §3/§5; decision record §9.1, §15.3) |
 | S5 against the Rust reference | P2.9 | 6/6 pinned in `zerocoin/tests/s5_boundary_probes.rs` (2 end-to-end + 4 scalar-boundary probes). Only the C++ half remains open, tracked as CB-2 |
 
 ## 5. Annex — deferred project items outside G2c's scope
@@ -145,6 +154,9 @@ Recorded so the register is complete; none is cryptographic and none gates G2c:
   `COMPONENT_OWNERSHIP.md` §2's "Blocked" ECDSA row needs a pointer to this
   register and to the P2.10 outcome; `CPP_PORT_REQUIREMENTS.md`'s P1 status
   line is historical framing (the requirement IDs remain normative labels).
+  *Refresh recorded in P2.11 (2026-10-23): the roadmap, the ownership table and
+  this register now carry dated supersession notes; the entry-state text is
+  preserved, not rewritten.*
 
 ---
 

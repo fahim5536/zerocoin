@@ -1,13 +1,19 @@
 # Component ownership
 
-Status: **as-built** at commit `e8fda7e` (2026-10-18), written during P2.1.
-This document assigns exactly one authoritative owner per subsystem. It changes
-no code, no vector and no consensus rule.
+Status: **snapshot** as-built at commit `e8fda7e` (2026-10-18), written during
+P2.1. This document assigns exactly one authoritative owner per subsystem. It
+changes no code, no vector and no consensus rule.
+
+> **Current status (P2.11 addendum, 2026-10-23).** Rows whose status names a later
+> milestone are marked inline (ECDSA: P2.10). Ownership has **not** moved: the
+> Rust crate remains the owner of every consensus rule and the shipped node
+> remains Rust-based; the C++ kernel is a derived implementation. P3 rows are
+> still "Not started".
 
 Related: `THREE_LANGUAGE_ARCHITECTURE.md` (what each language may do),
 `INTERFACE_CONTRACTS.md` (the interfaces owners expose),
 `MIGRATION_ROADMAP.md` (when derived implementations are removed), and
-`CRYPTO_BACKEND_DECISION.md` (the one subsystem with no C++ owner yet).
+`CRYPTO_BACKEND_DECISION.md` (G2c — closed in P2.10; Rust remains the owner).
 
 ---
 
@@ -40,7 +46,7 @@ file the phase produced or will produce; "—" means no C++ module exists yet.
 
 ### 2.1 Primitives and ledger
 
-| Subsystem | Authoritative owner (Rust) | Derived implementation (C++) | Phase | Status at `e8fda7e` |
+| Subsystem | Authoritative owner (Rust) | Derived implementation (C++) | Phase | Status at `e8fda7e`, unless dated inline |
 |---|---|---|---|---|
 | SHA-256, SHA-256d, RIPEMD-160, HASH160 | `src/crypto/hash.rs` | `kernel/src/sha256.cpp`, `ripemd160.cpp`, `hash.cpp` | P1 | Done; G1 vectors |
 | Hex and display order as distinct types | `src/crypto/hash.rs` | `kernel/include/zerocoin/hex.h` | P1 | Done; F3 guard |

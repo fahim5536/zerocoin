@@ -94,7 +94,7 @@ what the C++ module must reproduce.
 | `ledger/script.rs` | `kernel/script.{h,cpp}` | P2 | The 10-opcode subset, the four limits, `p2pkh_script_pubkey` | F5 |
 | `ledger/sighash.rs` | `kernel/sighash.{h,cpp}` | P2 | Tag, chain id, blanked scriptSigs, single `SIGHASH_ALL` | chain binding |
 | `ledger/utxo.rs` | `kernel/utxo.{h,cpp}` | P4 | Three-phase apply, maturity at `height + 100`, flat `state_root` | F2, F17 |
-| `consensus/block.rs` | `kernel/block.{h,cpp}` | P3 | 108-byte preimage, field order, duplicate-last Merkle, single-leaf rule, 13-step validation order | F13 |
+| `consensus/block.rs` | `kernel/block.{h,cpp}` | P3 | 107-byte preimage, field order, duplicate-last Merkle, single-leaf rule, 13-step validation order | F13 |
 | `consensus/difficulty.rs` | `kernel/difficulty.{h,cpp}` | P3 | Clamp, divide-first branch, pow-limit cap, `allow_pow_retarget` | integer division order |
 | `consensus/pow.rs` | `kernel/pow.{h,cpp}` | P3 | Trivial engine byte-exact; scratchpad bit-exact | F9 |
 | `consensus/reward.rs` | `kernel/reward.{h,cpp}` | P3 | Subsidy, maturity, `split_reward` remainder, coinbase script encoding, `validate_coinbase` | u128→u64 narrowing |

@@ -15,6 +15,13 @@ deferred by name; gate G2 is therefore **not met** in this phase.
 
 No Rust source file, no corpus vector and no G1 guard was modified.
 
+> **Status after P2.10 (2026-10-23).** This is the P2 phase record: at this
+> commit gate G2 was not met and two cases were deferred. Both blockers were
+> closed later — G2c is **GO**, conformance is 22/22 with one named deferral
+> (`ledger.sighash.signature_der`, signing only), and the C++ kernel now links a
+> verification-only backend. See
+> `docs/architecture/CRYPTO_BACKEND_DECISION.md` §15.
+
 ---
 
 ## 1. Result

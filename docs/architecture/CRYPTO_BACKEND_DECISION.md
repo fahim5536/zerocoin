@@ -1,8 +1,12 @@
 # Cryptographic backend decision record (G2c)
 
-Status: **BLOCKED — no backend acquired, no download performed.**
+Status: **G2c: GO — closed in P2.10.** The C++ verification backend is integrated
+into the C++ kernel. The P2.1 status recorded below (`BLOCKED — no backend
+acquired, no download performed`) is history; §15 is the dated reconciliation and
+states what the integration does and does not prove.
 Recorded during P2.1 at commit `e8fda7e` (2026-10-18); host inventory taken on
-2026-10-19. This document authorises no code and makes no compatibility claim.
+2026-10-19. As written, this document authorised no code and made no
+compatibility claim.
 
 > **Amended by P2.2.** `CRYPTO_BACKEND_READINESS.md` proves that the Rust
 > reference **rejects** high-S signatures, and that the normalisation step this
@@ -14,6 +18,11 @@ Recorded during P2.1 at commit `e8fda7e` (2026-10-18); host inventory taken on
 > parser and verify path from upstream source. §7.2's `[UNVERIFIED]` note is
 > replaced with what was found, qualified by the fact that `master` was read, not
 > a pinned release. The selection is unchanged and still not authorised.
+
+> **Amended by P2.11.** §9.1, §10, §11 and §13 each close on a verdict that P2.10
+> has since executed. They are left in place as the historical record and are
+> superseded by §15, which carries the executed evidence, the two distinct case
+> counts, and the qualification that the shipped node remains Rust-based.
 
 Scope: the secp256k1 implementation that `zk::SigVerifier`
 (`INTERFACE_CONTRACTS.md` §3) needs in order to close G2c. The Rust reference
@@ -275,6 +284,15 @@ backend can reach is therefore **22/23 with one named deferral**, not 23/23. The
 case is closed only by a separate decision about a test-harness signer outside
 the kernel (`CRYPTO_BACKEND_READINESS.md` §2 H2, §3).
 
+> **Executed in P2.10 (see §15).** 22 cases are executed and all 22 pass —
+> `SUMMARY cases=22 failures=0` — with the 23rd, `ledger.sighash.signature_der`,
+> deferred by name and counted (`deferred=1`). The result is therefore stated as
+> **22/22 with one named deferral**. The deferral is now a verify-only scope
+> statement (C-52), not missing evidence: the test-only C++ signer has since
+> reproduced the committed 71-byte DER signature byte-for-byte (CB-1).
+> `ledger.script.p2pkh_spend_accepted` is no longer deferred; it is replayed
+> against the real verifier.
+
 Acceptance also requires: G1 28/28 unchanged; unit tests only added; Rust 263
 unchanged; P0 112/5/0/0 unchanged; the deferral list reduced to exactly
 `ledger.sighash.signature_der` with a signing reason; and a written statement in
@@ -295,6 +313,11 @@ independent blockers exist: the plan was incompatible with the reference on
 high-S (H1), and one deferred fixture needs signing rather than verification
 (H2). Neither is a reason to change a consensus rule.
 
+> **Superseded by P2.10 (see §15).** Both blockers were closed without changing a
+> consensus rule: H1 by reproducing the reference's high-S rejection verbatim in
+> the wrapper (no normalisation added), H2 by a test-only C++ signer outside the
+> kernel. G2c is **GO**.
+
 **Therefore, explicitly not claimed:**
 
 - no signature compatibility between C++ and Rust;
@@ -308,6 +331,12 @@ high-S (H1), and one deferred fixture needs signing rather than verification
 The kernel keeps failing closed: `TxSigChecker` with a null verifier returns
 `false`, and the two corpus cases stay deferred (doc `08` §8.1), now with
 different reasons: one needs a verifier, one needs a signer.
+
+> **Superseded by P2.10 (see §15).** The kernel no longer links nothing:
+> `zk::Secp256k1Verifier` is linked PRIVATE into `zerocoin_kernel`, so the
+> "no change to the kernel's dependency set" non-claim above is historical. A
+> null verifier still returns `false`. Exactly one case remains deferred:
+> `ledger.sighash.signature_der`.
 
 ---
 
@@ -326,6 +355,12 @@ the backend is linked into a shipping target, must not normalise `s` (§7.3), an
 still may not change the Rust reference. Authorisation is necessary but not
 sufficient: P2.2's NO-GO stands until the revised plan and the acceptance suite
 exist (`CRYPTO_BACKEND_READINESS.md` §5).
+
+> **Superseded by P2.10 (see §15).** Option **A** was authorised and executed:
+> the pinned source archive, its detached signature and the public key are
+> committed under `kernel/third_party/secp256k1/provenance/`, with `SHA256SUMS`
+> and `ORIGIN.md` beside the vendored tree, the §9 vectors exist as the
+> differential fixture, and no normalisation was added.
 
 ---
 
@@ -349,3 +384,92 @@ comparison, the differential Rust-versus-C++ conformance matrix, the S5
 boundary-probe decision, the dependency reproducibility policy and the fresh gate
 results. It does not change this decision: libsecp256k1 remains the selected but
 unauthorised candidate, G2c remains **NO-GO**, and P3 has not started.
+
+> **Superseded by P2.10 (see §15).** libsecp256k1 is no longer unauthorised, G2c
+> is **GO**, and P3 has still not started.
+
+---
+
+## 15. P2.11 reconciliation (2026-10-23)
+
+Dated status addendum. §1–§13 are the P2.1/P2.2/P2.5 record and are not
+rewritten; the supersession notes above point here. Evidence:
+`CRYPTO_BACKEND_SELECTION_AUDIT.md` §20 (P2.10), `CRYPTO_BLOCKER_REGISTER.md`
+§6, `INTERFACE_CONTRACTS.md` §3.5.
+
+### 15.1 What is now built
+
+- libsecp256k1 **v0.8.0** is vendored under `kernel/third_party/secp256k1/`
+  together with `SHA256SUMS` and `ORIGIN.md`; the pinned source archive, its
+  detached signature and the public signing key live in `provenance/`.
+  Option **A** of §11 is the mechanism that was authorised and executed — the
+  dependency is committed, not fetched at configure time.
+- `zk::Secp256k1Verifier` is **integrated into the C++ kernel**: it is linked
+  PRIVATE into `zerocoin_kernel`, is verification-only
+  (`SECP256K1_CONTEXT_NONE`), applies contract rule P-1's 33-byte key gate
+  before any curve arithmetic, and fails closed.
+- The kernel therefore no longer "links nothing" (§10): `TxSigChecker` can be
+  constructed with `zk::Secp256k1Verifier`, and the conformance tool does
+  exactly that.
+
+### 15.2 What this does not prove
+
+The **shipped node is still Rust-based**. No Rust code calls the C++ verifier:
+`zerocoin/` keeps `k256` and its own `SigVerifier` implementation. The
+integration proves the C++ kernel *can* verify a ZeroCoin spend with the
+selected backend; it does **not** prove that the Rust node uses the C++ backend,
+and it transfers no semantic authority. Rust remains the reference and the lead
+implementation; the C++ kernel remains the derived implementation
+(`THREE_LANGUAGE_ARCHITECTURE.md`).
+
+### 15.3 Conformance and differential counts are different artifacts
+
+| Artifact | Measured | What it is |
+|---|---|---|
+| P2 conformance (`kernel/tools/p2_conformance.py`) | **22/22**, `failures=0`, one named deferral | ledger cases from the P0 corpus replayed against the C++ kernel |
+| Differential fixture (`kernel/differential/vectors/ledger.sighash.differential.txt`) | **121 cases**, groups V1–V8 | Rust-versus-C++ comparison of the sighash/verify path |
+| P0 corpus (`test/vectors/manifest.json`) | **117 cases** (`total_cases`) | the frozen Rust consensus corpus — a different artifact from the fixture above |
+
+- The single deferral is `ledger.sighash.signature_der`, declared in
+  `DEFERRED_CASES` and counted (`deferred=1`) so the slice cannot shrink
+  silently. It is deferred because the conformance runner is verify-only
+  (C-52), **not** because evidence is missing: the test-only C++ signer
+  reproduced the committed 71-byte low-S DER signature byte-for-byte (CB-1,
+  28/28 checks).
+- `ledger.script.p2pkh_spend_accepted` is **no longer deferred** — a real
+  verification backend now exists, which is exactly §12's stated closure
+  condition.
+- Measured fixture group sizes: V1=2, V2=3, V3=18, V4=11, V5=5, V6=2, V7=76,
+  V8=4 (sum 121); 8 accept / 113 reject; the harness's known-divergence list is
+  empty. The 121-case fixture must never be quoted as the corpus total, and the
+  117-case manifest must never be quoted as the differential total.
+- Two rows remain **adapter-load-bearing**: `V4.uncompressed_65` and
+  `V4.hybrid_prefix_06`. The raw library accepts those key encodings; the
+  production wrapper rejects them by contract rule P-1. Their agreement is a
+  property of the contract, not raw-backend parity, and they must not be cited
+  as library-parity evidence.
+
+### 15.4 What the provenance gate establishes, and what it does not
+
+`scripts/gate-p2-10-provenance.ps1` re-derives upstream identity from the
+repository alone and exits 0: pinned archive size and SHA-256 (`2,436,784`
+bytes, `dd685546f9e717b9adde329acd5a4cd8083d40f710fdb0a603ee5a83f908132b`),
+detached-signature SHA-256 (`c7eb14bbd67fe94b9ac4b556df6ae18aebb450092c836d05a6e13ea005fc7ac8`),
+`SHA256SUMS` agreement, the pinned key fingerprint
+`6A8F9C266528E25AEB1D7731C2371D91CB716EA7` (`gpg --show-keys` before anything is
+imported), `GOODSIG`/`VALIDSIG` in an isolated throwaway GnuPG home
+(`TRUST_UNDEFINED` is expected), and a byte-for-byte comparison of every
+`SHA256SUMS` entry against the archive's inner tree.
+
+**Limitations.** The gate proves the vendored bytes are the ones this repository
+pinned and that the detached signature was made by the pinned fingerprint. It
+does not build a web of trust, does not attest to upstream code quality or the
+absence of defects, and does not make the library part of the consensus
+specification — the Rust reference remains the specification.
+
+### 15.5 Closing statement
+
+**G2c: GO** (audit §20.5). The verdict lines in §9.1 ("22/23"), §10 ("P2.2
+verdict: NO-GO"), §11 ("P2.2's NO-GO stands") and §13 ("G2c remains NO-GO") are
+superseded here and left in place as history. P3 has still not started; its
+entry conditions are `MIGRATION_ROADMAP.md` §9.

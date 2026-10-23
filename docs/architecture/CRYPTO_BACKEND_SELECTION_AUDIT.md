@@ -1,6 +1,13 @@
 # Crypto backend selection and reproducibility audit (P2.5)
 
 Status: **audit complete — G2c remains NO-GO, no backend acquired.**
+
+> **Superseded by §20.5 (P2.10).** The verdict line above, and the "no C++ backend
+> exists" sentence below, are the P2.5 state at commit `22f1de5`. The current
+> decision is **G2c: GO** with executed evidence in §20; the C++ verification
+> backend is integrated into the C++ kernel. The shipped node remains Rust-based,
+> and this integration does not prove that the Rust node uses the C++ backend.
+
 Recorded at commit `22f1de5` (2026-10-19). This document changes no production
 cryptography, no consensus rule, no dependency version and no lockfile. It makes
 no parity claim: no C++ backend exists, and nothing here was measured against a

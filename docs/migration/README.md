@@ -36,6 +36,14 @@ independent C++ implementation beside the Rust one.
 > reference rejects high-S signatures, the documented wrapper normalised them,
 > and one deferred fixture needs signing rather than verification. It changed
 > documentation only; no dependency was obtained and no gate count moved.
+>
+> P2.10 closed G2c: the vendored libsecp256k1 0.8.0 is integrated into the C++
+> kernel as a verification-only backend, P2 conformance is 22/22 with one named
+> deferral (`ledger.sighash.signature_der`), and provenance is reproducible from
+> the repository. The NO-GO above is the P2.2 state and is preserved as history;
+> the current decision is G2c: GO (`docs/architecture/CRYPTO_BACKEND_DECISION.md`
+> §15, `CRYPTO_BLOCKER_REGISTER.md` §6). P2.11 reconciled the documents and added
+> no code. The Rust node remains the shipped implementation.
 
 ---
 

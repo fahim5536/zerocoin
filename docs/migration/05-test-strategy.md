@@ -51,7 +51,7 @@ test/vectors/
 ├── encoding/
 │   ├── varint.json               # 0, 1, 252, 253, 65535, 65536, 2^32-1
 │   ├── transaction.json          # txid + full hex for each fixture
-│   └── header_preimage.json      # 108-byte preimage per network
+│   └── header_preimage.json      # 107-byte preimage per network
 ├── pow/
 │   ├── trivial.json              # preimage+nonce -> hash
 │   └── scratchpad_devnet.json    # small profile, many nonces

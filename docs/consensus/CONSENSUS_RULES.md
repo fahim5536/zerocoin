@@ -128,6 +128,14 @@ difficulty_bits    u32 LE
 engine_id          u8
 ```
 
+Total: 14 + 4 + 4 + 8 + 32 + 32 + 8 + 4 + 1 = **107 bytes**. Corroborated by
+`test/vectors/chain/header.json` (`preimage_len: 107`, 214 hex characters, tag
+prefix `5a524f2f6865616465722f763100`) and by the frozen assertion
+`assert_eq!(preimage.len(), 107)` in `zerocoin/tests/consensus_rules.rs`. The
+engine appends the `u64` nonce, so **115 bytes** are hashed. P2.11 verified this
+definition against all of those artifacts; `INTERFACE_CONTRACTS.md` §11
+previously said 108 bytes and was corrected there.
+
 Rule **H-1** — The header preimage MUST exclude the nonce; each PoW engine appends the
 `u64` nonce itself in its own byte order (`src/consensus/block.rs:84`,
 `src/consensus/pow.rs:79,200`). P0 cases: `chain.header` (8 cases), including the pinned
