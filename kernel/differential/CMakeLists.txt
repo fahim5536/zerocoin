@@ -1,8 +1,9 @@
 # P2.6 differential experiment: pinned libsecp256k1 v0.8.0 vs the Rust reference.
 #
 # This is a STANDALONE project. It deliberately does not `add_subdirectory` into
-# `kernel/CMakeLists.txt`, is not part of the `zerocoin_kernel` target, and
-# nothing here is reachable from `TxSigChecker` or from any node binary.
+# `kernel/CMakeLists.txt` and nothing here is linked into any node binary. Since
+# P2.10 §7 the harness exercises the production verifier by compiling the same
+# translation unit the kernel builds, not by linking `zerocoin_kernel`.
 #
 # Build it out-of-tree:
 #   cmake -S kernel/differential -B .build/p26-differential -G Ninja
@@ -83,12 +84,17 @@ endfunction()
 # ---------------------------------------------------------------------------
 # Test-only harness.
 #
-# It includes `<zerocoin/sighash.h>` so the `zk::SigVerifier` override is
-# checked by the compiler, but it does NOT link `zerocoin_kernel`: no kernel
-# object, no transaction parser, no sighash implementation is pulled in.
+# The seam column of the report is the production verifier: the runner compiles
+# `../src/secp256k1_verifier.cpp`, the same translation unit the kernel builds,
+# so a verdict mismatch is a production bug, not an adapter artifact. The raw
+# probe (`backend/raw_backend_verifier.cpp`) remains test-only. The harness
+# still does not link `zerocoin_kernel`: no kernel object beyond the verifier
+# translation unit, no transaction parser, no sighash implementation is pulled
+# in.
 # ---------------------------------------------------------------------------
 add_executable(secp256k1_differential
-  "backend/secp256k1_verifier.cpp"
+  "backend/raw_backend_verifier.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../src/secp256k1_verifier.cpp"
   "runner/main.cpp"
 )
 

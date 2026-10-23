@@ -1,7 +1,8 @@
 // Test-only differential runner: pinned libsecp256k1 v0.8.0 vs the Rust reference.
 //
-// Reads a vector file, computes two verdicts per case with the backend adapter,
-// and prints one line per case. The recorded Rust verdict comes from the fixture
+// Reads a vector file, computes two verdicts per case — the seam verdict from
+// the production verifier and the raw verdict from the backend probe — and
+// prints one line per case. The recorded Rust verdict comes from the fixture
 // (produced by `zerocoin/tests/differential_vectors.rs`); this program never
 // invents an expected value, it only reports whether the backend reproduced it.
 //
@@ -19,7 +20,9 @@
 #include <string_view>
 #include <vector>
 
-#include "secp256k1_verifier.h"
+#include "raw_backend_verifier.h"
+
+#include "zerocoin/secp256k1_verifier.h"
 
 namespace {
 
@@ -257,7 +260,12 @@ int main(int argc, char** argv) {
     return 2;
   }
 
-  zk::differential::Secp256k1Verifier verifier;
+  // The seam column is the production verifier — the same class the kernel
+  // links — so a mismatch here is a production bug, not an adapter artifact.
+  // The backend column is the raw probe, kept so the report can still label
+  // which cases the ZeroCoin key gate decides.
+  zk::Secp256k1Verifier verifier;
+  zk::differential::RawBackendVerifier backend;
 
   std::size_t failures = 0;
   std::size_t adapter_divergences = 0;
@@ -272,21 +280,21 @@ int main(int argc, char** argv) {
 
     const bool seam = verifier.verify(digest, der, test.der.size(), public_key,
                                       test.public_key.size());
-    const bool backend = verifier.backend_verify(digest, der, test.der.size(), public_key,
-                                                 test.public_key.size());
+    const bool raw = backend.verify(digest, der, test.der.size(), public_key,
+                                    test.public_key.size());
 
     const bool matched = seam == test.rust_accept;
     if (!matched) {
       ++failures;
     }
-    if (backend != seam) {
+    if (raw != seam) {
       ++adapter_divergences;
     }
 
     std::cout << "CASE " << test.id << " group=" << test.group
               << " rust=" << verdict(test.rust_accept) << " seam=" << verdict(seam)
-              << " backend=" << verdict(backend) << " match=" << (matched ? "yes" : "no")
-              << " adapter=" << (backend == seam ? "faithful" : "load-bearing") << "\n";
+              << " backend=" << verdict(raw) << " match=" << (matched ? "yes" : "no")
+              << " adapter=" << (raw == seam ? "faithful" : "load-bearing") << "\n";
   }
 
   std::cout << "SUMMARY cases=" << cases.size() << " failures=" << failures

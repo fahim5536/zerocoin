@@ -74,8 +74,11 @@ std::optional<SigHash> signature_hash(const Transaction& tx, std::size_t input_i
 ///
 /// It owns DER decoding, SEC1 public-key parsing and point validation, and the
 /// ECDSA verification itself. The kernel does not implement any of that: R9 in
-/// docs/migration/04-risk-register.md requires a vetted library, and none is
-/// linked in this phase, so no implementation of this interface ships here.
+/// docs/migration/04-risk-register.md requires a vetted library, and since
+/// P2.10 §7 the approved implementation is `Secp256k1Verifier`
+/// (zerocoin/secp256k1_verifier.h), binding the pinned vendored libsecp256k1.
+/// The interface stays abstract so the Rust reference and any future backend
+/// can be compared without touching consensus code.
 class SigVerifier {
  public:
   virtual ~SigVerifier() = default;
@@ -92,8 +95,8 @@ class SigVerifier {
 /// interpreter when it reaches `OP_CHECKSIG` while validating that input.
 ///
 /// `script_code` is not copied: it must outlive the checker. `verifier` may be
-/// null, in which case every signature is rejected — the phase has no curve
-/// backend, so it fails closed instead of guessing (G2c, docs/migration/08).
+/// null, in which case every signature is rejected — a missing backend fails
+/// closed instead of guessing.
 class TxSigChecker final : public SigChecker {
  public:
   TxSigChecker(const Transaction& tx, std::size_t input_index, const std::uint8_t* script_code,

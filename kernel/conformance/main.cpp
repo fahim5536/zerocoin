@@ -35,6 +35,7 @@
 #include "zerocoin/hash.h"
 #include "zerocoin/hex.h"
 #include "zerocoin/script.h"
+#include "zerocoin/secp256k1_verifier.h"
 #include "zerocoin/sighash.h"
 #include "zerocoin/transaction.h"
 #include "zerocoin/uint256.h"
@@ -353,8 +354,10 @@ Produced op_p2pkh_script_sig(const Case& c) {
   return {{"script_hex", hex_of(script)}, {"length", std::to_string(script.size())}};
 }
 
-// The conformance runner has no curve backend. The accept/reject checkers are
-// stubs that pin the interpreter's control flow, never a signature verdict.
+// The accept/reject checkers are stubs that pin the interpreter's control flow
+// for cases that must not produce a signature verdict. The only corpus case
+// that checks a real signature is p2pkh_spend below, which runs the vendored
+// backend behind the production seam.
 struct AcceptAllChecker final : zk::SigChecker {
   bool check_signature(const std::uint8_t* /*signature*/, std::size_t /*signature_size*/,
                        const std::uint8_t* /*public_key*/,
@@ -391,6 +394,30 @@ Produced op_script_verify(const Case& c) {
   return {{"accepted", bool_text(static_cast<bool>(result))},
           {"error", zk::to_string(result.error)},
           {"opcode", std::to_string(result.opcode)}};
+}
+
+// A real signature verdict: the corpus spend case runs the actual vendored
+// backend through `TxSigChecker` — the first accepted signature in the corpus.
+Produced op_p2pkh_spend(const Case& c) {
+  const Transaction tx = tx_of(c.one("tx_hex"), "tx_hex");
+  const std::uint64_t input_index = parse_u64(c.one("input_index"), "input_index");
+  const std::vector<std::uint8_t> script_code =
+      bytes_of(c.one("script_code_hex"), "script_code_hex");
+  const std::vector<std::uint8_t> script_pubkey =
+      bytes_of(c.one("script_pubkey_hex"), "script_pubkey_hex");
+  const std::uint32_t chain_id = parse_u32(c.one("chain_id"), "chain_id");
+  if (input_index >= tx.inputs.size()) {
+    fail("input_index: out of range");
+  }
+  const zk::Secp256k1Verifier verifier;
+  const zk::TxSigChecker checker(tx, static_cast<std::size_t>(input_index), script_code.data(),
+                                 script_code.size(), zk::ChainId{chain_id}, &verifier);
+  const std::vector<std::uint8_t>& script_sig = tx.inputs[input_index].script_sig;
+  const zk::ScriptResult result = zk::verify(script_sig.data(), script_sig.size(),
+                                             script_pubkey.data(), script_pubkey.size(),
+                                             checker);
+  return {{"accepted", bool_text(static_cast<bool>(result))},
+          {"error", zk::to_string(result.error)}};
 }
 
 Produced op_sighash(const Case& c) {
@@ -456,6 +483,7 @@ Produced execute(const Case& c) {
     if (c.op == "p2pkh_script_pubkey") return op_p2pkh_script_pubkey(c);
     if (c.op == "p2pkh_script_sig") return op_p2pkh_script_sig(c);
     if (c.op == "script_verify") return op_script_verify(c);
+    if (c.op == "p2pkh_spend") return op_p2pkh_spend(c);
     if (c.op == "sighash") return op_sighash(c);
     if (c.op == "sighash_distinct") return op_sighash_distinct(c);
   fail("unknown OP: " + c.op);

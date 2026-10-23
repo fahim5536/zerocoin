@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Replay the P2 slice of the P0 corpus against the C++ kernel.
 
-P2 owns the script interpreter and the signature hasher. Two corpus cases in
-this group need a secp256k1 backend that is not linked in this phase
-(`ledger.script.p2pkh_spend_accepted` and `ledger.sighash.signature_der`); they
-are deferred by name and counted here, so the slice cannot shrink silently.
+P2 owns the script interpreter and the signature hasher. One corpus case in
+this group needs deterministic ECDSA signing, which the kernel deliberately
+does not implement (`ledger.sighash.signature_der`, C-52); it is deferred by
+name and counted here, so the slice cannot shrink silently. The spend case
+(`ledger.script.p2pkh_spend_accepted`) is replayed since P2.10 §7: the vendored
+libsecp256k1 is linked behind the `zk::SigVerifier` seam, so its accepted
+verdict is a real signature check, not a stub.
 
 The corpus is the oracle and this script never trusts the kernel to grade
 itself. Before rendering the fixture it re-derives, from the documented rules
@@ -37,16 +40,13 @@ P2_FILES = {
     "ledger.sighash": "ledger/sighash.json",
 }
 
-# 14 of 15 script cases and 7 of 8 sighash cases; the two crypto cases below
-# account for the difference.
-EXPECTED_CASE_COUNT = 21
+# All 15 script cases and 7 of 8 sighash cases; the one deferred crypto case
+# below accounts for the difference.
+EXPECTED_CASE_COUNT = 22
 
 DEFERRED_CASES = {
-    "ledger.script.p2pkh_spend_accepted": (
-        "requires secp256k1 ECDSA verification; no vetted curve backend is linked (G2c)"
-    ),
     "ledger.sighash.signature_der": (
-        "requires RFC 6979 deterministic ECDSA over secp256k1 (G2c)"
+        "requires RFC 6979 deterministic ECDSA signing; the kernel is verify-only (C-52)"
     ),
 }
 
@@ -181,6 +181,51 @@ def check_sighash_vector(case: dict) -> None:
         raise MappingError(f"{case['id']}: digest is not sha256d(preimage)")
 
 
+def check_spend_vector(case: dict) -> None:
+    """Re-derives the spend case's shape from the documented rules alone."""
+    case_id = case["id"]
+    payload = case["input"]
+    expected = case["expected"]
+    if expected.get("accepted") is not True or expected.get("error_kind") is not None:
+        raise MappingError(
+            f"{case_id}: the spend case must expect accepted=true and error_kind=null"
+        )
+    if payload["script_code_hex"] != payload["script_pubkey_hex"]:
+        raise MappingError(f"{case_id}: script_code must be the scriptPubKey being spent")
+
+    script_pubkey = bytes.fromhex(payload["script_pubkey_hex"])
+    if (
+        len(script_pubkey) != 25
+        or script_pubkey[:3] != bytes.fromhex("76a914")
+        or script_pubkey[23:] != bytes.fromhex("88ac")
+    ):
+        raise MappingError(
+            f"{case_id}: script_pubkey is not OP_DUP OP_HASH160 <20> OP_EQUALVERIFY OP_CHECKSIG"
+        )
+
+    script_sig = bytes.fromhex(payload["script_sig_hex"])
+    if not script_sig or script_sig[0] >= 0x4C:
+        raise MappingError(f"{case_id}: the signature push is not inline")
+    signature = script_sig[1 : 1 + script_sig[0]]
+    pubkey_offset = 1 + script_sig[0]
+    if pubkey_offset >= len(script_sig) or script_sig[pubkey_offset] != 33:
+        raise MappingError(f"{case_id}: the pubkey must be compressed SEC1, 33 bytes")
+    pubkey = script_sig[pubkey_offset + 1 : pubkey_offset + 34]
+    if pubkey[0] not in (0x02, 0x03):
+        raise MappingError(f"{case_id}: pubkey tag must be 0x02 or 0x03 (rule P-1)")
+    if script_sig != minimal_push(signature) + minimal_push(pubkey):
+        raise MappingError(f"{case_id}: script_sig is not <push sig> <push pubkey>")
+    if signature[-1] != 0x01 or payload["sighash_type"] != 1:
+        raise MappingError(f"{case_id}: the signature must end with SIGHASH_ALL")
+
+    # The corpus records the txid in internal byte order: sha256d of the
+    # serialized transaction.
+    tx_bytes = bytes.fromhex(payload["tx_hex"])
+    txid = hashlib.sha256(hashlib.sha256(tx_bytes).digest()).digest().hex()
+    if txid != expected["txid"]:
+        raise MappingError(f"{case_id}: txid is not sha256d(tx_bytes) in internal hex")
+
+
 def map_script_case(case: dict) -> FixtureCase | None:
     case_id = case["id"]
     payload = case["input"]
@@ -215,6 +260,21 @@ def map_script_case(case: dict) -> FixtureCase | None:
             "p2pkh_script_sig",
             [("signature_hex", signature), ("pubkey_sec1_hex", pubkey)],
             [("length", text(expected["length"])), ("script_hex", expected["script_hex"])],
+        )
+
+    if case_id == "ledger.script.p2pkh_spend_accepted":
+        check_spend_vector(case)
+        return FixtureCase(
+            case_id,
+            "p2pkh_spend",
+            [
+                ("tx_hex", payload["tx_hex"]),
+                ("input_index", text(payload["input_index"])),
+                ("script_code_hex", payload["script_code_hex"]),
+                ("script_pubkey_hex", payload["script_pubkey_hex"]),
+                ("chain_id", text(payload["chain_id"])),
+            ],
+            [("accepted", "true"), ("error", "None")],
         )
 
     if case_id.startswith("ledger.script.reject_"):
@@ -574,7 +634,7 @@ def main(argv: list[str]) -> int:
     )
     print(f"  ledger.script          {counts['ledger.script']}")
     print(f"  ledger.sighash         {counts['ledger.sighash']}")
-    print(f"  deferred (G2c)         {counts['deferred']}: {', '.join(sorted(DEFERRED_CASES))}")
+    print(f"  deferred (signing)     {counts['deferred']}: {', '.join(sorted(DEFERRED_CASES))}")
 
     return check_corruption(args.runner, cases, source_commit)
 

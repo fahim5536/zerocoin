@@ -1,9 +1,12 @@
 # libsecp256k1 — vendored provenance record (P2.6)
 
-Status: **unmodified third-party source**. Vendored for the P2.6 differential
-experiment only. It is **not** linked into `zerocoin_kernel`, **not** reachable
-from `TxSigChecker`, and **not** part of the production transaction-validation
-path.
+Status: **unmodified third-party source**. Vendored in P2.6 for the differential
+experiment; since P2.10 §7 it is also the production verification backend of
+the C++ kernel — linked PRIVATE into `zerocoin_kernel` and reachable from
+`TxSigChecker` only through `zk::Secp256k1Verifier`
+(`kernel/include/zerocoin/secp256k1_verifier.h`). Verification only: no signing
+code from this tree is linked anywhere (C-52). The shipped node stays the Rust
+binary, which uses `k256`, not this library.
 
 Every file in this directory except `ORIGIN.md`, `SHA256SUMS` and `provenance/`
 is a byte-for-byte copy of the file of the same relative path in the upstream
@@ -96,10 +99,10 @@ vendored verbatim at `COPYING`. Every vendored `.c`/`.h` file retains its
 upstream copyright header. No attribution is removed, and no file is relicensed.
 
 Upstream is distributed under the MIT licence; the ZeroCoin repository root
-`LICENSE` is unaffected. This vendored tree is not linked into any shipped
-binary in P2.6, so it does not yet add an attribution obligation to a release
-artifact. That obligation starts when (and if) the library is linked into a
-shipped node.
+`LICENSE` is unaffected. The vendored tree is linked only into the developer/CI
+kernel (`zerocoin_kernel` since P2.10 §7), which is not a shipped binary, so it
+still adds no attribution obligation to a release artifact. That obligation
+starts when (and if) a shipped node links this library.
 
 ## 4. Build configuration
 
