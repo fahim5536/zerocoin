@@ -2056,3 +2056,171 @@ is the accepted level; (3) the acquisition path for the production backend
 wrapper authorised per decision-record §11; (4) the four C++ boundary verdicts
 of §19.1 re-derived as measured results once a backend verifier exists. No P3
 work and no production crypto integration until these conditions are met.
+
+---
+
+## 20. P2.10 addendum — blocker closure, production integration, and the G2c decision
+
+P2.10 closes every cryptographic blocker that could be closed safely and takes
+the G2c decision on executed evidence. Nothing in §16–§19 is rewritten; this
+section records what moved. The entry-state snapshot of the blockers is
+`CRYPTO_BLOCKER_REGISTER.md` §2; its §6 records the final dispositions that
+this section substantiates.
+
+Baseline: `main` at `b0a4292`, equal to `origin/main`, working tree clean.
+Final code state: `e4e13d4` on `main`, working tree clean.
+
+### 20.1 What this milestone closed
+
+| Commit | Blocker | Result |
+|---|---|---|
+| `3bb0062` | — | The blocker register itself (§1–§2 entry state, verified) |
+| `046a5c7` | CB-1 | Test-only C++ signing adapter proves RFC 6979 DER byte parity: the committed 71-byte low-S DER of `ledger.sighash.signature_der` is reproduced byte-for-byte; 28/28 checks green across consecutive runs; ctest 2/2. The adapter lives only under `kernel/differential/signing/` and links into no production binary. U2 is closed |
+| `9c90680` | CB-2 | The four S5 scalar-boundary rows (fixture groups V3–V6) measured against the actual C++ backend, with negative controls; Rust verdicts re-derived by the committed oracle. §19.1's analytic C++ column is now a measured one |
+| `a7e9fa6` | CB-3 | Upstream identity re-derivable from the repository: archive (2,436,784 B, SHA-256 `dd685546f9e717b9adde329acd5a4cd8083d40f710fdb0a603ee5a83f908132b`), detached signature (566 B, SHA-256 `c7eb14bbd67fe94b9ac4b556df6ae18aebb450092c836d05a6e13ea005fc7ac8`) and the public signing key vendored under `kernel/third_party/secp256k1/provenance/`; `scripts/gate-p2-10-provenance.ps1` re-derives them (sizes, hashes, pinned fingerprint `6A8F 9C26 6528 E25A EB1D 7731 C237 1D91 CB71 6EA7`, GOODSIG/VALIDSIG in a throwaway GnuPG home, 60/60 tree comparison) with exit code 0. The backend stays pinned at v0.8.0; nothing upgraded |
+| `e4e13d4` | CB-4 | The production integration of §20.2 |
+| (this commit) | CB-5 | The G2c decision of §20.5 and the documentation set it rest on |
+
+### 20.2 The production integration (CB-4)
+
+The decision: integrate the vendored libsecp256k1 as the C++ kernel's
+production verification backend, behind the unchanged `zk::SigVerifier` seam,
+verification only. `CRYPTO_BACKEND_DECISION.md` §11 had already authorised the
+acquisition path; §2 item 7 of `INTERFACE_CONTRACTS.md` had reserved the
+dependency; every §-7 acceptance condition of the brief was measured green
+before the commit. Implementation:
+
+- `zk::Secp256k1Verifier` (`kernel/include/zerocoin/secp256k1_verifier.h`,
+  `kernel/src/secp256k1_verifier.cpp`): the fail-closed order is null context →
+  null/empty DER → **the 33-byte compressed SEC1 gate (rule P-1) before any
+  curve arithmetic** → strict `secp256k1_ecdsa_signature_parse_der` →
+  `secp256k1_ec_pubkey_parse` (the library enforces the 02/03 tag set) →
+  `secp256k1_ecdsa_verify` (high-`s` rejected internally, no normalisation).
+  Contract items B1–B7 are discharged exactly as tabulated in
+  `INTERFACE_CONTRACTS.md` §3.5. No unsafe FFI exists anywhere: this is pure
+  in-process C++ calling the vendored C library.
+- Build: `zerocoin_kernel` enables C (C90) and compiles the three vendored
+  translation units into a static `secp256k1_vendored` target with upstream's
+  own parameterisation (§ P2.6 defines table), linked PRIVATE; third-party
+  warnings are not escalated, ZeroCoin warnings still are. The CMake header
+  comment records the dependency.
+- Differential harness: the experiment now compiles the **production TU**
+  itself, so the report's seam column is `zk::Secp256k1Verifier` and not a
+  quarantined look-alike. A test-only `zk::differential::RawBackendVerifier`
+  probe (differential tree only, never linked into `zerocoin_kernel`) exposes
+  the raw backend verdict so the report can label exactly where the P-1 gate is
+  load-bearing. The old quarantined adapter is deleted; verdicts are unchanged
+  at 121/121.
+- End-to-end tests: `kernel/tests/test_secp256k1.cpp` (seven tests) pins the
+  corpus P2PKH spend (accept; corrupted digest; the V2 high-`s` twin without
+  normalisation; the P-1 gate against V4's 65-byte and `0x05`-prefix keys;
+  truncated DER and a wrong-scalar bit flip) and two script-level spends
+  through `TxSigChecker` + `Secp256k1Verifier` (`ScriptError::None`; corrupted
+  signature → `EvalFalse`). The corpus constants were verified byte-for-byte
+  against `test/vectors/ledger/script.json` before the build.
+- Conformance: the runner gains the `p2pkh_spend` verb (16 total), and
+  `kernel/tools/p2_conformance.py` re-enables
+  `ledger.script.p2pkh_spend_accepted` — **22/22 replayed, corruption
+  self-check 22/22**, with only `ledger.sighash.signature_der` deferred, on
+  signing (C-52; the runner is verify-only).
+
+Rust is untouched and remains the differential reference and the only
+production signer; the shipped node still uses `k256`. Benchmarks were
+deliberately not run: the brief orders correctness gates first.
+
+### 20.3 What deliberately remains different (recorded limitations, not blockers)
+
+- **Two adapter-load-bearing rows** (`V4.uncompressed_65`,
+  `V4.hybrid_prefix_06`): the raw library accepts these key encodings and the
+  production seam rejects them before the curve is consulted. This is the P-1
+  contract working as specified (§16.4), now demonstrated against the
+  production class rather than the quarantined adapter. They must never be
+  cited as library-parity evidence.
+- **`signature_der` stays deferred in the conformance runner**: signing parity
+  was proven under CB-1 in the differential harness, but the runner itself has
+  no signing verb, and none may be added while C-52 keeps the kernel
+  verify-only. The deferral is a scope statement, not missing evidence.
+- **The shipped binary is unchanged.** G2c closure is about the C++ kernel's
+  readiness and the release gate's conditions; it transfers no semantic
+  authority (ownership lifecycle §) and no runtime component.
+
+### 20.4 Gates executed this milestone
+
+All fresh, newly named directories; every command's exit code captured from
+the child process, never from a pipeline side effect. Toolchain identical to
+§19.4 (CMake 4.4.3, g++ 16.2.0 MinGW-W64 UCRT, Ninja, cargo 1.99.1, Python
+3.15.0).
+
+| Stage | Command (abridged) | Observed | Exit |
+|---|---|---|---|
+| §3 DER parity | ctest over `kernel/differential` + the adapter's 28 checks | 28/28, ctest 2/2, consecutive runs byte-identical | **0** |
+| §4 S5 rows | differential runner over the extended fixture | V3–V6 verdicts measured; negative controls hold | **0** |
+| §5 provenance | `powershell -ExecutionPolicy Bypass -File scripts\gate-p2-10-provenance.ps1` | 5/5 checks: materials, record agreement, key identity, GOODSIG/VALIDSIG, 60/60 tree | **0** |
+| §6 matrix | `scripts\gate-p2-6.ps1 -BuildDir .build\p210-s6-kernel -DifferentialBuildDir .build\p210-s6-differential` | full gate incl. differential **117+4=121/121 match, none allowed** (log `.build\p210-s6-gate.log`) | **0** |
+| §7 integration | constant-verification script + fresh builds + `scripts\gate-p2-6.ps1 -BuildDir .build\p210-s7-gate-kernel -DifferentialBuildDir .build\p210-s7-gate-differential` | 16/16 hex constants byte-verified; kernel tests **115 run, 0 failed**; P2 **22/22 + corruption 22/22**; differential **121/121** (log `.build\p210-s7-gate.log`) | **0** |
+| §9 acceptance | `scripts\gate-p2-6.ps1 -BuildDir .build\p210-s9-kernel -DifferentialBuildDir .build\p210-s9-differential` at `e4e13d4` | identical summary (ledger `.build\p210-s9-evidence.txt`, log `.build\p210-s9-gate.log`) | **0** |
+| §11 confirmation | gate + provenance re-run at the final tree (dirs `p210-s11-*`) | summary identical to §9 (115/0, 28/28, 22/22 + corruption, 287/0, repro 3/3, **121/121**); provenance 5/5 checks incl. GOODSIG/VALIDSIG and 60/60 tree (ledger `.build\p210-s11-evidence.txt`, logs `.build\p210-s11-gate.log` / `.build\p210-s11-provenance.log`) | **0** / **0** |
+
+The §9 summary line, quoted for the record: kernel build ok (warnings are
+errors); kernel unit tests 115/0; g1 28/28; p2 22/22, corruption rejected; p0
+PASS 112 ANCHOR 5 SKIP 0 FAIL 0; rust suite 287 passed / 0 failed across 11
+targets; high_s 4; s5_boundary 7; differential reproducibility 3/3 objects
+identical; differential ctest 2/2; differential verdicts 121/121, none allowed.
+The §11 confirmation repeated this summary identically at the final tree and is
+the first gate run that executed the updated banner line, which now reads:
+"G2c: not decided by this gate; differential parity is one condition of the
+decision recorded in docs/architecture/CRYPTO_BACKEND_SELECTION_AUDIT.md
+section 20.5".
+
+### 20.5 The G2c decision
+
+**G2c: GO** — every condition the register's CB-5 row and §19.5 enumerated is
+now evaluated with executed evidence:
+
+| Condition | Status |
+|---|---|
+| Signature-boundary cases measured on both implementations | **Met.** S5: 6/6 Rust pins (§19.1) + 4 measured C++ verdicts (V3–V6); high-`s` pinned on both sides (V2 group, `high_s_signature` 4/0, kernel test) |
+| All differential cases matching, no unexplained divergence | **Met.** 121/121 match, no allowed divergence; the two documented rows are the P-1 gate's load-bearing behaviour (§20.3), not divergences of the production path |
+| DER signing parity proven or deferral formally accepted | **Met — proven** (CB-1), byte-for-byte, consecutive-run stable |
+| Provenance at the accepted level | **Met.** Re-derivable from the repository alone (CB-3); TRUST_UNDEFINED on a host without a web of trust remains the documented, accepted state — the trust anchor is the pinned fingerprint |
+| Any production integration passing all fresh gates | **Met.** Three full-gate runs with the integration in place (§7, §9, §11), all exit 0, plus the provenance gate |
+| No open consensus-sensitive regression | **Met.** Rust 287/0 (the wallet/transaction-vector owner passes unchanged), kernel 115/0, G1 28/28, P2 22/22 + corruption, P0 clean |
+| Documentation matching code | **Met.** `INTERFACE_CONTRACTS.md` §2/§3/§7, `COMPONENT_OWNERSHIP.md` §2/§3/§5, the register §6, and `CRYPTO_BACKEND_READINESS.md` §15 are updated in the same milestone |
+
+This supersedes §14's and §19.5's NO-GO verdicts, which were correct for their
+milestones and are closed by the evidence above. The gate script's printed
+"G2c" banner was a P2.6-era static string and is updated this milestone to
+point at this section instead of asserting a decision.
+
+### 20.6 Files changed and non-claims
+
+Code/tests (commit `e4e13d4`): `kernel/CMakeLists.txt`,
+`kernel/include/zerocoin/secp256k1_verifier.h`, `kernel/src/secp256k1_verifier.cpp`,
+`kernel/include/zerocoin/sighash.h` (doc comments),
+`kernel/tests/test_secp256k1.cpp`, `kernel/conformance/main.cpp`,
+`kernel/tools/p2_conformance.py`, `kernel/differential/CMakeLists.txt`,
+`kernel/differential/runner/main.cpp`, `kernel/differential/backend/raw_backend_verifier.{h,cpp}`
+(new), `kernel/differential/backend/secp256k1_verifier.{h,cpp}` (deleted),
+`kernel/third_party/secp256k1/ORIGIN.md` (status).
+
+Earlier P2.10 commits: the differential signing adapter (`046a5c7`), the S5
+fixture rows (`9c90680`), the provenance materials and gate (`a7e9fa6`), the
+register (`3bb0062`).
+
+Documents (this commit): this section, `CRYPTO_BACKEND_READINESS.md` §15,
+`CRYPTO_BLOCKER_REGISTER.md` §6, `INTERFACE_CONTRACTS.md` §2/§3/§7,
+`COMPONENT_OWNERSHIP.md` §2/§3/§5, `scripts/gate-p2-6.ps1` (banner line only).
+
+Explicitly **not** claimed: any change to the shipped node binary or its
+dependencies; any production signing capability (C-52 stands); benchmark
+numbers (none were run); multi-platform reproducibility beyond the recorded
+Windows/MinGW toolchain; semantic-authority transfer of any kind; that P3 has
+begun. The two §20.3 limitations are permanent records, to be cited wherever
+the differential matrix is.
+
+### 20.7 Stop point
+
+P2.10 is the last planned P2 milestone. No P3 work (blocks, difficulty, PoW,
+rewards), no Go networking, and no unrelated feature development was performed
+or started. The next milestone decision belongs to the maintainer, informed by
+`MIGRATION_ROADMAP.md` as updated by its P2.6–P2.9 addenda and this section.

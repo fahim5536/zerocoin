@@ -145,3 +145,27 @@ Recorded so the register is complete; none is cryptographic and none gates G2c:
   `COMPONENT_OWNERSHIP.md` §2's "Blocked" ECDSA row needs a pointer to this
   register and to the P2.10 outcome; `CPP_PORT_REQUIREMENTS.md`'s P1 status
   line is historical framing (the requirement IDs remain normative labels).
+
+---
+
+## 6. P2.10 closing status updates (final dispositions)
+
+Recorded at the end of P2.10 as the header promises; the §2 statuses above
+remain the verified entry state of the milestone, not its outcome. Commit
+chain: `3bb0062` (this register, §1–§2), `046a5c7` (CB-1), `9c90680` (CB-2),
+`a7e9fa6` (CB-3), `e4e13d4` (CB-4), plus the documentation commit that closes
+CB-5.
+
+| Blocker | Disposition | Evidence |
+|---|---|---|
+| CB-1 | **RESOLVED** — DER signing parity proven with the test-only C++ adapter, exactly the option (a) this row scoped | Commit `046a5c7`: a differential-tree-only adapter (`secp256k1_ecdsa_sign`, RFC 6979 nonce, SHA-256, fixed non-secret scalar 1) reproduces the committed 71-byte low-S DER byte-for-byte; 28/28 checks green across consecutive runs; ctest 2/2. The adapter target exists only under `kernel/differential/` and is never linked into a production binary; risk U2 is closed |
+| CB-2 | **RESOLVED** — the four S5 scalar-boundary verdicts are measured on the C++ backend | Commit `9c90680`: fixture groups V3–V6 constructed with the sanctioned chosen-`s` method and executed through the production-facing wrapper, with negative controls; `s5_boundary_probes` 7/7 and the differential matrix re-run in every later gate |
+| CB-3 | **RESOLVED** — provenance reproducible from the repository | Commit `a7e9fa6`: the pinned archive (2,436,784 B, SHA-256 `dd685546…132b`), the detached signature (566 B, SHA-256 `c7eb14bb…7ac8`) and the public signing key are vendored under `kernel/third_party/secp256k1/provenance/`; `scripts/gate-p2-10-provenance.ps1` re-derives upstream identity — sizes, hashes, key fingerprint, GOODSIG/VALIDSIG in an isolated throwaway GnuPG home (TRUST_UNDEFINED expected), and a 60/60 byte-for-byte tree comparison — with exit code 0. No backend upgrade |
+| CB-4 | **RESOLVED** — the backend is in the production verification path of the C++ kernel | Commit `e4e13d4`: `zk::Secp256k1Verifier` linked PRIVATE into `zerocoin_kernel`, reachable from `TxSigChecker` and nothing else; every acceptance condition held — measured S5 on both implementations, zero unexplained divergences (two documented adapter-load-bearing rows), provenance closed, versioned interface unchanged, fail-closed behaviour, no unsafe FFI, Rust retained as differential reference, end-to-end script and transaction verification tests, Rust suite 287/0 re-confirming wallet/transaction-vector compatibility. Benchmarks deliberately not run (correctness first) |
+| CB-5 | **CLOSED — G2c: GO** | The P2.10 §11 decision record (`CRYPTO_BACKEND_SELECTION_AUDIT.md` §20.5, mirrored in `CRYPTO_BACKEND_READINESS.md` §15): every GO condition of §2 CB-5 evaluated with executed evidence. Recorded limitations, not open blockers: the two adapter-load-bearing rows (contract vs raw library), and the conformance runner's `signature_der` deferral (the runner is verify-only; signing parity itself was proven under CB-1). The shipped node remains Rust/k256; G2c closure changes no shipped binary and transfers no semantic authority |
+
+§3 non-defects, row 2 status: the verification deferral
+`ledger.script.p2pkh_spend_accepted` re-enabled in P2.10 §7 — the P2 wrapper
+now replays **22/22** with only `ledger.sighash.signature_der` deferred
+(signing; C-52). Row 1 stands unchanged and must never be cited as
+library-parity evidence.

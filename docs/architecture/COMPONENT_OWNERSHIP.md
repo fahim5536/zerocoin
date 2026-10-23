@@ -49,7 +49,7 @@ file the phase produced or will produce; "—" means no C++ module exists yet.
 | `uint256` and compact targets | `src/consensus/uint256.rs` | `kernel/src/uint256.cpp` | P1 | Done; G1 vectors |
 | Script interpreter | `src/ledger/script.rs` | `kernel/src/script.cpp` | P2 | Done |
 | Sighash preimage and digest | `src/ledger/sighash.rs` | `kernel/src/sighash.cpp` | P2 | Done |
-| ECDSA verification, SEC1, DER | `src/crypto/secp256k1.rs` (`k256 0.13.4`) | **none** | P2 / G2c | **Blocked** — see `CRYPTO_BACKEND_DECISION.md` |
+| ECDSA verification, SEC1, DER | `src/crypto/secp256k1.rs` (`k256 0.13.4`) | `kernel/src/secp256k1_verifier.cpp` (vendored libsecp256k1 0.8.0, PRIVATE link) | P2 / G2c | Done in P2.10 — verification only, signing stays Rust/test-only; `CRYPTO_BACKEND_SELECTION_AUDIT.md` §20 |
 | Block header and Merkle root | `src/consensus/block.rs` | — | P3 | Not started |
 | Difficulty retarget | `src/consensus/difficulty.rs` | — | P3 | Not started |
 | Proof of work | `src/consensus/pow.rs` | — | P3 | Not started |
@@ -70,10 +70,13 @@ file the phase produced or will produce; "—" means no C++ module exists yet.
 | Session API | `src/session.rs` | — | P5 | Not started |
 | Mining pool | `src/pool.rs` | — | P6 (deferrable) | Not started |
 
-The C++ ECDSA row is the only one where the *owner exists* and the *derived
-implementation does not*. The kernel therefore exposes two abstract seams
-(`zk::SigChecker`, `zk::SigVerifier`) with no implementation and fails closed
-(`INTERFACE_CONTRACTS.md` §3). No signature-compatibility claim is made.
+The C++ ECDSA row was, until P2.10, the only one where the *owner exists* and
+the *derived implementation does not*. The kernel still exposes the two abstract
+seams (`zk::SigChecker`, `zk::SigVerifier`) and still fails closed when no
+verifier is supplied (`INTERFACE_CONTRACTS.md` §3), but the seam now has the
+approved implementation recorded in `INTERFACE_CONTRACTS.md` §3.5. The Rust
+owner remains the oracle and the only production signer; a C++ result never
+updates a vector.
 
 ### 2.2 Front-ends and platforms
 
@@ -94,9 +97,9 @@ consensus code.
 |---|---|---|---|
 | Golden vectors (`test/vectors/**`) | Python capture tooling: `test/harness/zro_vectors.py`, `run_vectors.py` | The bytes are generated from the Rust reference and pinned to `source_commit`; hand edits are forbidden | 117 cases (112 PASS, 5 ANCHOR) |
 | G1 conformance mapping | `kernel/tools/g1_conformance.py` | Owns case selection, provenance and exit code | 28 cases |
-| P2 conformance mapping | `kernel/tools/p2_conformance.py` | Owns the deferral list, provenance and corruption self-check | 21 cases + 2 deferred |
-| Conformance runner protocol | `kernel/conformance/main.cpp` | Owns the 15 verbs and `SUMMARY` output | Stable |
-| Build and gate | `kernel/CMakeLists.txt`, `scripts/gate-g1.ps1` | Exit code is the verdict (doc `03` §1 rule 5) | Green |
+| P2 conformance mapping | `kernel/tools/p2_conformance.py` | Owns the deferral list, provenance and corruption self-check | 22 cases + 1 deferred (signing) |
+| Conformance runner protocol | `kernel/conformance/main.cpp` | Owns the 16 verbs and `SUMMARY` output | Stable |
+| Build and gate | `kernel/CMakeLists.txt`, `scripts/gate-g1.ps1`, `scripts/gate-p2-6.ps1`, `scripts/gate-p2-10-provenance.ps1` | Exit code is the verdict (doc `03` §1 rule 5) | Green |
 | Rust dependency set | `Cargo.toml`, `Cargo.lock` | `k256 0.13.4` is the curve implementation actually shipped | Locked |
 | Architecture records | `docs/architecture/**` | This set; decisions are recorded here, not in chat | New |
 | Go services | — | No component exists; no owner until an ADR authorises one | Absent |
@@ -113,10 +116,13 @@ script is re-run, and the new `source_commit` is recorded. This is what keeps
 1. **No second consensus engine.** Go may not parse, validate or serialize
    blocks, transactions, scripts or sighashes. A Go service is a client of the
    node's RPC (`THREE_LANGUAGE_ARCHITECTURE.md` §7).
-2. **No in-tree elliptic-curve code.** The kernel may contain the hash ports
-   because they are pinned byte-for-byte by published vectors and were required
-   by P1. It may never contain field arithmetic, scalar arithmetic, point
-   decoding or ECDSA (doc `04` R9).
+2. **No hand-written elliptic-curve code.** The kernel may contain the hash
+   ports because they are pinned byte-for-byte by published vectors and were
+   required by P1. ZeroCoin source may never implement field arithmetic, scalar
+   arithmetic, point decoding or ECDSA (doc `04` R9). The single exception is
+   the pinned upstream libsecp256k1 release under `kernel/third_party/`,
+   acquired and integrated per `CRYPTO_BACKEND_DECISION.md`; no ZeroCoin-owned
+   file contains curve arithmetic.
 3. **No derived implementation as oracle.** A C++ result never updates a vector.
    A disagreement is a C++ defect until proven otherwise.
 4. **No consumer re-serialization.** If a component needs consensus bytes, it
@@ -153,14 +159,14 @@ the same change.
 
 | Gap | Consequence | Owner of the gap | Closing criterion |
 |---|---|---|---|
-| G2c: no C++ curve backend | `OP_CHECKSIG` cannot succeed in C++; two corpus cases deferred, for two different reasons | Kernel (seam) + maintainers (acquisition) | `CRYPTO_BACKEND_READINESS.md` §5 conditions, then the corrected decision-record §9 matrix |
+| G2c: no C++ curve backend | Closed in P2.10 — `OP_CHECKSIG` succeeds in C++ through the approved backend; one corpus case remains deferred (signing; the runner is verify-only) | Kernel (seam) + maintainers (acquisition) | Closed: `CRYPTO_BACKEND_SELECTION_AUDIT.md` §20, `CRYPTO_BACKEND_READINESS.md` §15 |
 | Go: nothing exists | No service layer; no risk yet | — | An approved ADR that names a service and its RPC dependency |
 | `kernel/` vs doc `03`'s proposed `cpp/` | Path in the proposal does not match the tree | Documentation | Recorded in `THREE_LANGUAGE_ARCHITECTURE.md` §9; no code move |
 | CMake floor 3.20 vs doc `03`'s ≥3.25 | The proposal is stricter than the build | Build engineering | Either raise the floor or amend doc `03`; recorded in `MIGRATION_ROADMAP.md` §8 |
-| Stale comment in `kernel/CMakeLists.txt` line 2 | Points at a non-existent filename | Documentation | Fixed with the next code change, not in a docs-only commit |
+| Stale comment in `kernel/CMakeLists.txt` line 2 | Points at a non-existent filename | Documentation | Closed in P2.10 §7 — the header comment was rewritten with the backend integration (commit `e4e13d4`) |
 
-None of these gaps changes a consensus rule. The first is the only one that
-blocks a phase.
+None of these gaps changes a consensus rule. The first used to be the only one
+that blocked a phase; it no longer blocks one (closed in P2.10).
 
 ---
 

@@ -1022,3 +1022,47 @@ production C++ backend*.
 13. The vendored provenance is re-verified as non-drift (all 60 vendored files
     match `SHA256SUMS`); upstream identity verification remains non-reproducible
     from the repository.
+
+---
+
+## 15. P2.10 addendum — blockers closed, backend integrated, G2c GO `[VERIFIED]`
+
+P2.10 closes the remaining cryptographic blockers and takes the G2c decision.
+The full trail is `CRYPTO_BACKEND_SELECTION_AUDIT.md` §20; this section records
+only what moves *this* document. Nothing in §2–§14 is rewritten; §14's closing
+paragraph ("the measured C++ acceptance of the four boundary probes remains
+future work — the audit's V-matrix rows V3–V6 stay open") is superseded by
+§15.1.
+
+### 15.1 Which readiness findings move
+
+| Condition (§13.3 / §5.1) | State after P2.10 |
+|---|---|
+| S5 closed or explicitly waived | **fully satisfied** — the four boundary probes are now measured on the C++ backend as fixture groups V3–V6 (negative controls included), alongside the 6/6 Rust pins |
+| separate decision for `signature_der` | **taken — parity proven**: the test-only C++ adapter (RFC 6979, SHA-256, fixed non-secret scalar 1) reproduces the committed 71-byte low-S DER byte-for-byte, consecutive-run stable, 28/28 checks; U2 closed. The conformance runner keeps the case deferred because the runner is verify-only (C-52), not because evidence is missing |
+| pinned tag, archive SHA-256, GPG signature | **closed** — archive, detached signature and public key vendored under `kernel/third_party/secp256k1/provenance/`; `scripts/gate-p2-10-provenance.ps1` re-derives upstream identity from the repository alone (pinned sizes/hashes/fingerprint, GOODSIG/VALIDSIG in a throwaway GnuPG home, 60/60 tree comparison), exit 0 |
+| production integration behind the seam | **done** — `zk::Secp256k1Verifier` linked PRIVATE into `zerocoin_kernel`; fresh gates green three times with the integration in place (audit §20.4) |
+
+### 15.2 Limitations after P2.10
+
+Items 1–11 stand except as §15.1 narrows them; items 12–13 of §14.3 are
+**closed** by this milestone. What remains on the record:
+
+14. The two differential rows `V4.uncompressed_65` and `V4.hybrid_prefix_06`
+    remain **adapter-load-bearing**: the raw library accepts those key
+    encodings; the production `Secp256k1Verifier` rejects them by rule P-1
+    before any curve arithmetic. They are a property of the contract, documented
+    so they are never cited as library-parity evidence.
+15. `signature_der` stays deferred **in the conformance runner** only — a
+    verify-only scope statement (C-52), with the parity evidence recorded under
+    CB-1.
+16. Benchmarks were not run; the integration closed on correctness gates alone,
+    per the brief's ordering.
+
+### 15.3 The G2c decision
+
+**G2c: GO** (audit §20.5). This supersedes §11's "D1 stands" for the conditions
+it enumerated: every D1 constituent is now measured, reproducible or integrated
+with executed evidence. The gate script's static NO-GO banner is replaced this
+milestone by a pointer to audit §20.5. As always: no shipped binary changes, no
+semantic-authority transfer, and no P3 work was started in P2.10.

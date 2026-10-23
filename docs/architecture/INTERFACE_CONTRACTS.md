@@ -46,16 +46,21 @@ These rules apply to every header under `kernel/include/zerocoin/`.
    to a limit is a consensus change and cannot be a local edit.
 6. **Warnings are errors** for every target, tests included
    (`kernel/CMakeLists.txt` lines 34–41).
-7. **No dependency.** `zerocoin_kernel` links no third-party library today; the
-   one approved future dependency is the curve backend
-   (`CRYPTO_BACKEND_DECISION.md`).
+7. **One approved dependency.** `zerocoin_kernel` links exactly one third-party
+   library: the pinned vendored libsecp256k1 v0.8.0 release
+   (`kernel/third_party/secp256k1/`), the curve backend approved by
+   `CRYPTO_BACKEND_DECISION.md` and integrated in P2.10 §7 behind
+   `zk::SigVerifier` (PRIVATE link, verification only). Any further dependency
+   requires a new decision record.
 
 ---
 
 ## 3. Signature verification contract
 
-This is the seam that G2c must fill. It is the only place where the kernel
-touches elliptic-curve verification, and it currently has no implementation.
+This is the seam that G2c gated. It is the only place where the kernel touches
+elliptic-curve verification. Since P2.10 it has exactly one approved
+implementation (§3.5); the interface itself is unchanged, and any further
+backend must implement the same methods under the same obligations.
 
 ### 3.1 The two interfaces
 
@@ -149,6 +154,41 @@ regression coverage that pins both verdicts.
 The seam is source-compatible if a new method is added with a default
 implementation; anything else is a breaking change and follows §12. Adding a
 backend must not change `SigChecker`, `TxSigChecker` or the script interpreter.
+
+### 3.5 The approved implementation (P2.10)
+
+`zk::Secp256k1Verifier` (`kernel/include/zerocoin/secp256k1_verifier.h`,
+`kernel/src/secp256k1_verifier.cpp`) is the `SigVerifier` implementation
+approved by `CRYPTO_BACKEND_DECISION.md` §11 and integrated in P2.10 §7. It
+wraps the vendored libsecp256k1 v0.8.0 (`secp256k1_vendored` target, PRIVATE
+link) and discharges the obligations exactly as follows:
+
+1. Fail closed on a null context, a null or empty DER buffer, and any public
+   key whose length is not 33 bytes — rule P-1's gate, applied **before any
+   curve arithmetic** (B1, B5).
+2. `secp256k1_ecdsa_signature_parse_der`: strict DER; non-minimal encodings and
+   trailing bytes are rejected by the library (B2).
+3. `secp256k1_ec_pubkey_parse`: the 02/03 tag set is enforced by the library
+   itself; a parsed key is a validated curve point (B1).
+4. `secp256k1_ecdsa_verify`: verifies over the digest as given and rejects a
+   high-`s` signature internally before the equation; no normalisation exists
+   anywhere in the wrapper (B3, B4).
+5. The context is created once (`SECP256K1_CONTEXT_NONE`) and never mutated;
+   verification is re-entrant and thread-safe for concurrent use (B6). No key
+   material is logged, copied or retained (B7).
+
+The class is `final`, non-copyable and non-movable; it never throws. A test-only
+raw probe (`zk::differential::RawBackendVerifier`, differential tree only)
+exposes the backend verdict without the P-1 gate so the differential report can
+show exactly where the gate is load-bearing; it is never linked into
+`zerocoin_kernel`.
+
+Measured evidence at integration time: the Rust/C++ differential matrix matches
+on all 121 cases with no allowed divergence (`kernel/tools/secp256k1_differential.py`),
+the four S5 scalar-boundary verdicts are measured on both implementations, and
+the seven `kernel/tests/test_secp256k1.cpp` tests pin the P-1 gate, the
+strict-DER behaviour, the high-S rejection, and two end-to-end P2PKH spends
+through `TxSigChecker`.
 
 ---
 
@@ -261,10 +301,15 @@ stdout:
 exit: 0 all cases passed | 1 any case failed | 2 usage, fixture or I/O error
 ```
 
-The 15 verbs: `sha256_utf8`, `sha256d_utf8`, `hash160_sec1`, `display_reversal`,
+The 16 verbs: `sha256_utf8`, `sha256d_utf8`, `hash160_sec1`, `display_reversal`,
 `varint_encode`, `tx_build`, `tx_roundtrip`, `tx_decode_error`, `compact`,
 `script_push_data`, `p2pkh_script_pubkey`, `p2pkh_script_sig`, `script_verify`,
-`sighash`, `sighash_distinct`.
+`sighash`, `sighash_distinct`, `p2pkh_spend`.
+
+`p2pkh_spend` (added in P2.10 §7) is the only verb that checks a real
+signature: it deserialises the transaction, derives the sighash for the bound
+input through the production `zk::Secp256k1Verifier`, and runs the script
+interpreter, so the corpus's accepted P2PKH spend is replayed end to end.
 
 ### 7.2 The wrappers
 
@@ -275,10 +320,10 @@ The 15 verbs: `sha256_utf8`, `sha256d_utf8`, `hash160_sec1`, `display_reversal`,
 2. fail if a case is missing, duplicated or mapped twice;
 3. fail if a **deferred** case is also mapped (the deferral list is explicit);
 4. run a **corruption self-check** where feasible, proving the comparison can
-   fail (P2 rejects 21/21 corrupted cases);
+   fail (P2 rejects 22/22 corrupted cases);
 5. exit non-zero if the runner reports any failure or if the counts disagree.
 
-The wrappers are the reason "21/21" means something. A wrapper change is a
+The wrappers are the reason "22/22" means something. A wrapper change is a
 change to the proof, and is reviewed as such.
 
 ### 7.3 The corpus

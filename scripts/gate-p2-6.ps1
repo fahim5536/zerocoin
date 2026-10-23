@@ -405,5 +405,5 @@ foreach ($result in $results) {
 }
 Write-Host ''
 Write-Host 'P2.6 gates: PASS (every step executed; no divergence allowance)' -ForegroundColor Green
-Write-Host 'G2c: NO-GO — differential parity is one G2c condition, not the whole gate; see docs/architecture/CRYPTO_BACKEND_SELECTION_AUDIT.md'
+Write-Host 'G2c: not decided by this gate; differential parity is one condition of the decision recorded in docs/architecture/CRYPTO_BACKEND_SELECTION_AUDIT.md section 20.5'
 exit 0
