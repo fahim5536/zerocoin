@@ -5,9 +5,14 @@ experiment only. It is **not** linked into `zerocoin_kernel`, **not** reachable
 from `TxSigChecker`, and **not** part of the production transaction-validation
 path.
 
-Every file in this directory except `ORIGIN.md` and `SHA256SUMS` is a byte-for-byte
-copy of the file of the same relative path in the upstream release archive
-listed below. Nothing was edited, patched, generated or reformatted.
+Every file in this directory except `ORIGIN.md`, `SHA256SUMS` and `provenance/`
+is a byte-for-byte copy of the file of the same relative path in the upstream
+release archive listed below. Nothing was edited, patched, generated or
+reformatted. `provenance/` holds the upstream verification materials
+themselves — the release archive, its detached signature, and the public
+verification key — preserved since P2.10 so the chain below can be re-derived
+from the repository alone (see `provenance/README.md` and
+`scripts/gate-p2-10-provenance.ps1`).
 
 ## 1. Upstream and release
 
@@ -75,6 +80,15 @@ verification attempt did **not** succeed.
 Host note: GnuPG 2.4.9 shipped with Git for Windows was used
 (`D:\Git\usr\bin\gpg.exe`). It needs an explicit `--keyboxd-program` on this host.
 
+Since P2.10 the three inputs of this verification are vendored at
+`provenance/` (archive, `.sig`, public key), and
+`scripts/gate-p2-10-provenance.ps1` re-derives the whole chain — pinned sizes
+and hashes, key fingerprint, `gpg --verify` in an isolated throwaway GnuPG
+home, and a byte-for-byte comparison of the vendored tree against the
+archive's inner tree — with exit code 0 as the standing evidence. The
+transcript above is the historical acquisition record, no longer the only
+proof.
+
 ## 3. Licence and attribution
 
 Upstream `COPYING` is the MIT licence, `Copyright (c) 2013 Pieter Wuille`. It is
@@ -126,6 +140,10 @@ release archive itself. Regenerate and compare with:
 cd kernel\third_party\secp256k1
 Get-Content SHA256SUMS
 ```
+
+Since P2.10 the comparison is a gate step rather than a manual procedure:
+`scripts/gate-p2-10-provenance.ps1` re-hashes the vendored tree against
+`SHA256SUMS` and byte-compares it with the archive's inner tree.
 
 Vendored: `COPYING`, `include/secp256k1.h`, `include/secp256k1_preallocated.h`,
 all `src/*.h` needed by the library, and the three `.c` files above — 60 files,

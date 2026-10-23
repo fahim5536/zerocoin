@@ -58,4 +58,4 @@ c9eff089d8cd7c5b3a843bf5ca1cc9d3fdac3a4a84b7d446e5a53e2bbd0d712a  src/secp256k1.
 2eda8afb246812b36e9761977c93ed75a95e1ccfbdab1c31ffba4986b937335e  src/selftest.h
 1ae020ca4feba019413b549de263e7c07c656fa1f9edd6b63cc563943ae4097b  src/util.h
 d47d4a58f40157ab2a298151f366c5ebec8f7a1e7aaba88e36b530b1c01584ca  src/util_local_visibility.h
-dd685546f9e717b9adde329acd5a4cd8083d40f710fdb0a603ee5a83f908132b  libsecp256k1-0.8.0.tar.gz  (upstream release archive, not vendored)
+dd685546f9e717b9adde329acd5a4cd8083d40f710fdb0a603ee5a83f908132b  libsecp256k1-0.8.0.tar.gz  (upstream release archive, vendored at provenance/libsecp256k1-0.8.0.tar.gz since P2.10)
