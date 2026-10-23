@@ -102,6 +102,29 @@ target_link_libraries(secp256k1_differential PRIVATE secp256k1_vendored)
 zerocoin_enable_warnings(secp256k1_differential)
 
 # ---------------------------------------------------------------------------
+# P2.10 test-only signing adapter: the RFC 6979 + DER surface the audit's
+# §19.2 prescribes, for the byte-for-byte parity check with the committed
+# `ledger.sighash.signature_der` corpus value (blocker CB-1).
+#
+# Like everything else in this project it is standalone: not part of
+# `zerocoin_kernel`, not reachable from any node binary, and built only here,
+# in the differential experiment tree. No production signing API exists here
+# and none is created.
+# ---------------------------------------------------------------------------
+add_executable(secp256k1_der_signing
+  "signing/secp256k1_signer.cpp"
+  "signing/main.cpp"
+)
+
+target_include_directories(secp256k1_der_signing PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/signing"
+)
+
+target_link_libraries(secp256k1_der_signing PRIVATE secp256k1_vendored)
+
+zerocoin_enable_warnings(secp256k1_der_signing)
+
+# ---------------------------------------------------------------------------
 # Vector-driven test. The fixture records the Rust verdict for every case; the
 # wrapper checks that the runner reproduced it and that no case was skipped.
 #
@@ -111,10 +134,20 @@ zerocoin_enable_warnings(secp256k1_differential)
 # wrapper still fails on a stale entry, which is the negative control that keeps
 # an allowance from outliving the divergence it was written for.
 # ---------------------------------------------------------------------------
+# `enable_testing()` is unconditional: the DER parity check registers without
+# Python, so a gate run always executes the signing fixture alongside the
+# differential vectors.
+enable_testing()
+
+# The DER parity check is pure C++: no wrapper, no fixture, no Python.
+add_test(
+  NAME kernel_secp256k1_der_signing_parity
+  COMMAND secp256k1_der_signing
+)
+
 find_package(Python3 COMPONENTS Interpreter QUIET)
 
 if(Python3_Interpreter_FOUND)
-  enable_testing()
   add_test(
     NAME kernel_secp256k1_differential
     COMMAND "${Python3_EXECUTABLE}"
