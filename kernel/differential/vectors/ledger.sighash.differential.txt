@@ -9,7 +9,7 @@ META format=zerocoin-differential-v1
 META backend=libsecp256k1-0.8.0
 META reference=zerocoin/src/crypto/secp256k1.rs
 META seam=zk::SigVerifier (33-byte compressed SEC1, strict DER)
-META cases=117
+META cases=121
 
 CASE V1.p2_corpus_low_s
 GROUP V1
@@ -1062,4 +1062,40 @@ DIGEST e0e7ce176c2aa8077378299f682baec23e02abc289b51fa1895b7cde9ce6a236
 DER 304502210096b22dddb2b93b4eb6a4a649ee126c4493a81855257b03758c5735a052ffee890220199b56aa206063c815ca731c2193c1a66d0da05f8045d7242145dba365dc3a4f
 PUBKEY 0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798
 NOTE single-bit flip of the digest
+END
+
+CASE V8.s5_boundary_s_equals_one
+GROUP V8
+RUST accept
+DIGEST 06cf75fe6da73cefb6cbb07a0762add5057d14a12bd9068b39d06d7913560a4b
+DER 3026022100f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9020101
+PUBKEY 0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798
+NOTE s = 1, the smallest low-S scalar. Chosen-s construction (d = 1, k = 3): equation-valid over the constructed digest, accepted by both.
+END
+
+CASE V8.s5_boundary_s_equals_n_minus_one
+GROUP V8
+RUST reject
+DIGEST 06cf75fe6da73cefb6cbb07a0762add5057d14a12bd9068b39d06d7913560a45
+DER 3046022100f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140
+PUBKEY 0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798
+NOTE s = n - 1, the largest representable scalar. Equation-valid over the constructed digest; only the half-order gate separates it from V8.s5_boundary_s_equals_one.
+END
+
+CASE V8.s5_boundary_s_equals_half_order
+GROUP V8
+RUST accept
+DIGEST 86cf75fe6da73cefb6cbb07a0762add462d48314837d56a919b99cbf7b712ae7
+DER 3045022100f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f902207fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0
+PUBKEY 0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798
+NOTE s = floor(n/2): the boundary itself sits on the low-S side, accepted.
+END
+
+CASE V8.s5_boundary_s_equals_half_order_plus_one
+GROUP V8
+RUST reject
+DIGEST 86cf75fe6da73cefb6cbb07a0762add462d48314837d56a919b99cbf7b712aea
+DER 3045022100f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f902207fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a1
+PUBKEY 0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798
+NOTE s = floor(n/2) + 1: the smallest high-S scalar. Equation-valid, rejected by the strict half-order gate alone.
 END

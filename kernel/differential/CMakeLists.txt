@@ -154,7 +154,7 @@ if(Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_SOURCE_DIR}/../tools/secp256k1_differential.py"
             --vectors "${CMAKE_CURRENT_SOURCE_DIR}/vectors/ledger.sighash.differential.txt"
             --runner "$<TARGET_FILE:secp256k1_differential>"
-            --expect-cases 117
+            --expect-cases 121
   )
 else()
   message(WARNING "Python3 not found: the differential vector test is not registered.")

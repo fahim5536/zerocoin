@@ -25,7 +25,7 @@ Usage:
   python kernel/tools/secp256k1_differential.py \
       --vectors kernel/differential/vectors/ledger.sighash.differential.txt \
       --runner .build/p26-differential/secp256k1_differential.exe \
-      --expect-cases 117
+      --expect-cases 121
 
 `--known-divergence` is normally absent. P2.8 closed the last allowance
 (`V4.prefix_05`), so every case must now match; the flag is retained because the

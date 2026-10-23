@@ -33,9 +33,10 @@
 
 use std::path::{Path, PathBuf};
 
-use k256::ecdsa::Signature as K256Signature;
+use k256::ecdsa::{hazmat, Signature as K256Signature};
 use k256::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
-use k256::{AffinePoint, EncodedPoint, Scalar};
+use k256::elliptic_curve::{ff::Field, ops::Reduce, scalar::IsHigh, ScalarPrimitive};
+use k256::{AffinePoint, EncodedPoint, FieldBytes, ProjectivePoint, Scalar, Secp256k1, U256};
 use zerocoin::crypto::hash::Hash256;
 use zerocoin::crypto::secp256k1::{
     PrivateKey, PublicKey, Signature, COMPRESSED_PUBKEY_LEN, SECRET_LEN,
@@ -829,6 +830,115 @@ fn build_cases() -> Vec<Case> {
         "single-bit flip of the digest",
     ));
 
+    // -- V8: S5 scalar boundary ------------------------------------------------
+    //
+    // The four S5 probes from `tests/s5_boundary_probes.rs`, replayed against
+    // the C++ backend. A boundary probe must present a signature that is
+    // genuinely ECDSA-valid for its intended verdict, so the rows use the §10
+    // test-only signer (docs/architecture/CRYPTO_BACKEND_SELECTION_AUDIT.md):
+    // fixed `d = 1` (the corpus `signature_der` key), fixed nonce `k = 3`, and
+    // `z' = z + k * (s_target - s) mod n`, which makes the equation yield
+    // `s_target` exactly. Every row proves equation validity over its
+    // constructed digest through the equation-only primitive, so a rejection
+    // can only be the half-order gate — the same strict rule
+    // `secp256k1_ecdsa_verify` enforces on the C++ side.
+    {
+        // The corpus key is scalar 1 (`ledger.sighash.signature_der`), so its
+        // public key is the generator G — the anchor tests/s5_boundary_probes.rs
+        // pins. The rows verify against this exact point.
+        let generator =
+            hex::decode("0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798")
+                .expect("even-length hex");
+        assert_eq!(
+            corpus.pubkey, generator,
+            "the corpus key is scalar 1, so its public key is the generator G"
+        );
+        let corpus_point = ProjectivePoint::from(
+            AffinePoint::from_encoded_point(
+                &EncodedPoint::from_bytes(&corpus.pubkey).expect("33-byte compressed SEC1"),
+            )
+            .expect("the corpus pubkey is a curve point"),
+        );
+
+        let z_bytes = FieldBytes::clone_from_slice(&corpus.digest);
+        let half = half_order();
+        let probes: [(&str, Scalar, bool, &str); 4] = [
+            (
+                "V8.s5_boundary_s_equals_one",
+                Scalar::ONE,
+                true,
+                "s = 1, the smallest low-S scalar. Chosen-s construction (d = 1, k = 3): \
+                 equation-valid over the constructed digest, accepted by both.",
+            ),
+            (
+                "V8.s5_boundary_s_equals_n_minus_one",
+                -Scalar::ONE,
+                false,
+                "s = n - 1, the largest representable scalar. Equation-valid over the \
+                 constructed digest; only the half-order gate separates it from \
+                 V8.s5_boundary_s_equals_one.",
+            ),
+            (
+                "V8.s5_boundary_s_equals_half_order",
+                half,
+                true,
+                "s = floor(n/2): the boundary itself sits on the low-S side, accepted.",
+            ),
+            (
+                "V8.s5_boundary_s_equals_half_order_plus_one",
+                half + Scalar::ONE,
+                false,
+                "s = floor(n/2) + 1: the smallest high-S scalar. Equation-valid, \
+                 rejected by the strict half-order gate alone.",
+            ),
+        ];
+        for (id, s_target, expected, note) in probes {
+            let (target_sig, z_prime_bytes) = chosen_s_signature(&s_target, &z_bytes);
+
+            // The half-order predicate is the rule under test, so the side of
+            // the boundary each target sits on is asserted before any verdict
+            // is recorded.
+            assert_eq!(
+                !bool::from(s_target.is_high()),
+                expected,
+                "{id}: the half-order predicate decides the expected verdict"
+            );
+
+            // The construction really carries s_target, and it is ECDSA-valid
+            // over z' — and only over z', which is the negative control that
+            // separates a boundary probe from a mere mutation of s.
+            let (_, s_actual) = target_sig.split_scalars();
+            assert_eq!(
+                s_actual.to_bytes(),
+                s_target.to_bytes(),
+                "{id}: the constructed signature carries the target scalar"
+            );
+            assert!(
+                hazmat::verify_prehashed(&corpus_point, &z_prime_bytes, &target_sig).is_ok(),
+                "{id}: the constructed signature is ECDSA-valid over its digest"
+            );
+            assert_ne!(
+                z_prime_bytes.as_slice(),
+                corpus.digest.as_slice(),
+                "{id}: the shifted digest differs from the corpus digest"
+            );
+            assert!(
+                hazmat::verify_prehashed(&corpus_point, &z_bytes, &target_sig).is_err(),
+                "{id}: over the original corpus digest the equation fails"
+            );
+
+            let digest: [u8; 32] = z_prime_bytes.as_slice().try_into().expect("32 bytes");
+            let der = target_sig.to_der().as_bytes().to_vec();
+            let case = Case::new("V8", id, &digest, &der, &corpus.pubkey, note);
+            assert_eq!(
+                case.verdict(),
+                expected,
+                "{id}: the seam verdict must match the S5 boundary expectation"
+            );
+            cases.push(case);
+        }
+    }
+
     cases
 }
 
@@ -836,6 +946,54 @@ fn scalar_bytes(value: u8) -> [u8; SECRET_LEN] {
     let mut bytes = [0u8; SECRET_LEN];
     bytes[SECRET_LEN - 1] = value;
     bytes
+}
+
+/// `floor(n/2) = (n - 1) / 2 = -1 * 2^-1` in the scalar field (n is odd), the
+/// boundary of the half-order predicate: low-S at and below, high-S above.
+fn half_order() -> Scalar {
+    let two_inv = Option::<Scalar>::from(Scalar::ONE.double().invert())
+        .expect("two is invertible modulo an odd prime order");
+    -two_inv
+}
+
+/// The P2.9 test-only signer, exactly as §10 of
+/// `docs/architecture/CRYPTO_BACKEND_SELECTION_AUDIT.md` sanctions and
+/// `tests/s5_boundary_probes.rs` uses: fixed `d = 1` (the corpus
+/// `signature_der` key) and nonce `k = 3` through `ecdsa::hazmat`
+/// `sign_prehashed` — no RFC 6979 derivation, no low-S normalisation, no
+/// entropy. It lives only in this integration-test target, so it cannot be
+/// linked into a node, and it emits only fixtures, so it is never a
+/// production signing path.
+///
+/// Given a target scalar and the digest to shift, it returns the signature
+/// `(r, s_target)` and the digest `z'` that makes it ECDSA-valid. Fixing `k`
+/// yields `r = x(k*G) mod n` and `s = k^-1 * (z + r*d) mod n`; choosing
+/// `z' = z + k*(s_target - s) mod n` makes the equation yield `s_target`.
+/// Both `z` and the emitted `z'` are below `n`, so the verifiers' modular
+/// reduction of the digest is the identity on both sides of the comparison.
+fn chosen_s_signature(s_target: &Scalar, z_bytes: &FieldBytes) -> (K256Signature, FieldBytes) {
+    let d = Scalar::ONE; // the corpus key: `signature_der` uses `scalar: 1`
+    let k = Scalar::ONE.double() + Scalar::ONE; // the fixed nonce k = 3
+
+    // `Scalar` is a projection the compiler treats as non-injective, so the
+    // curve parameter cannot be inferred from `d` alone; pin both generics.
+    let (sig, _recovery) = hazmat::sign_prehashed::<Secp256k1, Scalar>(&d, k, z_bytes)
+        .expect("k = 3 is invertible");
+    let (r, s) = sig.split_scalars();
+    let s = Scalar::from(ScalarPrimitive::from(&s));
+
+    let z = <Scalar as Reduce<U256>>::reduce_bytes(z_bytes);
+    let z_prime = z + k * (*s_target - s);
+    let z_prime_bytes = FieldBytes::clone_from_slice(&z_prime.to_bytes());
+
+    // `from_scalars` is generic over the curve and a bare byte array cannot
+    // pin it (many curves use 32-byte field elements); bind both sides to
+    // the concrete `FieldBytes<Secp256k1>` via `From<&NonZeroScalar>`.
+    let r_bytes = FieldBytes::from(&r);
+    let s_bytes = FieldBytes::clone_from_slice(&s_target.to_bytes());
+    let target_sig = K256Signature::from_scalars(r_bytes, s_bytes)
+        .expect("the four targets are non-zero scalars below n");
+    (target_sig, z_prime_bytes)
 }
 
 // ---------------------------------------------------------------------------
@@ -974,7 +1132,7 @@ fn differential_vectors_match_rust_reference() {
         );
     }
 
-    for group in ["V1", "V2", "V3", "V4", "V5", "V6", "V7"] {
+    for group in ["V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8"] {
         assert!(
             recorded.iter().any(|case| case.group == group),
             "group {group} has no cases"
@@ -1001,4 +1159,22 @@ fn differential_vectors_match_rust_reference() {
         .expect("twin row");
     assert_eq!(twin.der, high_s_twin(&corpus.der));
     assert!(!twin.rust_accept, "high-S is rejected by the reference");
+
+    // The S5 boundary rows carry the four canonical verdicts: both low-S
+    // scalars accept, both high-S scalars reject on the strict half-order rule.
+    for (id, expected) in [
+        ("V8.s5_boundary_s_equals_one", true),
+        ("V8.s5_boundary_s_equals_n_minus_one", false),
+        ("V8.s5_boundary_s_equals_half_order", true),
+        ("V8.s5_boundary_s_equals_half_order_plus_one", false),
+    ] {
+        let case = recorded
+            .iter()
+            .find(|case| case.id == id)
+            .unwrap_or_else(|| panic!("{id} missing"));
+        assert_eq!(
+            case.rust_accept, expected,
+            "{id} must carry its S5 boundary verdict"
+        );
+    }
 }

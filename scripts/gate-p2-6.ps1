@@ -63,7 +63,7 @@ $Toolchain     = '+stable-x86_64-pc-windows-gnu'
 # therefore unexplained and fails the gate. See
 # docs/consensus/PUBLIC_KEY_ENCODING_CONTRACT.md (rule P-1).
 $KnownDivergences = @()
-$ExpectedCases    = 117
+$ExpectedCases    = 121
 
 $BuildRoot = Join-Path $RepoRoot '.build'
 if ([string]::IsNullOrWhiteSpace($BuildDir)) {
