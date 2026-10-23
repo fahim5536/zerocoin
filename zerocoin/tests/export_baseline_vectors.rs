@@ -31,7 +31,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{json, Value};
 
 use zerocoin::address::{Address, AddressError};
-use zerocoin::consensus::block::{merkle_root, BlockHeader, BLOCK_VERSION};
+use zerocoin::consensus::block::{merkle_root, Block, BlockError, BlockHeader, BLOCK_VERSION};
 use zerocoin::consensus::difficulty::{
     compact_from_target, compact_to_target, hash_meets_target, next_difficulty, required_work,
     validate_bits, DifficultyError, DIFFICULTY_PARAMS,
@@ -60,7 +60,7 @@ use zerocoin::ledger::transaction::{
     write_varint, Outpoint, Transaction, TxDecodeError, TxIn, TxOut,
 };
 use zerocoin::ledger::utxo::{UtxoError, UtxoSet};
-use zerocoin::params::{ChainParams, REGTEST_CHAIN};
+use zerocoin::params::{ChainParams, DEVNET_CHAIN, MAINNET_CHAIN, REGTEST_CHAIN};
 
 /// The commit whose build inputs (`src/`, `Cargo.toml`, `Cargo.lock`, `build.rs`)
 /// produced every expected value in this corpus.
@@ -866,6 +866,565 @@ fn header_cases() -> Vec<Value> {
             "two duplication rounds: 5 -> 3 -> 2 -> 1",
         ),
     ]
+}
+
+// ---------------------------------------------------------------------------
+// Groups: chain.header_preimage and chain.header_identity (P3.1A)
+//
+// A different question from `chain.header` above. That group pins what the
+// shipped P0 corpus already said; these two record what the *current* encoder
+// and the *current* identity validator produce across a deliberate boundary
+// grid. They live in their own corpus root (`test/p31-vectors`) because the P0
+// manifest carries a single `source_commit` - 7cb9017 - that predates
+// `Block::validate_header_identity`. Stamping identity verdicts with it would
+// claim provenance that commit does not have, and re-stamping the manifest
+// would rewrite every historical fixture. The P0 corpus is left untouched.
+// ---------------------------------------------------------------------------
+
+/// `block::HEADER_TAG` is crate-private, so this integration test restates it.
+/// `preimage_case` proves the restatement still matches the reference: every
+/// emitted preimage must begin with these bytes and be `P31_PREIMAGE_LEN` long.
+const P31_HEADER_TAG: &[u8] = b"ZRO/header/v1\0";
+
+/// tag || version(4) || chain(4) || height(8) || prev(32) || merkle(32) ||
+/// timestamp(8) || bits(4) || engine(1). Derived from the field list, so the
+/// expected length moves with the layout instead of being copied from a doc.
+const P31_PREIMAGE_LEN: usize = P31_HEADER_TAG.len() + 4 + 4 + 8 + 32 + 32 + 8 + 4 + 1;
+
+/// The commit whose `zerocoin/` production code produced every value in this
+/// corpus. It is the P3.1 baseline and it contains both functions under test.
+const P31_SOURCE_COMMIT: &str = "2ea27f4a2f10f51a42814dfdfd312df94829500f";
+/// Where `BlockHeader::preimage` last changed. Between this commit and
+/// `P31_SOURCE_COMMIT` the only edit to `block.rs` extracts
+/// `validate_header_identity`, so the preimage bytes are the same at both.
+const P31_ENCODER_COMMIT: &str = "7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c";
+/// Where `Block::validate_header_identity` entered `zerocoin/src`. It did not
+/// exist at `P31_ENCODER_COMMIT`, so no fixture may cite that commit for it.
+const P31_VALIDATOR_COMMIT: &str = "b71d769be8357bcf10d768d915770125cf7f7c24";
+
+/// The header fields published as a case input. The same shape `chain.header`
+/// uses, so one reader can consume both corpora.
+fn header_input(header: &BlockHeader) -> Value {
+    json!({
+        "version": header.version,
+        "chain": header.chain,
+        "height": header.height,
+        "previous_hash_hex": hx(&header.previous_hash.0),
+        "merkle_root_hex": hx(&header.merkle_root.0),
+        "timestamp": header.timestamp,
+        "difficulty_bits": header.difficulty_bits,
+        "engine_id": header.engine_id,
+        "nonce": header.nonce,
+    })
+}
+
+/// The exhaustive `BlockError` variant name. A port must reproduce the variant,
+/// not merely "rejected".
+fn block_error_kind(error: &BlockError) -> &'static str {
+    match error {
+        BlockError::WrongChain { .. } => "WrongChain",
+        BlockError::BadHeight { .. } => "BadHeight",
+        BlockError::BadPreviousHash => "BadPreviousHash",
+        BlockError::RootMismatch => "RootMismatch",
+        BlockError::WrongEngine { .. } => "WrongEngine",
+        BlockError::BadDifficulty { .. } => "BadDifficulty",
+        BlockError::InsufficientProofOfWork => "InsufficientProofOfWork",
+        BlockError::TimestampTooOld { .. } => "TimestampTooOld",
+        BlockError::TimestampTooFarFuture { .. } => "TimestampTooFarFuture",
+        BlockError::NoTransactions => "NoTransactions",
+        BlockError::FirstNotCoinbase => "FirstNotCoinbase",
+        BlockError::DuplicateCoinbase => "DuplicateCoinbase",
+        BlockError::TooManyTransactions(_) => "TooManyTransactions",
+    }
+}
+
+/// The numeric payload of the two variants this validator can produce. Every
+/// other variant publishes `null` rather than a guessed shape.
+fn block_error_payload(error: &BlockError) -> Value {
+    match error {
+        BlockError::WrongChain { expected, found } => {
+            json!({"expected": expected, "found": found})
+        }
+        BlockError::BadHeight { expected, found } => {
+            json!({"expected": expected, "found": found})
+        }
+        _ => Value::Null,
+    }
+}
+
+/// The P3.1A envelope: the P0 envelope plus the two reference commits, so one
+/// file answers "which code produced this" without consulting the manifest.
+fn p31_envelope(group: &str, intent: &str, note: &str, cases: Vec<Value>) -> String {
+    let doc = json!({
+        "schema": "zro-baseline-vectors/1",
+        "group": group,
+        "intent": intent,
+        "note": note,
+        "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+        "source_commit": P31_SOURCE_COMMIT,
+        "provenance": "every expected value was produced by the shipping `zerocoin/` Rust code at `source_commit`; no value is transcribed from another implementation or written by hand",
+        "reference_commits": {
+            "encoder": P31_ENCODER_COMMIT,
+            "validator_introduced": P31_VALIDATOR_COMMIT,
+        },
+        "generator": "zerocoin/tests/export_baseline_vectors.rs (`p31_*` functions), added by the P3.1A commit that lands immediately after the baseline; a fixture cannot record the hash of the commit that contains it",
+        "case_count": cases.len(),
+        "cases": cases,
+    });
+    let mut text = serde_json::to_string_pretty(&doc).expect("reference document serialises");
+    text.push('\n');
+    text
+}
+
+/// One preimage case: the header goes in, the reference's own bytes come out.
+/// The length and tag assertions make the exporter fail loudly if the layout
+/// ever moves, so a stale expectation cannot be published silently.
+fn preimage_case(
+    id: &str,
+    intent: &str,
+    header: &BlockHeader,
+    with_tag: bool,
+    independent_check: &str,
+) -> Value {
+    let preimage = header.preimage();
+    assert_eq!(
+        preimage.len(),
+        P31_PREIMAGE_LEN,
+        "{id}: the reference preimage is no longer the frozen length"
+    );
+    assert!(
+        preimage.starts_with(P31_HEADER_TAG),
+        "{id}: the reference preimage no longer starts with the frozen tag"
+    );
+
+    let mut expected = json!({
+        "preimage_hex": hx(&preimage),
+        "preimage_len": preimage.len(),
+        "preimage_digest": hash256_json(&sha256d(&preimage)),
+    });
+    if with_tag {
+        // A slice of the real output, not a restated constant.
+        let tag = hx(&preimage[..P31_HEADER_TAG.len()]);
+        expected["tag_hex"] = Value::String(tag);
+    }
+
+    case(id, intent, header_input(header), expected, independent_check)
+}
+
+fn header_preimage_cases() -> Vec<Value> {
+    let canonical = header_at(1, 0);
+    let variant = |apply: &dyn Fn(&mut BlockHeader)| {
+        let mut header = canonical.clone();
+        apply(&mut header);
+        header
+    };
+    // Ascending then descending byte runs: a display-order reversal of either
+    // hash field reorders these bytes and the case fails.
+    let ascending: [u8; 32] = std::array::from_fn(|index| index as u8 + 1);
+    let descending: [u8; 32] = std::array::from_fn(|index| 32 - index as u8);
+    let mainnet = ChainParams::mainnet();
+    let devnet = ChainParams::devnet();
+
+    vec![
+        preimage_case(
+            "chain.header_preimage.regtest_h1",
+            "rule",
+            &canonical,
+            true,
+            "tag || version || chain || height || prev || merkle || time || bits || engine, 107 bytes",
+        ),
+        preimage_case(
+            "chain.header_preimage.nonce_excluded",
+            "rule",
+            &variant(&|header: &mut BlockHeader| header.nonce = 42),
+            false,
+            "the nonce is outside the preimage, so this hex must equal chain.header_preimage.regtest_h1 byte for byte",
+        ),
+        preimage_case(
+            "chain.header_preimage.u32_top_bit",
+            "oddity",
+            &variant(&|header: &mut BlockHeader| {
+                header.version = 0x8000_0000;
+                header.chain = 0x8000_0001;
+                header.difficulty_bits = 0x8000_0002;
+            }),
+            false,
+            "top bit set in all three u32 fields: a signed encoding turns these negative and changes the bytes",
+        ),
+        preimage_case(
+            "chain.header_preimage.u32_max",
+            "oddity",
+            &variant(&|header: &mut BlockHeader| {
+                header.version = u32::MAX;
+                header.chain = u32::MAX;
+                header.difficulty_bits = u32::MAX;
+            }),
+            false,
+            "u32::MAX in every u32 field: all four bytes are 0xff, little-endian",
+        ),
+        preimage_case(
+            "chain.header_preimage.u64_top_bit",
+            "oddity",
+            &variant(&|header: &mut BlockHeader| {
+                header.height = 0x8000_0000_0000_0000;
+                header.timestamp = 0x8000_0000_0000_0001;
+                header.nonce = 0x8000_0000_0000_0002;
+            }),
+            false,
+            "top bit set in the u64 fields: little-endian puts 0x00 at byte 7, not 0x80",
+        ),
+        preimage_case(
+            "chain.header_preimage.u64_max",
+            "oddity",
+            &variant(&|header: &mut BlockHeader| {
+                header.height = u64::MAX;
+                header.timestamp = u64::MAX;
+                header.nonce = u64::MAX;
+            }),
+            false,
+            "u64::MAX in every u64 field: eight 0xff bytes each",
+        ),
+        preimage_case(
+            "chain.header_preimage.engine_id_max",
+            "oddity",
+            &variant(&|header: &mut BlockHeader| header.engine_id = u8::MAX),
+            false,
+            "the engine id is one raw byte; 0xff must not widen or sign-extend",
+        ),
+        preimage_case(
+            "chain.header_preimage.mainnet_chain",
+            "rule",
+            &variant(&|header: &mut BlockHeader| {
+                header.chain = MAINNET_CHAIN.0;
+                header.height = 0;
+                header.previous_hash = Hash256::ZERO;
+                header.merkle_root = Hash256([0x55; 32]);
+                header.timestamp = zerocoin::params::GENESIS_TIMESTAMP;
+                header.difficulty_bits = mainnet.genesis_bits;
+                header.engine_id = mainnet.engine.id();
+            }),
+            false,
+            "a second configured chain id (mainnet) with its own engine id",
+        ),
+        preimage_case(
+            "chain.header_preimage.devnet_chain",
+            "rule",
+            &variant(&|header: &mut BlockHeader| {
+                header.chain = DEVNET_CHAIN.0;
+                header.height = 0;
+                header.previous_hash = Hash256::ZERO;
+                header.merkle_root = Hash256([0x66; 32]);
+                header.timestamp = zerocoin::params::GENESIS_TIMESTAMP;
+                header.difficulty_bits = devnet.genesis_bits;
+                header.engine_id = devnet.engine.id();
+            }),
+            false,
+            "a third configured chain id (devnet); the chain field is never normalised",
+        ),
+        preimage_case(
+            "chain.header_preimage.hash_bytes_raw_order",
+            "rule",
+            &variant(&|header: &mut BlockHeader| {
+                header.previous_hash = Hash256(ascending);
+                header.merkle_root = Hash256(descending);
+            }),
+            false,
+            "both hashes are copied in stored byte order; there is no display-order reversal and no length prefix",
+        ),
+    ]
+}
+
+/// One identity case: the verdict comes from the real
+/// `Block::validate_header_identity`, with an empty transaction list because the
+/// validator reads only the header.
+fn identity_case(
+    id: &str,
+    header: &BlockHeader,
+    expected_chain: u32,
+    expected_height: u64,
+    independent_check: &str,
+) -> Value {
+    let outcome = Block {
+        header: header.clone(),
+        transactions: Vec::new(),
+    }
+    .validate_header_identity(expected_chain, expected_height);
+
+    let expected = match &outcome {
+        Ok(()) => json!({"accepted": true, "error_kind": null, "error_payload": null}),
+        Err(error) => json!({
+            "accepted": false,
+            "error_kind": block_error_kind(error),
+            "error_payload": block_error_payload(error),
+        }),
+    };
+
+    case(
+        id,
+        "rule",
+        json!({
+            "header": header_input(header),
+            "expected_chain": expected_chain,
+            "expected_height": expected_height,
+        }),
+        expected,
+        independent_check,
+    )
+}
+
+fn header_identity_cases() -> Vec<Value> {
+    let at = |height: u64| header_at(height, 0);
+    let at_chain = |chain: u32, height: u64| {
+        let mut header = header_at(height, 0);
+        header.chain = chain;
+        header
+    };
+    // `header_at` derives the timestamp as `1_700_000_000 + height`, which
+    // overflows at u64::MAX, so the boundary header is built field by field.
+    let max_height = {
+        let mut header = header_at(0, 0);
+        header.height = u64::MAX;
+        header
+    };
+
+    vec![
+        identity_case(
+            "chain.header_identity.correct_chain_and_height",
+            &at(1),
+            REGTEST_CHAIN.0,
+            1,
+            "identity holds: the header names this chain and the height the caller expects next",
+        ),
+        identity_case(
+            "chain.header_identity.chain_mismatch_only",
+            &at_chain(MAINNET_CHAIN.0, 1),
+            REGTEST_CHAIN.0,
+            1,
+            "height agrees, chain does not: WrongChain carrying both u32 payloads",
+        ),
+        identity_case(
+            "chain.header_identity.height_mismatch_only",
+            &at(1),
+            REGTEST_CHAIN.0,
+            2,
+            "chain agrees, height does not: BadHeight carrying both u64 payloads",
+        ),
+        identity_case(
+            "chain.header_identity.both_wrong_precedence",
+            &at_chain(MAINNET_CHAIN.0, 1),
+            REGTEST_CHAIN.0,
+            2,
+            "both fields wrong: the chain test runs first, so WrongChain wins; this is the F-1 evidence at this layer",
+        ),
+        identity_case(
+            "chain.header_identity.height_zero_matches_zero",
+            &at(0),
+            REGTEST_CHAIN.0,
+            0,
+            "height 0 matches expected 0: this validator compares, it does not infer a valid height",
+        ),
+        identity_case(
+            "chain.header_identity.height_zero_versus_expected_one",
+            &at(0),
+            REGTEST_CHAIN.0,
+            1,
+            "genesis cannot stand in for height 1: BadHeight, not WrongChain",
+        ),
+        identity_case(
+            "chain.header_identity.height_above_expected",
+            &at(5),
+            REGTEST_CHAIN.0,
+            1,
+            "a height above the supplied expectation is BadHeight here; chain-tip and schedule behaviour is P4",
+        ),
+        identity_case(
+            "chain.header_identity.height_max_payload",
+            &max_height,
+            REGTEST_CHAIN.0,
+            1,
+            "the found payload keeps all 64 bits of u64::MAX",
+        ),
+        identity_case(
+            "chain.header_identity.chain_max_payload",
+            &at_chain(u32::MAX, 1),
+            REGTEST_CHAIN.0,
+            1,
+            "the found payload keeps all 32 bits of u32::MAX",
+        ),
+    ]
+}
+
+/// The P3.1A corpus, mirroring `corpus()` above: same `add!` shape, same
+/// manifest, same write-versus-compare protocol, different root.
+fn p31_corpus() -> Vec<(String, String)> {
+    let mut files: Vec<(String, String)> = Vec::new();
+    let mut counts: Vec<Value> = Vec::new();
+
+    macro_rules! add {
+        ($path:expr, $group:expr, $intent:expr, $note:expr, $cases:expr) => {{
+            let cases: Vec<Value> = $cases;
+            counts.push(json!({"path": $path, "group": $group, "cases": cases.len()}));
+            files.push(($path.to_string(), p31_envelope($group, $intent, $note, cases)));
+        }};
+    }
+
+    add!(
+        "chain/header_preimage.json",
+        "chain.header_preimage",
+        "rule",
+        "The 107-byte header preimage: tag, field order, little-endian integers, \
+         raw hash bytes, nonce exclusion and the u32/u64/engine_id boundaries.",
+        header_preimage_cases()
+    );
+    add!(
+        "chain/header_identity.json",
+        "chain.header_identity",
+        "rule",
+        "Block::validate_header_identity: chain-before-height precedence, the \
+         structured payloads of WrongChain and BadHeight, and heights that only \
+         look invalid outside their caller.",
+        header_identity_cases()
+    );
+
+    let manifest = json!({
+        "schema": "zro-baseline-vectors/1",
+        "phase": "P3.1A",
+        "description": "Rust reference vectors for the P3.1 header preimage encoder and the P3.1 header identity validator.",
+        "provenance": "every expected value was produced by the shipping `zerocoin/` Rust code at `source_commit`: `BlockHeader::preimage` (unchanged since `reference_commits.encoder`) and `Block::validate_header_identity` (`reference_commits.validator_introduced`); no value is transcribed from another implementation or written by hand",
+        "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+        "source_commit": P31_SOURCE_COMMIT,
+        "source_commit_rule": "the commit whose `zerocoin/` production code produced every value here; unlike the P0 corpus this is not the commit that introduced the exporter, so `generator` names the exporter separately",
+        "generator": "zerocoin/tests/export_baseline_vectors.rs, `p31_*` functions, added by the P3.1A commit that lands immediately after 2ea27f4a2f10f51a42814dfdfd312df94829500f; no fixture can record the hash of the commit that contains it",
+        "reference_commits": {
+            "encoder": P31_ENCODER_COMMIT,
+            "validator_introduced": P31_VALIDATOR_COMMIT,
+        },
+        "regenerate": "ZRO_VECTOR_WRITE=1 with the same command, then review the diff",
+        "independent_verifier": "none: test/harness/run_vectors.py dispatches by case-id namespace and registers no verifier for these groups, so the Rust exporter is the sole origin of every value",
+        "determinism": [
+            "no wall clock, RNG, wallet, data directory or network is used",
+            "every header is a literal field set; the only non-literal bytes are the two 32-byte hash fills",
+            "JSON object keys are emitted in sorted order by serde_json",
+        ],
+        "files": counts,
+        "total_cases": counts
+            .iter()
+            .map(|entry| entry["cases"].as_u64().unwrap_or(0))
+            .sum::<u64>(),
+        "notes": [
+            "Separate from test/vectors on purpose: the P0 manifest carries one `source_commit` (7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c) that predates `Block::validate_header_identity`, so re-stamping it for these cases would rewrite every historical fixture.",
+            "Only `BlockHeader::preimage` and `Block::validate_header_identity` are exercised. No decoder, no PoW engine, no Merkle tree and no chain state is involved.",
+            "`chain.header_identity.*` compares against the supplied expected height. It does not decide whether a height is valid for a chain tip, and it does not read the difficulty schedule; that ordering obligation belongs to `connect_block` in P4.",
+        ],
+    });
+    let mut text = serde_json::to_string_pretty(&manifest).expect("reference manifest serialises");
+    text.push('\n');
+    files.push(("manifest.json".to_string(), text));
+
+    files.sort_by(|left, right| left.0.cmp(&right.0));
+    files
+}
+
+fn p31_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("test")
+        .join("p31-vectors")
+}
+
+#[test]
+fn p31_vectors_match_the_committed_reference_corpus() {
+    let write = std::env::var("ZRO_VECTOR_WRITE")
+        .map(|value| value == "1")
+        .unwrap_or(false);
+    let root = p31_root();
+    let mut drift: Vec<String> = Vec::new();
+    let mut written = 0usize;
+
+    for (relative, text) in p31_corpus() {
+        let path = root.join(&relative);
+        if write {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).expect("reference directory is creatable");
+            }
+            fs::write(&path, text.as_bytes()).expect("reference vector is writable");
+            written += 1;
+        } else {
+            let committed = fs::read_to_string(&path).unwrap_or_else(|error| {
+                panic!(
+                    "missing reference vector {}: {error}\nrun with ZRO_VECTOR_WRITE=1 to regenerate",
+                    path.display()
+                )
+            });
+            if committed != text {
+                drift.push(relative);
+            }
+        }
+    }
+
+    if write {
+        println!("wrote {written} reference vector files under {}", root.display());
+    } else {
+        assert!(
+            drift.is_empty(),
+            "these reference vectors differ from the committed corpus: {drift:?}\n\
+             run with ZRO_VECTOR_WRITE=1 to regenerate, then review the diff"
+        );
+    }
+}
+
+#[test]
+fn p31_reference_fixtures_are_reproducible_and_pinned() {
+    let first = p31_corpus();
+    let second = p31_corpus();
+    assert_eq!(first, second, "two generations must be byte-identical");
+    assert_eq!(first.len(), 3, "two groups plus the manifest");
+
+    // Nonce exclusion: the same header mined with a different nonce emits the
+    // same preimage bytes, because the engine appends the nonce itself.
+    assert_eq!(
+        header_at(1, 0).preimage(),
+        header_at(1, 42).preimage(),
+        "the nonce must not enter the preimage"
+    );
+
+    // Precedence: a header wrong in both fields must report the chain first.
+    let both_wrong = Block {
+        header: header_at(1, 0),
+        transactions: Vec::new(),
+    };
+    assert!(
+        matches!(
+            both_wrong.validate_header_identity(MAINNET_CHAIN.0, 2),
+            Err(BlockError::WrongChain { expected, found })
+                if expected == MAINNET_CHAIN.0 && found == REGTEST_CHAIN.0
+        ),
+        "a header wrong in chain and height must report WrongChain"
+    );
+
+    // A top-bit u32 must survive as unsigned little-endian bytes.
+    let mut top_bit = header_at(0, 0);
+    top_bit.version = 0x8000_0000;
+    let bytes = top_bit.preimage();
+    assert_eq!(
+        &bytes[P31_HEADER_TAG.len()..P31_HEADER_TAG.len() + 4],
+        &0x8000_0000u32.to_le_bytes(),
+        "the version field must be unsigned little-endian"
+    );
+
+    // Every published preimage is the frozen length and carries the frozen tag.
+    for value in header_preimage_cases() {
+        let expected = &value["expected"];
+        let hex = expected["preimage_hex"].as_str().expect("preimage_hex");
+        assert_eq!(hex.len(), P31_PREIMAGE_LEN * 2, "{}", value["id"]);
+        assert!(hex.starts_with(&hx(P31_HEADER_TAG)), "{}", value["id"]);
+        assert_eq!(
+            expected["preimage_len"].as_u64(),
+            Some(P31_PREIMAGE_LEN as u64),
+            "{}",
+            value["id"]
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------

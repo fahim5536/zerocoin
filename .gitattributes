@@ -4,3 +4,4 @@
 # comparison would fail, so line endings are pinned here. Every vector file is
 # generated with LF only.
 test/vectors/** text eol=lf
+test/p31-vectors/** text eol=lf

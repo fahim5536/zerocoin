@@ -1,0 +1,39 @@
+{
+  "description": "Rust reference vectors for the P3.1 header preimage encoder and the P3.1 header identity validator.",
+  "determinism": [
+    "no wall clock, RNG, wallet, data directory or network is used",
+    "every header is a literal field set; the only non-literal bytes are the two 32-byte hash fills",
+    "JSON object keys are emitted in sorted order by serde_json"
+  ],
+  "files": [
+    {
+      "cases": 10,
+      "group": "chain.header_preimage",
+      "path": "chain/header_preimage.json"
+    },
+    {
+      "cases": 9,
+      "group": "chain.header_identity",
+      "path": "chain/header_identity.json"
+    }
+  ],
+  "generator": "zerocoin/tests/export_baseline_vectors.rs, `p31_*` functions, added by the P3.1A commit that lands immediately after 2ea27f4a2f10f51a42814dfdfd312df94829500f; no fixture can record the hash of the commit that contains it",
+  "independent_verifier": "none: test/harness/run_vectors.py dispatches by case-id namespace and registers no verifier for these groups, so the Rust exporter is the sole origin of every value",
+  "notes": [
+    "Separate from test/vectors on purpose: the P0 manifest carries one `source_commit` (7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c) that predates `Block::validate_header_identity`, so re-stamping it for these cases would rewrite every historical fixture.",
+    "Only `BlockHeader::preimage` and `Block::validate_header_identity` are exercised. No decoder, no PoW engine, no Merkle tree and no chain state is involved.",
+    "`chain.header_identity.*` compares against the supplied expected height. It does not decide whether a height is valid for a chain tip, and it does not read the difficulty schedule; that ordering obligation belongs to `connect_block` in P4."
+  ],
+  "phase": "P3.1A",
+  "provenance": "every expected value was produced by the shipping `zerocoin/` Rust code at `source_commit`: `BlockHeader::preimage` (unchanged since `reference_commits.encoder`) and `Block::validate_header_identity` (`reference_commits.validator_introduced`); no value is transcribed from another implementation or written by hand",
+  "reference_commits": {
+    "encoder": "7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c",
+    "validator_introduced": "b71d769be8357bcf10d768d915770125cf7f7c24"
+  },
+  "regenerate": "ZRO_VECTOR_WRITE=1 with the same command, then review the diff",
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+  "source_commit": "2ea27f4a2f10f51a42814dfdfd312df94829500f",
+  "source_commit_rule": "the commit whose `zerocoin/` production code produced every value here; unlike the P0 corpus this is not the commit that introduced the exporter, so `generator` names the exporter separately",
+  "total_cases": 19
+}

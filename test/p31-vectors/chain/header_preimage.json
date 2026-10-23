@@ -1,0 +1,258 @@
+{
+  "case_count": 10,
+  "cases": [
+    {
+      "expected": {
+        "preimage_digest": {
+          "display_hex": "1c0b9722fff9de908dfa84eb502af4fe939504948789064441b33cfdadb3b1b3",
+          "internal_hex": "b3b1b3adfd3cb3414406898794049593fef42a50eb84fa8d90def9ff22970b1c"
+        },
+        "preimage_hex": "5a524f2f6865616465722f76310001000000004f525a01000000000000003333333333333333333333333333333333333333333333333333333333333333444444444444444444444444444444444444444444444444444444444444444401f1536500000000ffff7f2000",
+        "preimage_len": 107,
+        "tag_hex": "5a524f2f6865616465722f763100"
+      },
+      "id": "chain.header_preimage.regtest_h1",
+      "independent_check": "tag || version || chain || height || prev || merkle || time || bits || engine, 107 bytes",
+      "input": {
+        "chain": 1515343616,
+        "difficulty_bits": 545259519,
+        "engine_id": 0,
+        "height": 1,
+        "merkle_root_hex": "4444444444444444444444444444444444444444444444444444444444444444",
+        "nonce": 0,
+        "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+        "timestamp": 1700000001,
+        "version": 1
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "preimage_digest": {
+          "display_hex": "1c0b9722fff9de908dfa84eb502af4fe939504948789064441b33cfdadb3b1b3",
+          "internal_hex": "b3b1b3adfd3cb3414406898794049593fef42a50eb84fa8d90def9ff22970b1c"
+        },
+        "preimage_hex": "5a524f2f6865616465722f76310001000000004f525a01000000000000003333333333333333333333333333333333333333333333333333333333333333444444444444444444444444444444444444444444444444444444444444444401f1536500000000ffff7f2000",
+        "preimage_len": 107
+      },
+      "id": "chain.header_preimage.nonce_excluded",
+      "independent_check": "the nonce is outside the preimage, so this hex must equal chain.header_preimage.regtest_h1 byte for byte",
+      "input": {
+        "chain": 1515343616,
+        "difficulty_bits": 545259519,
+        "engine_id": 0,
+        "height": 1,
+        "merkle_root_hex": "4444444444444444444444444444444444444444444444444444444444444444",
+        "nonce": 42,
+        "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+        "timestamp": 1700000001,
+        "version": 1
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "preimage_digest": {
+          "display_hex": "ca05427c2ed2360befdb8c30305d122f65140c73af5e51d3b890689bb31f1537",
+          "internal_hex": "37151fb39b6890b8d3515eaf730c14652f125d30308cdbef0b36d22e7c4205ca"
+        },
+        "preimage_hex": "5a524f2f6865616465722f763100000000800100008001000000000000003333333333333333333333333333333333333333333333333333333333333333444444444444444444444444444444444444444444444444444444444444444401f15365000000000200008000",
+        "preimage_len": 107
+      },
+      "id": "chain.header_preimage.u32_top_bit",
+      "independent_check": "top bit set in all three u32 fields: a signed encoding turns these negative and changes the bytes",
+      "input": {
+        "chain": 2147483649,
+        "difficulty_bits": 2147483650,
+        "engine_id": 0,
+        "height": 1,
+        "merkle_root_hex": "4444444444444444444444444444444444444444444444444444444444444444",
+        "nonce": 0,
+        "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+        "timestamp": 1700000001,
+        "version": 2147483648
+      },
+      "intent": "oddity"
+    },
+    {
+      "expected": {
+        "preimage_digest": {
+          "display_hex": "97b832e269f9eeb1524ebdc656f1208c5611c0c11659230a3de63af30ab7f27b",
+          "internal_hex": "7bf2b70af33ae63d0a235916c1c011568c20f156c6bd4e52b1eef969e232b897"
+        },
+        "preimage_hex": "5a524f2f6865616465722f763100ffffffffffffffff01000000000000003333333333333333333333333333333333333333333333333333333333333333444444444444444444444444444444444444444444444444444444444444444401f1536500000000ffffffff00",
+        "preimage_len": 107
+      },
+      "id": "chain.header_preimage.u32_max",
+      "independent_check": "u32::MAX in every u32 field: all four bytes are 0xff, little-endian",
+      "input": {
+        "chain": 4294967295,
+        "difficulty_bits": 4294967295,
+        "engine_id": 0,
+        "height": 1,
+        "merkle_root_hex": "4444444444444444444444444444444444444444444444444444444444444444",
+        "nonce": 0,
+        "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+        "timestamp": 1700000001,
+        "version": 4294967295
+      },
+      "intent": "oddity"
+    },
+    {
+      "expected": {
+        "preimage_digest": {
+          "display_hex": "75001da2deaf7bc30abc09f43b975dafa035d92f9143e0535b2328d9eb776b5c",
+          "internal_hex": "5c6b77ebd928235b53e043912fd935a0af5d973bf409bc0ac37bafdea21d0075"
+        },
+        "preimage_hex": "5a524f2f6865616465722f76310001000000004f525a0000000000000080333333333333333333333333333333333333333333333333333333333333333344444444444444444444444444444444444444444444444444444444444444440100000000000080ffff7f2000",
+        "preimage_len": 107
+      },
+      "id": "chain.header_preimage.u64_top_bit",
+      "independent_check": "top bit set in the u64 fields: little-endian puts 0x00 at byte 7, not 0x80",
+      "input": {
+        "chain": 1515343616,
+        "difficulty_bits": 545259519,
+        "engine_id": 0,
+        "height": 9223372036854775808,
+        "merkle_root_hex": "4444444444444444444444444444444444444444444444444444444444444444",
+        "nonce": 9223372036854775810,
+        "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+        "timestamp": 9223372036854775809,
+        "version": 1
+      },
+      "intent": "oddity"
+    },
+    {
+      "expected": {
+        "preimage_digest": {
+          "display_hex": "52ee1eb7dfb2e88ba1e6da0c9a63be7f9af3239195b8fdbdc02ff8ef821766d4",
+          "internal_hex": "d4661782eff82fc0bdfdb8959123f39a7fbe639a0cdae6a18be8b2dfb71eee52"
+        },
+        "preimage_hex": "5a524f2f6865616465722f76310001000000004f525affffffffffffffff33333333333333333333333333333333333333333333333333333333333333334444444444444444444444444444444444444444444444444444444444444444ffffffffffffffffffff7f2000",
+        "preimage_len": 107
+      },
+      "id": "chain.header_preimage.u64_max",
+      "independent_check": "u64::MAX in every u64 field: eight 0xff bytes each",
+      "input": {
+        "chain": 1515343616,
+        "difficulty_bits": 545259519,
+        "engine_id": 0,
+        "height": 18446744073709551615,
+        "merkle_root_hex": "4444444444444444444444444444444444444444444444444444444444444444",
+        "nonce": 18446744073709551615,
+        "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+        "timestamp": 18446744073709551615,
+        "version": 1
+      },
+      "intent": "oddity"
+    },
+    {
+      "expected": {
+        "preimage_digest": {
+          "display_hex": "ffe38b0369d8f7cb9a2efb054f8c0aaeea7e74354b34f25b07094abcde5ac56c",
+          "internal_hex": "6cc55adebc4a09075bf2344b35747eeaae0a8c4f05fb2e9acbf7d869038be3ff"
+        },
+        "preimage_hex": "5a524f2f6865616465722f76310001000000004f525a01000000000000003333333333333333333333333333333333333333333333333333333333333333444444444444444444444444444444444444444444444444444444444444444401f1536500000000ffff7f20ff",
+        "preimage_len": 107
+      },
+      "id": "chain.header_preimage.engine_id_max",
+      "independent_check": "the engine id is one raw byte; 0xff must not widen or sign-extend",
+      "input": {
+        "chain": 1515343616,
+        "difficulty_bits": 545259519,
+        "engine_id": 255,
+        "height": 1,
+        "merkle_root_hex": "4444444444444444444444444444444444444444444444444444444444444444",
+        "nonce": 0,
+        "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+        "timestamp": 1700000001,
+        "version": 1
+      },
+      "intent": "oddity"
+    },
+    {
+      "expected": {
+        "preimage_digest": {
+          "display_hex": "5f0c6f05a99d5cfddccaa73caed6c518c7b259ff3811a60d26782e11a86a834d",
+          "internal_hex": "4d836aa8112e78260da61138ff59b2c718c5d6ae3ca7cadcfd5c9da9056f0c5f"
+        },
+        "preimage_hex": "5a524f2f6865616465722f76310001000000014f525a0000000000000000000000000000000000000000000000000000000000000000000000000000000055555555555555555555555555555555555555555555555555555555555555558085746700000000ffff001e01",
+        "preimage_len": 107
+      },
+      "id": "chain.header_preimage.mainnet_chain",
+      "independent_check": "a second configured chain id (mainnet) with its own engine id",
+      "input": {
+        "chain": 1515343617,
+        "difficulty_bits": 503382015,
+        "engine_id": 1,
+        "height": 0,
+        "merkle_root_hex": "5555555555555555555555555555555555555555555555555555555555555555",
+        "nonce": 0,
+        "previous_hash_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+        "timestamp": 1735689600,
+        "version": 1
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "preimage_digest": {
+          "display_hex": "2e86499f79ba1e84b85573d34871fbdcacef307f2a545993691f859de2811b93",
+          "internal_hex": "931b81e29d851f699359542a7f30efacdcfb7148d37355b8841eba799f49862e"
+        },
+        "preimage_hex": "5a524f2f6865616465722f76310001000000024f525a0000000000000000000000000000000000000000000000000000000000000000000000000000000066666666666666666666666666666666666666666666666666666666666666668085746700000000ffff7f2001",
+        "preimage_len": 107
+      },
+      "id": "chain.header_preimage.devnet_chain",
+      "independent_check": "a third configured chain id (devnet); the chain field is never normalised",
+      "input": {
+        "chain": 1515343618,
+        "difficulty_bits": 545259519,
+        "engine_id": 1,
+        "height": 0,
+        "merkle_root_hex": "6666666666666666666666666666666666666666666666666666666666666666",
+        "nonce": 0,
+        "previous_hash_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+        "timestamp": 1735689600,
+        "version": 1
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "preimage_digest": {
+          "display_hex": "9ce14af8e856aebd925bf35b00c05bb05bd55ea58668755fd16e1f8e8b019e43",
+          "internal_hex": "439e018b8e1f6ed15f756886a55ed55bb05bc0005bf35b92bdae56e8f84ae19c"
+        },
+        "preimage_hex": "5a524f2f6865616465722f76310001000000004f525a01000000000000000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20201f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020101f1536500000000ffff7f2000",
+        "preimage_len": 107
+      },
+      "id": "chain.header_preimage.hash_bytes_raw_order",
+      "independent_check": "both hashes are copied in stored byte order; there is no display-order reversal and no length prefix",
+      "input": {
+        "chain": 1515343616,
+        "difficulty_bits": 545259519,
+        "engine_id": 0,
+        "height": 1,
+        "merkle_root_hex": "201f1e1d1c1b1a191817161514131211100f0e0d0c0b0a090807060504030201",
+        "nonce": 0,
+        "previous_hash_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "timestamp": 1700000001,
+        "version": 1
+      },
+      "intent": "rule"
+    }
+  ],
+  "generator": "zerocoin/tests/export_baseline_vectors.rs (`p31_*` functions), added by the P3.1A commit that lands immediately after the baseline; a fixture cannot record the hash of the commit that contains it",
+  "group": "chain.header_preimage",
+  "intent": "rule",
+  "note": "The 107-byte header preimage: tag, field order, little-endian integers, raw hash bytes, nonce exclusion and the u32/u64/engine_id boundaries.",
+  "provenance": "every expected value was produced by the shipping `zerocoin/` Rust code at `source_commit`; no value is transcribed from another implementation or written by hand",
+  "reference_commits": {
+    "encoder": "7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c",
+    "validator_introduced": "b71d769be8357bcf10d768d915770125cf7f7c24"
+  },
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+  "source_commit": "2ea27f4a2f10f51a42814dfdfd312df94829500f"
+}

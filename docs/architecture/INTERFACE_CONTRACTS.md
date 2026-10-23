@@ -333,6 +333,18 @@ change to the proof, and is reviewed as such.
 no field is hand-written. Adding a vector without a Rust source commit is a
 defect.
 
+`test/p31-vectors/**` is a second corpus with the same schema and the same
+generator. It holds the P3.1A header reference groups (`chain.header_preimage`
+and `chain.header_identity`) because the P0 manifest carries a single
+`source_commit` (7cb9017) that predates `Block::validate_header_identity`;
+re-stamping it would rewrite every historical fixture. It is not a third kind of
+provenance: its manifest names `source_commit` (the code that produced the
+values) and `reference_commits` (where the encoder last changed, and where the
+validator entered `zerocoin/src`) separately, so no fixture claims a commit that
+did not contain the function it exercises. `run_vectors.py` does not read this
+root - it dispatches by case-id namespace and registers no verifier for these
+groups - so the Rust exporter is their sole origin and the P0 gate is unchanged.
+
 ---
 
 ## 8. RPC contract (C3, planned at P5)
