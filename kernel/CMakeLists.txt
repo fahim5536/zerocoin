@@ -68,6 +68,7 @@ add_library(zerocoin_kernel STATIC
   src/ripemd160.cpp
   src/uint256.cpp
   src/difficulty.cpp
+  src/header.cpp
   src/varint.cpp
   src/transaction.cpp
   src/script.cpp
@@ -99,6 +100,7 @@ add_executable(kernel_tests
   tests/test_hash.cpp
   tests/test_uint256.cpp
   tests/test_difficulty.cpp
+  tests/test_header.cpp
   tests/test_varint.cpp
   tests/test_transaction.cpp
   tests/test_script.cpp
@@ -141,4 +143,15 @@ add_test(NAME kernel_p3_conformance
   COMMAND ${PYTHON_EXECUTABLE}
           ${CMAKE_CURRENT_SOURCE_DIR}/tools/p3_conformance.py
           --vectors ${CMAKE_CURRENT_SOURCE_DIR}/../test/vectors
+          --runner $<TARGET_FILE:kernel_conformance>)
+
+# P3.1 replays the header preimage and identity cases the P3.1A corpus exports.
+# That corpus lives in test/p31-vectors, outside the test/vectors root the three
+# wrappers above read, so it gets its own --vectors argument and its own test
+# entry: nothing historical changes count, and gate-g1.ps1 and gate-p2-6.ps1
+# both run the whole ctest set, so this line is the only gate wiring needed.
+add_test(NAME kernel_p31_conformance
+  COMMAND ${PYTHON_EXECUTABLE}
+          ${CMAKE_CURRENT_SOURCE_DIR}/tools/p31_conformance.py
+          --vectors ${CMAKE_CURRENT_SOURCE_DIR}/../test/p31-vectors
           --runner $<TARGET_FILE:kernel_conformance>)

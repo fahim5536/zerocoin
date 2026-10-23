@@ -32,6 +32,23 @@ changes no code, no vector and no consensus rule.
 > single clause in the P2.11 addendum that all P3 rows are "Not started"; the other
 > seven P3 rows are unchanged, and F-1 still has no tested C++ counterpart.
 
+> **P3.1B addendum (2026-10-23).** The second P3 derived implementation is registered:
+> the **block-header slice** of the owner row `src/consensus/block.rs` — the 107-byte
+> header preimage (C-3) and `Block::validate_header_identity` — in
+> `kernel/src/header.cpp`. The gate that proves equivalence is
+> `kernel_p31_conformance` (`kernel/tools/p31_conformance.py`, which replays all 19
+> committed P3.1A cases in `test/p31-vectors/chain/` against `source_commit 2ea27f4a`)
+> plus 13 focused unit tests. Only that row's header half is covered: the **Merkle root
+> (C-5) is not implemented**, and neither is header hashing or the engine dispatch that
+> turns the preimage plus a nonce into the block identity (C-4); there is no decoder.
+> F-1 still has **no tested C++ counterpart** in the sense that mattered: what the kernel
+> reproduces is the identity rule and its chain-before-height precedence, not
+> `connect_block` refusing to read the difficulty schedule from an unvalidated height,
+> which is C-29's remaining obligation and belongs to P4. Ownership has not moved and no
+> phase moved: Rust is still the oracle, and the P0 corpus, the P3.1A fixtures and the
+> 121-case differential fixture were not touched. This addendum supersedes the clause in
+> the M-F1 addendum that the header row has no C++ module and no structured-error type.
+
 Related: `THREE_LANGUAGE_ARCHITECTURE.md` (what each language may do),
 `INTERFACE_CONTRACTS.md` (the interfaces owners expose),
 `MIGRATION_ROADMAP.md` (when derived implementations are removed), and
@@ -78,7 +95,7 @@ file the phase produced or will produce; "—" means no C++ module exists yet.
 | Script interpreter | `src/ledger/script.rs` | `kernel/src/script.cpp` | P2 | Done |
 | Sighash preimage and digest | `src/ledger/sighash.rs` | `kernel/src/sighash.cpp` | P2 | Done |
 | ECDSA verification, SEC1, DER | `src/crypto/secp256k1.rs` (`k256 0.13.4`) | `kernel/src/secp256k1_verifier.cpp` (vendored libsecp256k1 0.8.0, PRIVATE link) | P2 / G2c | Done in P2.10 — verification only, signing stays Rust/test-only; `CRYPTO_BACKEND_SELECTION_AUDIT.md` §20 |
-| Block header and Merkle root | `src/consensus/block.rs` | — | P3 | Not started |
+| Block header and Merkle root | `src/consensus/block.rs` | `kernel/src/header.cpp` | P3 | Header slice done in P3.1B: the 107-byte preimage (C-3) and `validate_header_identity`; Merkle root (C-5), header hashing and PoW dispatch (C-4) not started |
 | Difficulty retarget | `src/consensus/difficulty.rs` | `kernel/src/difficulty.cpp` | P3 | Done in P3.0; reproduces F-6 and F-11, diverges deliberately on F-7 |
 | Proof of work | `src/consensus/pow.rs` | — | P3 | Not started |
 | Subsidy, maturity, coinbase split | `src/consensus/reward.rs` | — | P3 | Not started |
@@ -127,7 +144,8 @@ consensus code.
 | G1 conformance mapping | `kernel/tools/g1_conformance.py` | Owns case selection, provenance and exit code | 28 cases |
 | P2 conformance mapping | `kernel/tools/p2_conformance.py` | Owns the deferral list, provenance and corruption self-check | 22 cases + 1 deferred (signing) |
 | P3 conformance mapping | `kernel/tools/p3_conformance.py` | Owns the P3 slice, the corpus classification and the corruption self-check | 18 cases (6 corpus cases) |
-| Conformance runner protocol | `kernel/conformance/main.cpp` | Owns the 21 verbs and `SUMMARY` output | Stable |
+| P3.1 header conformance mapping | `kernel/tools/p31_conformance.py` | Owns the P3.1A corpus slice, the header field mapping, the printed deferral and the corruption self-check | 19 cases (10 preimage + 9 identity) |
+| Conformance runner protocol | `kernel/conformance/main.cpp` | Owns the 23 verbs and `SUMMARY` output | Stable |
 | Build and gate | `kernel/CMakeLists.txt`, `scripts/gate-g1.ps1`, `scripts/gate-p2-6.ps1`, `scripts/gate-p2-10-provenance.ps1` | Exit code is the verdict (doc `03` §1 rule 5) | Green |
 | Rust dependency set | `Cargo.toml`, `Cargo.lock` | `k256 0.13.4` is the curve implementation actually shipped | Locked |
 | Architecture records | `docs/architecture/**` | This set; decisions are recorded here, not in chat | New |

@@ -37,6 +37,19 @@ is removed. P2.1 created no service and started no phase.
 > **deferred**, not identical: the typed height rejection (C-29) still needs a block
 > module.
 
+> **P3.1B addendum (2026-10-23).** P3 gains its second derived implementation, and it is
+> deliberately a slice: `kernel/src/header.cpp` ports the **107-byte header preimage**
+> (C-3) and **`Block::validate_header_identity`** from the owner `src/consensus/block.rs`,
+> with 13 focused tests and a new `kernel_p31_conformance` target that replays the 19
+> committed P3.1A cases in `test/p31-vectors/chain/` against `source_commit 2ea27f4a`.
+> Header hashing and PoW engine dispatch (C-4), the Merkle root (C-5), a header decoder,
+> reward, anchors, params and genesis are **not** delivered, and P4 (`connect_block`, chain
+> replay) was not pulled forward — so F-1 remains **deferred**, not identical: the kernel
+> now reproduces the identity rule and its chain-before-height precedence, but has no chain
+> that could read a difficulty schedule from an unvalidated height. No historical fixture,
+> vector or gate expectation changed; the new suite is one additive `add_test` entry in a
+> ctest set the existing gate scripts already run whole.
+
 Related: doc `03` (the original phase proposal), `COMPONENT_OWNERSHIP.md`,
 `THREE_LANGUAGE_ARCHITECTURE.md`, `INTERFACE_CONTRACTS.md`,
 `CRYPTO_BACKEND_DECISION.md`.
@@ -75,7 +88,7 @@ Nothing in this table is restated in prose elsewhere; the gate regenerates it
 | **P2** | Script, sighash, signature verification | G2 | **Partial** at this snapshot — script and sighash complete; ECDSA blocked as G2c. Closed in P2.10: 22/22 with one signing deferral |
 | **P2.1** | Backend investigation, three-language architecture | none (documentation) | **Complete in this change** |
 | **P2.2–P2.10** | Backend evidence, provenance, integration, conformance, gate closure | G2 | **Complete** — CB-1…CB-4 RESOLVED, CB-5 CLOSED; G2c: GO (`CRYPTO_BLOCKER_REGISTER.md` §6) |
-| **P3** | Header, Merkle, difficulty, PoW, reward, anchors, params, genesis | G3 | In progress — P3.0 delivered difficulty (1 of 8); seven rows remain |
+| **P3** | Header, Merkle, difficulty, PoW, reward, anchors, params, genesis | G3 | In progress — P3.0 delivered difficulty; P3.1B delivered the header preimage and identity rule only (Merkle, PoW, reward, anchors, params, genesis remain) |
 | **P4** | UTXO apply, `connect_block`, storage read | G4 | Not started |
 | **P5** | Storage write, P2P, RPC, wallet, keystore, CLI | G5 | Not started |
 | **P6** | Differential soak | G6 | Not started |

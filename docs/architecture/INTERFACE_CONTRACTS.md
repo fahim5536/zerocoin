@@ -301,20 +301,33 @@ stdout:
 exit: 0 all cases passed | 1 any case failed | 2 usage, fixture or I/O error
 ```
 
-The 16 verbs: `sha256_utf8`, `sha256d_utf8`, `hash160_sec1`, `display_reversal`,
+The 23 verbs: `sha256_utf8`, `sha256d_utf8`, `hash160_sec1`, `display_reversal`,
 `varint_encode`, `tx_build`, `tx_roundtrip`, `tx_decode_error`, `compact`,
 `script_push_data`, `p2pkh_script_pubkey`, `p2pkh_script_sig`, `script_verify`,
-`sighash`, `sighash_distinct`, `p2pkh_spend`.
+`sighash`, `sighash_distinct`, `p2pkh_spend`, `difficulty_params`,
+`difficulty_validate_bits`, `difficulty_hash_meets_target`,
+`difficulty_required_work`, `difficulty_next`, `header_preimage`,
+`header_identity`.
 
 `p2pkh_spend` (added in P2.10 §7) is the only verb that checks a real
 signature: it deserialises the transaction, derives the sighash for the bound
 input through the production `zk::Secp256k1Verifier`, and runs the script
 interpreter, so the corpus's accepted P2PKH spend is replayed end to end.
 
+`header_preimage` and `header_identity` (added in P3.1B) are the first verbs that
+take a whole block header. The encoder reads the nine header fields and returns
+the fixed 107-byte preimage as hex, its length, and the tag — the nonce is read
+so a malformed one is rejected, but it is never among the returned bytes, because
+appending it is the engine's job (C-4). The validator returns the verdict, the
+error kind, and only on a rejection the two unsigned `expected`/`found` payloads,
+so an acceptance case that grew a payload fails instead of matching a null.
+
 ### 7.2 The wrappers
 
-`kernel/tools/g1_conformance.py` and `p2_conformance.py` own the translation from
-`test/vectors/**` JSON to the fixture grammar. They must:
+`kernel/tools/g1_conformance.py`, `p2_conformance.py` and `p3_conformance.py` own
+the translation from `test/vectors/**` JSON to the fixture grammar;
+`kernel/tools/p31_conformance.py` owns the same translation for the header corpus
+in §7.3. They must:
 
 1. read `source_commit` from the corpus and print it, so a stale build is visible;
 2. fail if a case is missing, duplicated or mapped twice;
@@ -344,6 +357,12 @@ validator entered `zerocoin/src`) separately, so no fixture claims a commit that
 did not contain the function it exercises. `run_vectors.py` does not read this
 root - it dispatches by case-id namespace and registers no verifier for these
 groups - so the Rust exporter is their sole origin and the P0 gate is unchanged.
+Since P3.1B the corpus is executable rather than decorative:
+`kernel/tools/p31_conformance.py` replays every case in it through the runner and
+is registered as the `kernel_p31_conformance` ctest entry, which the existing
+gate scripts already pick up because they run the whole ctest set. Its one
+deferred expected key is `preimage_digest`, printed on every run: that value is a
+header hash, and header hashing is C-4, not this milestone.
 
 ---
 

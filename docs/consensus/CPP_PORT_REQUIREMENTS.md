@@ -62,6 +62,25 @@ byte vectors.)
 Overflow behavior MUST be explicit: `checked_*` → error, `saturating_*` → clamp,
 `wrapping_*` → modulo 2^N. (Verification: review + arithmetic boundary tests.)
 
+**Implementation status (P3.1B, 2026-10-23).** `kernel/src/header.cpp` implements C-3.
+`zk::header_preimage` returns the 107 bytes in a `std::array` whose length is the frozen
+`kHeaderPreimageSize`, so a wrong total is a compile error rather than a test failure, and
+every field is written byte by byte out of an unsigned value — no host byte order,
+no struct packing, no `memcpy` of a native integer (C-11) — at the offsets the P3.1A
+corpus pins: tag 0, `version` 14, `chain` 18, `height` 22, previous hash 30, merkle
+root 62, `timestamp` 94, `difficulty_bits` 102, `engine_id` 106. The two digests are
+copied in stored order, because display hex is not consensus bytes.
+`zk::validate_header_identity` reproduces the owner's first-failing rule and taxonomy
+(C-13, C-14): the chain id is tested before the height, and `WrongChain` carries two
+`uint32_t` payloads while `BadHeight` carries two `uint64_t`, so `u32::MAX` and
+`u64::MAX` keep all their bits (C-12). `kernel/tools/p31_conformance.py` replays all 19
+committed cases byte for byte, and `kernel/tests/test_header.cpp` pins what a fixture
+file cannot express — the high-bit and all-bits-set `u32`/`u64` encodings, `engine_id`
+at 0/1/255, and that five different nonces produce one identical preimage. C-4
+(`engine.hash(preimage, nonce)`) and C-5 (Merkle root) are **not** implemented, and
+there is no header decoder, so the encoder output is not yet the input of any
+acceptance path.
+
 ---
 
 ## 3. Validation outcome compatibility
@@ -169,6 +188,17 @@ and C-27, and both are exercised: `kernel/tools/p3_conformance.py` replays the
 pow limit), the clamp boundaries and the zero-before-limit order. C-28 and C-29 are still
 unimplemented: both are block/chain obligations and the kernel has no block or chain
 module, so the F-1 row in §10 keeps reading "deferred", never "identical".
+
+**Implementation status (P3.1B, 2026-10-23).** The kernel now has a block-header module, so
+the half of C-29 that lives inside a header — validate the identity and return the typed
+`BadHeight`, never an abort, a negative index or an out-of-bounds read — exists as
+`zk::validate_header_identity`, and its precedence is pinned twice: by the corpus case
+`chain.header_identity.both_wrong_precedence` and by the unit test
+`header_identity_chain_is_tested_before_height`. The rest of C-29 is still an obligation of
+the caller that does not exist yet: `connect_block` must run that check before `required_bits`
+can read the schedule, and the kernel has no chain module. C-28 and the schedule half of C-29
+therefore stay unimplemented, and the sentence above that says the kernel "has no block or
+chain module" is superseded only as to the block header.
 
 ---
 
@@ -324,6 +354,16 @@ implemented and cannot be tested: `kernel/CMakeLists.txt` builds only the primit
 translation units, and there is no block or chain module to hold such a test. Consequently
 C-29's obligation stands, the F-1 row above reads "deferred" rather than "identical", and
 nothing here changes a validity rule, a vector or a consensus parameter.
+
+**P3.1B note (2026-10-23).** The F-1 row's disposition is **unchanged**, and this note
+supersedes one clause of it only. The kernel does now have a block-header module with a
+structured error type, and the typed rejection with the owner's chain-before-height
+precedence is tested there, so F-1 is no longer literally "untestable" at that layer.
+What it still lacks is the chain: nothing in C++ reaches, refuses to reach, or is
+ordered around a difficulty-schedule lookup, which is the defect this row records.
+Criterion 4 of M-F1 — the matching `connect_block` negative test — is therefore still
+not met, the row above keeps reading "Deferred (untestable)", never "identical", and
+this milestone closes neither F-1 nor C-29 nor consensus parity.
 
 ---
 

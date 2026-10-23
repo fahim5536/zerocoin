@@ -210,6 +210,26 @@ hazard F-7 and a locally constructible oversized block (F-3); F-1's reachable pa
     fingerprint `6A8F9C266528E25AEB1D7731C2371D91CB716EA7`, 60/60 vendored files
     byte-identical.
 
+- **P3.1B record (2026-10-23) — header half of the port obligation delivered; criterion 4
+  still open.** Nothing in this milestone closes F-1.
+  - **What now exists in C++.** `kernel/src/header.cpp` gives the kernel the block-header
+    module and the structured error type the M-F1 limitation bullet above says it
+    lacked: `zk::BlockIdentityError` with `BlockErrorKind::{kNone, kWrongChain,
+    kBadHeight}` and the owner's chain-before-height order.
+    `kernel/tests/test_header.cpp` asserts the rejection **kind**, not the absence of a
+    crash, and `kernel/tools/p31_conformance.py` replays the committed corpus case
+    `chain.header_identity.both_wrong_precedence`, whose expected `WrongChain` payload is the
+    precedence evidence at this layer.
+  - **What that does not prove.** F-1 is a defect about `connect_block` reading
+    `required_bits(height)` — the difficulty schedule — before the height is validated. The
+    kernel still has no chain module, no schedule and no block acceptance path, so no C++
+    statement has been tested about the ordering of identity validation against a schedule
+    lookup. M-F1 criterion 4 is therefore **not met**, the differential exclusion of the
+    invalid-height class stands, and `CPP_PORT_REQUIREMENTS.md` §10 keeps the F-1 row reading
+    "Deferred (untestable)" rather than "identical".
+  - **Untouched.** No vector, fixture, corpus manifest or historical gate expectation changed;
+    the P0 117-case and differential 121-case artifacts still report the same counts as before.
+
 ### F-2 — block `version` is never validated
 
 - **Disposition: Confirmed.**

@@ -2,7 +2,9 @@
 // test/vectors/*.json by one of the tools/*_conformance.py wrappers, which also
 // check the runner's answers: this binary knows nothing about the Rust source
 // and nothing about JSON, so a passing run means the C++ kernel reproduced
-// bytes that the Rust reference produced.
+// bytes that the Rust reference produced. Since P3.1B the header corpus is
+// replayed the same way; it lives outside that root, in test/p31-vectors/chain/, and
+// tools/p31_conformance.py renders it.
 //
 // Fixture grammar (one directive per line, `value` is everything after the
 // first '=' so empty values are unambiguous):
@@ -35,6 +37,7 @@
 
 #include "zerocoin/difficulty.h"
 #include "zerocoin/hash.h"
+#include "zerocoin/header.h"
 #include "zerocoin/hex.h"
 #include "zerocoin/script.h"
 #include "zerocoin/secp256k1_verifier.h"
@@ -540,6 +543,68 @@ Produced op_difficulty_next(const Case& c) {
   };
 }
 
+// Reads the nine header fields the P3.1A corpus publishes for a header. The
+// prefix keeps the two operand shapes honest: `header_preimage` names the
+// fields bare, while `header_identity` nests them under `header.` so the
+// validator's own `expected_*` inputs can never be confused with the header
+// bytes being validated.
+zk::BlockHeader header_of(const Case& c, const std::string& prefix) {
+  zk::BlockHeader header{};
+  header.version = parse_u32(c.one(prefix + "version"), "version");
+  header.chain = parse_u32(c.one(prefix + "chain"), "chain");
+  header.height = parse_u64(c.one(prefix + "height"), "height");
+  header.previous_hash = hash256_of(c.one(prefix + "previous_hash_hex"), "previous_hash_hex");
+  header.merkle_root = hash256_of(c.one(prefix + "merkle_root_hex"), "merkle_root_hex");
+  header.timestamp = parse_u64(c.one(prefix + "timestamp"), "timestamp");
+  header.difficulty_bits = parse_u32(c.one(prefix + "difficulty_bits"), "difficulty_bits");
+  const std::string engine_text = c.one(prefix + "engine_id");
+  const std::uint64_t engine = parse_u64(engine_text, "engine_id");
+  if (engine > 0xffull) {
+    fail("engine_id: does not fit in 8 bits: " + engine_text);
+  }
+  header.engine_id = static_cast<std::uint8_t>(engine);
+  // Read, but by nothing that writes a byte: the reference's engine appends the
+  // nonce after the preimage, so the fixture can only pin its exclusion by
+  // publishing a second header that differs in the nonce alone.
+  header.nonce = parse_u64(c.one(prefix + "nonce"), "nonce");
+  return header;
+}
+
+Produced op_header_preimage(const Case& c) {
+  const std::array<std::uint8_t, zk::kHeaderPreimageSize> preimage =
+      zk::header_preimage(header_of(c, ""));
+  return {
+      {"preimage_hex", zk::to_hex(preimage.data(), preimage.size())},
+      {"preimage_len", std::to_string(preimage.size())},
+      {"tag_hex", zk::to_hex(zk::kHeaderTag, zk::kHeaderTagSize)},
+  };
+}
+
+Produced op_header_identity(const Case& c) {
+  const zk::BlockHeader header = header_of(c, "header.");
+  const std::uint32_t expected_chain = parse_u32(c.one("expected_chain"), "expected_chain");
+  const std::uint64_t expected_height = parse_u64(c.one("expected_height"), "expected_height");
+  const zk::BlockIdentityError error =
+      zk::validate_header_identity(header, expected_chain, expected_height);
+  Produced produced{
+      {"accepted", bool_text(error.ok())},
+      {"error_kind", zk::block_error_kind_name(error.kind)},
+      {"error_payload_present", bool_text(error.has_payload())},
+  };
+  // `Ok` carries no payload and the reference publishes null for it, so the
+  // runner withholds these keys instead of inventing a zero payload. A fixture
+  // that expected one then fails with "produced no value for", not a false
+  // equality.
+  if (error.kind == zk::BlockErrorKind::kWrongChain) {
+    produced["error_payload_expected"] = std::to_string(error.expected_chain);
+    produced["error_payload_found"] = std::to_string(error.found_chain);
+  } else if (error.kind == zk::BlockErrorKind::kBadHeight) {
+    produced["error_payload_expected"] = std::to_string(error.expected_height);
+    produced["error_payload_found"] = std::to_string(error.found_height);
+  }
+  return produced;
+}
+
 Produced execute(const Case& c) {
   if (c.op == "sha256_utf8") return op_sha256_utf8(c);
   if (c.op == "sha256d_utf8") return op_sha256d_utf8(c);
@@ -562,6 +627,8 @@ Produced execute(const Case& c) {
     if (c.op == "difficulty_hash_meets_target") return op_difficulty_hash_meets_target(c);
     if (c.op == "difficulty_required_work") return op_difficulty_required_work(c);
     if (c.op == "difficulty_next") return op_difficulty_next(c);
+  if (c.op == "header_preimage") return op_header_preimage(c);
+  if (c.op == "header_identity") return op_header_identity(c);
   fail("unknown OP: " + c.op);
 }
 
