@@ -1,0 +1,51 @@
+{
+  "contract": {
+    "byte_order": "digests stay in internal byte order; `display_hex` is a separate printing-only representation and is the reverse of `internal_hex`",
+    "empty_input": "sha256d over the 17-byte `ZRO/merkle:empty\\0` tag, not sha256d of an empty message",
+    "empty_tree_tag_bytes": 17,
+    "empty_tree_tag_hex": "5a524f2f6d65726b6c653a656d70747900",
+    "empty_tree_tag_hex_note": "a restatement of the crate-private tag, pinned by an assertion in `p32_reference_fixtures_are_reproducible_and_pinned` that the published empty root equals sha256d of exactly these bytes",
+    "internal_node": "sha256d(left_internal_bytes || right_internal_bytes) over exactly 64 bytes, with no node tag, prefix or separator",
+    "internal_node_input_bytes": 64,
+    "leaf_count_limit": "none: `merkle_root` is defined on any number of leaves. `MAX_BLOCK_TRANSACTIONS` is a block rule checked outside this function",
+    "leaf_order": "positional; the function does not sort, deduplicate, reverse or reinterpret digest bytes",
+    "leaf_width_bytes": 32,
+    "odd_level": "the final node is duplicated at every affected level, never promoted unchanged",
+    "single_leaf": "the leaf is returned unchanged; no hash is computed"
+  },
+  "description": "Rust reference vectors for the leaf-level Merkle root function `zerocoin::consensus::block::merkle_root`, generated for the C++ kernel's `zk::merkle_root`.",
+  "determinism": [
+    "no wall clock, RNG, wallet, data directory or network is used",
+    "every leaf is a literal 32-byte array; the only derived leaf is the empty-tree root, which the reference computes from the frozen tag",
+    "inputs are ordered leaf lists, so a change in leaf order changes the file",
+    "JSON object keys are emitted in sorted order by serde_json"
+  ],
+  "files": [
+    {
+      "cases": 20,
+      "group": "chain.merkle_root",
+      "path": "chain/merkle_root.json"
+    }
+  ],
+  "generator": "zerocoin/tests/export_baseline_vectors.rs, `p32_*` functions, added by the P3.2B commit that lands immediately after the baseline; no fixture can record the hash of the commit that contains it, and none here claims to have existed before this exporter did",
+  "independent_verifier": "test/harness/zro_vectors.py::merkle_root is a pre-existing dependency-free Python re-implementation of this contract, already wired to the five historical `chain.merkle.*` cases; this corpus does not wire it to these cases, so the Rust exporter remains the origin of every value published here",
+  "notes": [
+    "Separate from test/vectors on purpose: the P0 manifest carries one `source_commit` (7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c) for all 117 historical cases, so adding these cases there would either re-state that commit for values it did not generate or rewrite every historical file. Nothing under test/vectors was touched.",
+    "Leaf-level only. `Block::compute_merkle_root` — the transaction list to root path — is deliberately not exercised here: the kernel has no block type and no transaction-id aggregation yet, so that wiring belongs to a later block/transaction integration milestone.",
+    "No header is encoded, hashed or validated by any case in this corpus, and no case compares a root against a header's claimed root.",
+    "`chain.merkle_root.empty_root_as_single_leaf` and `chain.merkle_root.empty_root_paired` feed the empty-tree root back in as a leaf value to prove nothing special-cases it.",
+    "`chain.merkle_root.order_abc` uses the same three leaves as the historical `chain.merkle.three` case, so the two corpora can be cross-read; `order_cba` is its reverse and must disagree.",
+    "These 20 cases are new with the `p32_*` exporter. `reference_commits` names the commit whose code is under test, not the commit that introduced these cases, because a fixture cannot truthfully claim to predate its own generator."
+  ],
+  "phase": "P3.2B",
+  "provenance": "every expected value was produced by a direct call to `consensus::block::merkle_root` in the shipping `zerocoin/` Rust code at `source_commit`; no root is transcribed from another implementation, computed by hand, or typed from a document. `merkle_root` and `EMPTY_MERKLE_TAG` entered `zerocoin/src` at `reference_commits.merkle_introduced` and have not been edited since, so the roots published here are the roots that commit already produced.",
+  "reference_commits": {
+    "merkle_introduced": "e464695f92f6884e6d25c6947d452d5fb24229a6"
+  },
+  "regenerate": "ZRO_VECTOR_WRITE=1 with the same command, then review the diff",
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+  "source_commit": "b71d769be8357bcf10d768d915770125cf7f7c24",
+  "source_commit_rule": "the newest commit that touches a Rust build input (`zerocoin/src`, `zerocoin/Cargo.toml`, `zerocoin/Cargo.lock`, `zerocoin/build.rs`) and therefore the production code that produced every value here; `zerocoin/src` is byte-identical between it and the baseline this corpus is committed on. Unlike the P0 corpus this is not the commit that introduced the exporter, so `generator` names the exporter separately.",
+  "total_cases": 20
+}

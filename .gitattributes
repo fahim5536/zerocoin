@@ -5,3 +5,4 @@
 # generated with LF only.
 test/vectors/** text eol=lf
 test/p31-vectors/** text eol=lf
+test/p32-vectors/** text eol=lf

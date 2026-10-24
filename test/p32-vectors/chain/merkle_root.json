@@ -1,0 +1,623 @@
+{
+  "case_count": 20,
+  "cases": [
+    {
+      "expected": {
+        "root": {
+          "display_hex": "ebbcf2fd9a0d55c5bb840db45530046692a16cd2d6588b932ce23d954ffadfde",
+          "internal_hex": "dedffa4f953de22c938b58d6d26ca19266043055b40d84bbc5550d9afdf2bceb"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.empty",
+      "independent_check": "sha256d of the 17-byte `ZRO/merkle:empty\\0` tag, not sha256d of an empty message",
+      "input": {
+        "leaf_count": 0,
+        "leaves": []
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+          "internal_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.one_leaf",
+      "independent_check": "a single leaf is its own root; no hash is computed and the tag never enters",
+      "input": {
+        "leaf_count": 1,
+        "leaves": [
+          {
+            "display_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+            "internal_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "ba982c0808a9a03c4e958ae612516f85faac3780dcb34d9ab83ceeaf74b54011",
+          "internal_hex": "1140b574afee3cb89a4db3dc8037acfa856f5112e68a954e3ca0a908082c98ba"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.two_leaves",
+      "independent_check": "exactly one internal node: sha256d over the 64 raw bytes a || b",
+      "input": {
+        "leaf_count": 2,
+        "leaves": [
+          {
+            "display_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+            "internal_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          {
+            "display_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+            "internal_hex": "2222222222222222222222222222222222222222222222222222222222222222"
+          }
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "e6f5f3a082e7117eca9f5b077b5f9e08a64c213c92f4b6377af3825e5c89cdca",
+          "internal_hex": "cacd895c5e82f37a37b6f4923c214ca6089e5f7b075b9fca7e11e782a0f3f5e6"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.three_leaves",
+      "independent_check": "the odd trailing leaf is duplicated, never promoted to the next level",
+      "input": {
+        "leaf_count": 3,
+        "leaves": [
+          {
+            "display_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+            "internal_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          {
+            "display_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+            "internal_hex": "2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          {
+            "display_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+            "internal_hex": "3333333333333333333333333333333333333333333333333333333333333333"
+          }
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "1a0507560359f2b7aaec501e9574c32d9e69e2e2cc9a56358ba551c86dbeae46",
+          "internal_hex": "46aebe6dc851a58b35569acce2e2699e2dc374951e50ecaab7f259035607051a"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.four_leaves",
+      "independent_check": "a full balanced tree with no duplication: 4 -> 2 -> 1",
+      "input": {
+        "leaf_count": 4,
+        "leaves": [
+          {
+            "display_hex": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0",
+            "internal_hex": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"
+          },
+          {
+            "display_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "internal_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+          },
+          {
+            "display_hex": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+            "internal_hex": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2"
+          },
+          {
+            "display_hex": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+            "internal_hex": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3"
+          }
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "cbccd9d01609edc916819f867c871e474c985bc6091ddf0e9c6924abab48f9c6",
+          "internal_hex": "c6f948abab24699c0edf1d09c65b984c471e877c869f8116c9ed0916d0d9cccb"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.five_leaves",
+      "independent_check": "two duplication rounds: 5 -> 3 -> 2 -> 1",
+      "input": {
+        "leaf_count": 5,
+        "leaves": [
+          {
+            "display_hex": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0",
+            "internal_hex": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"
+          },
+          {
+            "display_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "internal_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+          },
+          {
+            "display_hex": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+            "internal_hex": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2"
+          },
+          {
+            "display_hex": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+            "internal_hex": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3"
+          },
+          {
+            "display_hex": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+            "internal_hex": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4"
+          }
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "597e6122f2d6f90dc3993a3319558460ef0b9b5e609b6c498eaf0c480f6552d0",
+          "internal_hex": "d052650f480caf8e496c9b605e9b0bef60845519333a99c30df9d6f222617e59"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.six_leaves",
+      "independent_check": "duplication at the second level only: 6 -> 3 -> 2 -> 1",
+      "input": {
+        "leaf_count": 6,
+        "leaves": [
+          {
+            "display_hex": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0",
+            "internal_hex": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"
+          },
+          {
+            "display_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "internal_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+          },
+          {
+            "display_hex": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+            "internal_hex": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2"
+          },
+          {
+            "display_hex": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+            "internal_hex": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3"
+          },
+          {
+            "display_hex": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+            "internal_hex": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4"
+          },
+          {
+            "display_hex": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+            "internal_hex": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5"
+          }
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "2171d2cc4339742eeb30b48438a3cb7a3ea8881b170a63231adb247576f8715c",
+          "internal_hex": "5c71f8767524db1a23630a171b88a83e7acba33884b430eb2e743943ccd27121"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.seven_leaves",
+      "independent_check": "duplication at the first level only: 7 -> 4 -> 2 -> 1",
+      "input": {
+        "leaf_count": 7,
+        "leaves": [
+          {
+            "display_hex": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0",
+            "internal_hex": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"
+          },
+          {
+            "display_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "internal_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+          },
+          {
+            "display_hex": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+            "internal_hex": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2"
+          },
+          {
+            "display_hex": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+            "internal_hex": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3"
+          },
+          {
+            "display_hex": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+            "internal_hex": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4"
+          },
+          {
+            "display_hex": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+            "internal_hex": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5"
+          },
+          {
+            "display_hex": "a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6",
+            "internal_hex": "a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6"
+          }
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "9bbb73761e3479c0a7a20cf31db4c0c4d8f622156b2020431af2d4e922093e7e",
+          "internal_hex": "7e3e0922e9d4f21a4320206b1522f6d8c4c0b41df30ca2a7c079341e7673bb9b"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.eight_leaves",
+      "independent_check": "the power-of-two case with no duplication at any level: 8 -> 4 -> 2 -> 1",
+      "input": {
+        "leaf_count": 8,
+        "leaves": [
+          {
+            "display_hex": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0",
+            "internal_hex": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"
+          },
+          {
+            "display_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "internal_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+          },
+          {
+            "display_hex": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+            "internal_hex": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2"
+          },
+          {
+            "display_hex": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+            "internal_hex": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3"
+          },
+          {
+            "display_hex": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+            "internal_hex": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4"
+          },
+          {
+            "display_hex": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+            "internal_hex": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5"
+          },
+          {
+            "display_hex": "a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6",
+            "internal_hex": "a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6"
+          },
+          {
+            "display_hex": "a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7",
+            "internal_hex": "a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7"
+          }
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "c9772d90f1647411802d3472ca6849f305f2b68dbf361e960205a99cccb99bf8",
+          "internal_hex": "f89bb9cc9ca90502961e36bf8db6f205f34968ca72342d80117464f1902d77c9"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.nine_leaves",
+      "independent_check": "duplicate-when-odd at three successive levels: 9 -> 5 -> 3 -> 2 -> 1",
+      "input": {
+        "leaf_count": 9,
+        "leaves": [
+          {
+            "display_hex": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0",
+            "internal_hex": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"
+          },
+          {
+            "display_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "internal_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+          },
+          {
+            "display_hex": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+            "internal_hex": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2"
+          },
+          {
+            "display_hex": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+            "internal_hex": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3"
+          },
+          {
+            "display_hex": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+            "internal_hex": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4"
+          },
+          {
+            "display_hex": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+            "internal_hex": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5"
+          },
+          {
+            "display_hex": "a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6",
+            "internal_hex": "a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6"
+          },
+          {
+            "display_hex": "a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7",
+            "internal_hex": "a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7"
+          },
+          {
+            "display_hex": "a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8",
+            "internal_hex": "a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8"
+          }
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "359e3e6a5793d07184dba17a3f64e474c35574382ff07b637654f5423a2df10b",
+          "internal_hex": "0bf12d3a42f55476637bf02f387455c374e4643f7aa1db8471d093576a3e9e35"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.repeated_pair",
+      "independent_check": "two identical leaves still hash as one pair; nothing is deduplicated",
+      "input": {
+        "leaf_count": 2,
+        "leaves": [
+          {
+            "display_hex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+            "internal_hex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+          },
+          {
+            "display_hex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+            "internal_hex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+          }
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "1e69c2d9756a5cafa58af85e659f2f03823ed767200dcbc1cee0f5b8ffb37aba",
+          "internal_hex": "ba7ab3ffb8f5e0cec1cb0d2067d73e82032f9f655ef88aa5af5c6a75d9c2691e"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.repeated_triple",
+      "independent_check": "three identical leaves are not collapsed to one: 3 -> 2 -> 1",
+      "input": {
+        "leaf_count": 3,
+        "leaves": [
+          {
+            "display_hex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+            "internal_hex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+          },
+          {
+            "display_hex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+            "internal_hex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+          },
+          {
+            "display_hex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+            "internal_hex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+          }
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "44bf65ac7d85a61b5cb2fd3078b23b7a7dc9ad20b55e0795a038289cc5e964b0",
+          "internal_hex": "b064e9c59c2838a095075eb520adc97d7a3bb27830fdb25c1ba6857dac65bf44"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.high_bit_first_bytes",
+      "independent_check": "top-bit first bytes stay unsigned raw bytes in the 64-byte pair",
+      "input": {
+        "leaf_count": 3,
+        "leaves": [
+          {
+            "display_hex": "0100000000000000000000000000000000000000000000000000000000000080",
+            "internal_hex": "8000000000000000000000000000000000000000000000000000000000000001"
+          },
+          {
+            "display_hex": "80000000000000000000000000000000000000000000000000000000000000ff",
+            "internal_hex": "ff00000000000000000000000000000000000000000000000000000000000080"
+          },
+          {
+            "display_hex": "fe00000000000000000000000000000000000000000000000000000000000081",
+            "internal_hex": "81000000000000000000000000000000000000000000000000000000000000fe"
+          }
+        ]
+      },
+      "intent": "oddity"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "f6c7a92a034e0ce7f329927a9548204a1c18ec555682b73053df2177148a5de2",
+          "internal_hex": "e25d8a147721df5330b7825655ec181c4a2048957a9229f3e70c4e032aa9c7f6"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.all_ff_leaf",
+      "independent_check": "an all-`0xff` leaf is a digest like any other, not a sentinel",
+      "input": {
+        "leaf_count": 2,
+        "leaves": [
+          {
+            "display_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "internal_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+          },
+          {
+            "display_hex": "0101010101010101010101010101010101010101010101010101010101010101",
+            "internal_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+          }
+        ]
+      },
+      "intent": "oddity"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+          "internal_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.zero_leaf_only",
+      "independent_check": "an all-zero leaf is returned unchanged and is not confused with the empty tree",
+      "input": {
+        "leaf_count": 1,
+        "leaves": [
+          {
+            "display_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+            "internal_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      "intent": "oddity"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "6db7479c5346abc47ef4196df47836190a79ce42b078a9e5c36f47429dde5e70",
+          "internal_hex": "705ede9d42476fc3e5a978b042ce790a193678f46d19f47ec4ab46539c47b76d"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.zero_then_nonzero",
+      "independent_check": "a zero digest is a child, not an absent child; no leading zero is stripped",
+      "input": {
+        "leaf_count": 2,
+        "leaves": [
+          {
+            "display_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+            "internal_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "display_hex": "0101010101010101010101010101010101010101010101010101010101010101",
+            "internal_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+          }
+        ]
+      },
+      "intent": "oddity"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "ebbcf2fd9a0d55c5bb840db45530046692a16cd2d6588b932ce23d954ffadfde",
+          "internal_hex": "dedffa4f953de22c938b58d6d26ca19266043055b40d84bbc5550d9afdf2bceb"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.empty_root_as_single_leaf",
+      "independent_check": "the empty-tree root used as a leaf is still just a leaf",
+      "input": {
+        "leaf_count": 1,
+        "leaves": [
+          {
+            "display_hex": "ebbcf2fd9a0d55c5bb840db45530046692a16cd2d6588b932ce23d954ffadfde",
+            "internal_hex": "dedffa4f953de22c938b58d6d26ca19266043055b40d84bbc5550d9afdf2bceb"
+          }
+        ]
+      },
+      "intent": "oddity"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "404fed6e301e111bd66dc283bbdb19d40e4209bb21427772270d536bbdf392e8",
+          "internal_hex": "e892f3bd6b530d2772774221bb09420ed419dbbb83c26dd61b111e306eed4f40"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.empty_root_paired",
+      "independent_check": "the empty-tree root gets no special case as the left child of an internal node",
+      "input": {
+        "leaf_count": 2,
+        "leaves": [
+          {
+            "display_hex": "ebbcf2fd9a0d55c5bb840db45530046692a16cd2d6588b932ce23d954ffadfde",
+            "internal_hex": "dedffa4f953de22c938b58d6d26ca19266043055b40d84bbc5550d9afdf2bceb"
+          },
+          {
+            "display_hex": "6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b",
+            "internal_hex": "6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b"
+          }
+        ]
+      },
+      "intent": "oddity"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "e6f5f3a082e7117eca9f5b077b5f9e08a64c213c92f4b6377af3825e5c89cdca",
+          "internal_hex": "cacd895c5e82f37a37b6f4923c214ca6089e5f7b075b9fca7e11e782a0f3f5e6"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.order_abc",
+      "independent_check": "the same three leaves as the historical `chain.merkle.three` case",
+      "input": {
+        "leaf_count": 3,
+        "leaves": [
+          {
+            "display_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+            "internal_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          {
+            "display_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+            "internal_hex": "2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          {
+            "display_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+            "internal_hex": "3333333333333333333333333333333333333333333333333333333333333333"
+          }
+        ]
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "root": {
+          "display_hex": "cc30c5aa317537f7d3fcfc7c344bd0c526ab92ffe1c6a25b0085c1fde5df4b99",
+          "internal_hex": "994bdfe5fdc185005ba2c6e1ff92ab26c5d04b347cfcfcd3f7377531aac530cc"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root.order_cba",
+      "independent_check": "the reverse of order_abc: a different root, because the tree is positional",
+      "input": {
+        "leaf_count": 3,
+        "leaves": [
+          {
+            "display_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+            "internal_hex": "3333333333333333333333333333333333333333333333333333333333333333"
+          },
+          {
+            "display_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+            "internal_hex": "2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          {
+            "display_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+            "internal_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ]
+      },
+      "intent": "rule"
+    }
+  ],
+  "generator": "zerocoin/tests/export_baseline_vectors.rs, `p32_*` functions, added by the P3.2B commit that lands immediately after the baseline; a fixture cannot truthfully record the hash of the commit that contains it, so `source_commit` names the code and this field names the exporter separately",
+  "group": "chain.merkle_root",
+  "intent": "rule",
+  "note": "Leaf-level `merkle_root`: the 17-byte empty-tree tag, the single-leaf identity, the untagged 64-byte internal node over raw internal bytes, duplicate-when-odd at every level, positional leaf order, and the digest byte shapes a port can get wrong.",
+  "provenance": "every expected value was produced by a direct call to the shipping `zerocoin/` Rust function `consensus::block::merkle_root` at `source_commit`; no root is transcribed from another implementation, computed by hand, or typed from a document",
+  "reference_commits": {
+    "merkle_introduced": "e464695f92f6884e6d25c6947d452d5fb24229a6"
+  },
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+  "source_commit": "b71d769be8357bcf10d768d915770125cf7f7c24"
+}

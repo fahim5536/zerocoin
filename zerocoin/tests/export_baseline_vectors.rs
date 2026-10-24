@@ -1428,6 +1428,533 @@ fn p31_reference_fixtures_are_reproducible_and_pinned() {
 }
 
 // ---------------------------------------------------------------------------
+// Groups: chain.merkle_root (P3.2B)
+//
+// A different question from the five historical `chain.merkle.*` cases above.
+// Those pin what the shipped P0 corpus already said and are left byte-for-byte
+// unchanged. This group asks what the *current* `merkle_root` produces for every
+// leaf count and leaf shape the C++ port has to survive: 0 through 9 leaves,
+// repeated leaves, an all-zero leaf, an all-`0xff` leaf, high-bit first bytes, a
+// leaf whose bytes *are* the empty-tree root, and an explicit ordering pair.
+//
+// It is a leaf-level function only. No transaction id, no header encoding, no
+// block validation and no comparison against a header's claimed root.
+//
+// It lives in its own corpus root (`test/p32-vectors`) for the same reason the
+// P3.1A groups do: the P0 manifest stamps one `source_commit` on all 117
+// historical cases, so adding cases there would either re-state a commit that did
+// not produce them or rewrite every historical file.
+// ---------------------------------------------------------------------------
+
+/// `block::EMPTY_MERKLE_TAG` is crate-private, so this integration test restates
+/// it. `p32_reference_fixtures_are_reproducible_and_pinned` proves the restatement
+/// still matches the reference: the published empty root must equal `sha256d` of
+/// exactly these bytes.
+const P32_EMPTY_MERKLE_TAG: &[u8] = b"ZRO/merkle:empty\0";
+
+/// Every leaf and every internal node is one sha256d digest.
+const P32_DIGEST_LEN: usize = 32;
+
+/// The exact width of the buffer an internal node hashes: the two child digests
+/// back to back, with no node tag, length prefix or separator between them.
+const P32_PAIR_LEN: usize = P32_DIGEST_LEN * 2;
+
+/// The commit whose `zerocoin/` production code produced every value in this
+/// corpus: the newest commit that touches a Rust build input. `zerocoin/src` is
+/// byte-identical here and at the P3.2B baseline, so no value depends on a later
+/// test-only or documentation-only commit.
+const P32_SOURCE_COMMIT: &str = "b71d769be8357bcf10d768d915770125cf7f7c24";
+
+/// Where `merkle_root` and `EMPTY_MERKLE_TAG` entered `zerocoin/src`. Neither has
+/// been edited since, so the values here are the values that commit produced.
+const P32_MERKLE_INTRODUCED_COMMIT: &str = "e464695f92f6884e6d25c6947d452d5fb24229a6";
+
+/// A uniform-byte leaf, in the same vocabulary the historical Merkle cases use.
+fn p32_leaf(byte: u8) -> Hash256 {
+    Hash256([byte; P32_DIGEST_LEN])
+}
+
+/// A leaf with a high first byte and a different last byte, so neither a signed
+/// cast nor an accidental byte-order swap can hide behind a uniform value.
+fn p32_edge_leaf(first: u8, last: u8) -> Hash256 {
+    let mut bytes = [0u8; P32_DIGEST_LEN];
+    bytes[0] = first;
+    bytes[P32_DIGEST_LEN - 1] = last;
+    Hash256(bytes)
+}
+
+/// One internal node as the contract describes it: two raw digests in exactly
+/// `P32_PAIR_LEN` bytes. Used only to cross-check the published roots — every
+/// value in the corpus itself still comes from `merkle_root`.
+fn p32_internal(left: &Hash256, right: &Hash256) -> Hash256 {
+    let mut pair = [0u8; P32_PAIR_LEN];
+    pair[..P32_DIGEST_LEN].copy_from_slice(&left.0);
+    pair[P32_DIGEST_LEN..].copy_from_slice(&right.0);
+    sha256d(&pair)
+}
+
+/// One leaf-level case: the leaves go in, the reference's own root comes out. The
+/// width assertion makes the exporter fail loudly if the digest ever stops being
+/// one sha256d, so a stale expectation cannot be published silently.
+fn p32_case(id: &str, intent: &str, leaves: &[Hash256], independent_check: &str) -> Value {
+    let root = merkle_root(leaves);
+    let internal = hex::encode(root.0);
+    assert_eq!(
+        internal.len(),
+        P32_DIGEST_LEN * 2,
+        "{id}: the reference root is no longer one digest wide"
+    );
+
+    case(
+        id,
+        intent,
+        json!({
+            "leaf_count": leaves.len(),
+            "leaves": leaves.iter().map(hash256_json).collect::<Vec<Value>>(),
+        }),
+        json!({
+            "root": hash256_json(&root),
+            "root_len": internal.len() / 2,
+        }),
+        independent_check,
+    )
+}
+
+fn merkle_root_cases() -> Vec<Value> {
+    let empty_root = merkle_root(&[]);
+    // A run of distinct leaves, so each slice below is a different tree.
+    let nine: Vec<Hash256> = (0u8..9).map(|i| p32_leaf(0xa0 + i)).collect();
+    let (a, b, c) = (p32_leaf(0x11), p32_leaf(0x22), p32_leaf(0x33));
+    let x = p32_leaf(0x5a);
+    let zero = Hash256::ZERO;
+
+    vec![
+        // One case per leaf count the port has to handle.
+        p32_case(
+            "chain.merkle_root.empty",
+            "rule",
+            &[],
+            "sha256d of the 17-byte `ZRO/merkle:empty\\0` tag, not sha256d of an empty message",
+        ),
+        p32_case(
+            "chain.merkle_root.one_leaf",
+            "rule",
+            &[a],
+            "a single leaf is its own root; no hash is computed and the tag never enters",
+        ),
+        p32_case(
+            "chain.merkle_root.two_leaves",
+            "rule",
+            &[a, b],
+            "exactly one internal node: sha256d over the 64 raw bytes a || b",
+        ),
+        p32_case(
+            "chain.merkle_root.three_leaves",
+            "rule",
+            &[a, b, c],
+            "the odd trailing leaf is duplicated, never promoted to the next level",
+        ),
+        p32_case(
+            "chain.merkle_root.four_leaves",
+            "rule",
+            &nine[..4],
+            "a full balanced tree with no duplication: 4 -> 2 -> 1",
+        ),
+        p32_case(
+            "chain.merkle_root.five_leaves",
+            "rule",
+            &nine[..5],
+            "two duplication rounds: 5 -> 3 -> 2 -> 1",
+        ),
+        p32_case(
+            "chain.merkle_root.six_leaves",
+            "rule",
+            &nine[..6],
+            "duplication at the second level only: 6 -> 3 -> 2 -> 1",
+        ),
+        p32_case(
+            "chain.merkle_root.seven_leaves",
+            "rule",
+            &nine[..7],
+            "duplication at the first level only: 7 -> 4 -> 2 -> 1",
+        ),
+        p32_case(
+            "chain.merkle_root.eight_leaves",
+            "rule",
+            &nine[..8],
+            "the power-of-two case with no duplication at any level: 8 -> 4 -> 2 -> 1",
+        ),
+        p32_case(
+            "chain.merkle_root.nine_leaves",
+            "rule",
+            &nine[..9],
+            "duplicate-when-odd at three successive levels: 9 -> 5 -> 3 -> 2 -> 1",
+        ),
+        // Repeated leaves: the function neither deduplicates nor collapses.
+        p32_case(
+            "chain.merkle_root.repeated_pair",
+            "rule",
+            &[x, x],
+            "two identical leaves still hash as one pair; nothing is deduplicated",
+        ),
+        p32_case(
+            "chain.merkle_root.repeated_triple",
+            "rule",
+            &[x, x, x],
+            "three identical leaves are not collapsed to one: 3 -> 2 -> 1",
+        ),
+        // Digest byte shapes a port can get wrong.
+        p32_case(
+            "chain.merkle_root.high_bit_first_bytes",
+            "oddity",
+            &[
+                p32_edge_leaf(0x80, 0x01),
+                p32_edge_leaf(0xff, 0x80),
+                p32_edge_leaf(0x81, 0xfe),
+            ],
+            "top-bit first bytes stay unsigned raw bytes in the 64-byte pair",
+        ),
+        p32_case(
+            "chain.merkle_root.all_ff_leaf",
+            "oddity",
+            &[p32_leaf(0xff), p32_leaf(0x01)],
+            "an all-`0xff` leaf is a digest like any other, not a sentinel",
+        ),
+        p32_case(
+            "chain.merkle_root.zero_leaf_only",
+            "oddity",
+            &[zero],
+            "an all-zero leaf is returned unchanged and is not confused with the empty tree",
+        ),
+        p32_case(
+            "chain.merkle_root.zero_then_nonzero",
+            "oddity",
+            &[zero, p32_leaf(0x01)],
+            "a zero digest is a child, not an absent child; no leading zero is stripped",
+        ),
+        // The empty-tree root as a value, to prove nothing special-cases it.
+        p32_case(
+            "chain.merkle_root.empty_root_as_single_leaf",
+            "oddity",
+            &[empty_root],
+            "the empty-tree root used as a leaf is still just a leaf",
+        ),
+        p32_case(
+            "chain.merkle_root.empty_root_paired",
+            "oddity",
+            &[empty_root, p32_leaf(0x6b)],
+            "the empty-tree root gets no special case as the left child of an internal node",
+        ),
+        // Order, stated twice so the disagreement is visible in the file itself.
+        p32_case(
+            "chain.merkle_root.order_abc",
+            "rule",
+            &[a, b, c],
+            "the same three leaves as the historical `chain.merkle.three` case",
+        ),
+        p32_case(
+            "chain.merkle_root.order_cba",
+            "rule",
+            &[c, b, a],
+            "the reverse of order_abc: a different root, because the tree is positional",
+        ),
+    ]
+}
+
+/// The P3.2B envelope: the P0 envelope plus the reference commit, so one file
+/// answers "which code produced this" without consulting the manifest.
+fn p32_envelope(group: &str, intent: &str, note: &str, cases: Vec<Value>) -> String {
+    let doc = json!({
+        "schema": "zro-baseline-vectors/1",
+        "group": group,
+        "intent": intent,
+        "note": note,
+        "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+        "source_commit": P32_SOURCE_COMMIT,
+        "provenance": "every expected value was produced by a direct call to the shipping `zerocoin/` Rust function `consensus::block::merkle_root` at `source_commit`; no root is transcribed from another implementation, computed by hand, or typed from a document",
+        "reference_commits": {
+            "merkle_introduced": P32_MERKLE_INTRODUCED_COMMIT,
+        },
+        "generator": "zerocoin/tests/export_baseline_vectors.rs, `p32_*` functions, added by the P3.2B commit that lands immediately after the baseline; a fixture cannot truthfully record the hash of the commit that contains it, so `source_commit` names the code and this field names the exporter separately",
+        "case_count": cases.len(),
+        "cases": cases,
+    });
+    let mut text = serde_json::to_string_pretty(&doc).expect("reference document serialises");
+    text.push('\n');
+    text
+}
+
+/// The P3.2B corpus, mirroring `p31_corpus()` above: same `add!` shape, same
+/// manifest, same write-versus-compare protocol, different root.
+fn p32_corpus() -> Vec<(String, String)> {
+    let mut files: Vec<(String, String)> = Vec::new();
+    let mut counts: Vec<Value> = Vec::new();
+
+    macro_rules! add {
+        ($path:expr, $group:expr, $intent:expr, $note:expr, $cases:expr) => {{
+            let cases: Vec<Value> = $cases;
+            counts.push(json!({"path": $path, "group": $group, "cases": cases.len()}));
+            files.push(($path.to_string(), p32_envelope($group, $intent, $note, cases)));
+        }};
+    }
+
+    add!(
+        "chain/merkle_root.json",
+        "chain.merkle_root",
+        "rule",
+        "Leaf-level `merkle_root`: the 17-byte empty-tree tag, the single-leaf \
+         identity, the untagged 64-byte internal node over raw internal bytes, \
+         duplicate-when-odd at every level, positional leaf order, and the digest \
+         byte shapes a port can get wrong.",
+        merkle_root_cases()
+    );
+
+    let manifest = json!({
+        "schema": "zro-baseline-vectors/1",
+        "phase": "P3.2B",
+        "description": "Rust reference vectors for the leaf-level Merkle root function `zerocoin::consensus::block::merkle_root`, generated for the C++ kernel's `zk::merkle_root`.",
+        "provenance": "every expected value was produced by a direct call to `consensus::block::merkle_root` in the shipping `zerocoin/` Rust code at `source_commit`; no root is transcribed from another implementation, computed by hand, or typed from a document. `merkle_root` and `EMPTY_MERKLE_TAG` entered `zerocoin/src` at `reference_commits.merkle_introduced` and have not been edited since, so the roots published here are the roots that commit already produced.",
+        "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+        "source_commit": P32_SOURCE_COMMIT,
+        "source_commit_rule": "the newest commit that touches a Rust build input (`zerocoin/src`, `zerocoin/Cargo.toml`, `zerocoin/Cargo.lock`, `zerocoin/build.rs`) and therefore the production code that produced every value here; `zerocoin/src` is byte-identical between it and the baseline this corpus is committed on. Unlike the P0 corpus this is not the commit that introduced the exporter, so `generator` names the exporter separately.",
+        "generator": "zerocoin/tests/export_baseline_vectors.rs, `p32_*` functions, added by the P3.2B commit that lands immediately after the baseline; no fixture can record the hash of the commit that contains it, and none here claims to have existed before this exporter did",
+        "reference_commits": {
+            "merkle_introduced": P32_MERKLE_INTRODUCED_COMMIT,
+        },
+        "regenerate": "ZRO_VECTOR_WRITE=1 with the same command, then review the diff",
+        "independent_verifier": "test/harness/zro_vectors.py::merkle_root is a pre-existing dependency-free Python re-implementation of this contract, already wired to the five historical `chain.merkle.*` cases; this corpus does not wire it to these cases, so the Rust exporter remains the origin of every value published here",
+        "determinism": [
+            "no wall clock, RNG, wallet, data directory or network is used",
+            "every leaf is a literal 32-byte array; the only derived leaf is the empty-tree root, which the reference computes from the frozen tag",
+            "inputs are ordered leaf lists, so a change in leaf order changes the file",
+            "JSON object keys are emitted in sorted order by serde_json",
+        ],
+        "contract": {
+            "empty_input": "sha256d over the 17-byte `ZRO/merkle:empty\\0` tag, not sha256d of an empty message",
+            "single_leaf": "the leaf is returned unchanged; no hash is computed",
+            "internal_node": "sha256d(left_internal_bytes || right_internal_bytes) over exactly 64 bytes, with no node tag, prefix or separator",
+            "odd_level": "the final node is duplicated at every affected level, never promoted unchanged",
+            "leaf_order": "positional; the function does not sort, deduplicate, reverse or reinterpret digest bytes",
+            "byte_order": "digests stay in internal byte order; `display_hex` is a separate printing-only representation and is the reverse of `internal_hex`",
+            "leaf_count_limit": "none: `merkle_root` is defined on any number of leaves. `MAX_BLOCK_TRANSACTIONS` is a block rule checked outside this function",
+            "leaf_width_bytes": P32_DIGEST_LEN,
+            "internal_node_input_bytes": P32_PAIR_LEN,
+            "empty_tree_tag_bytes": P32_EMPTY_MERKLE_TAG.len(),
+            "empty_tree_tag_hex": hx(P32_EMPTY_MERKLE_TAG),
+            "empty_tree_tag_hex_note": "a restatement of the crate-private tag, pinned by an assertion in `p32_reference_fixtures_are_reproducible_and_pinned` that the published empty root equals sha256d of exactly these bytes",
+        },
+        "files": counts,
+        "total_cases": counts
+            .iter()
+            .map(|entry| entry["cases"].as_u64().unwrap_or(0))
+            .sum::<u64>(),
+        "notes": [
+            "Separate from test/vectors on purpose: the P0 manifest carries one `source_commit` (7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c) for all 117 historical cases, so adding these cases there would either re-state that commit for values it did not generate or rewrite every historical file. Nothing under test/vectors was touched.",
+            "Leaf-level only. `Block::compute_merkle_root` — the transaction list to root path — is deliberately not exercised here: the kernel has no block type and no transaction-id aggregation yet, so that wiring belongs to a later block/transaction integration milestone.",
+            "No header is encoded, hashed or validated by any case in this corpus, and no case compares a root against a header's claimed root.",
+            "`chain.merkle_root.empty_root_as_single_leaf` and `chain.merkle_root.empty_root_paired` feed the empty-tree root back in as a leaf value to prove nothing special-cases it.",
+            "`chain.merkle_root.order_abc` uses the same three leaves as the historical `chain.merkle.three` case, so the two corpora can be cross-read; `order_cba` is its reverse and must disagree.",
+            "These 20 cases are new with the `p32_*` exporter. `reference_commits` names the commit whose code is under test, not the commit that introduced these cases, because a fixture cannot truthfully claim to predate its own generator.",
+        ],
+    });
+    let mut text = serde_json::to_string_pretty(&manifest).expect("reference manifest serialises");
+    text.push('\n');
+    files.push(("manifest.json".to_string(), text));
+
+    files.sort_by(|left, right| left.0.cmp(&right.0));
+    files
+}
+
+fn p32_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("test")
+        .join("p32-vectors")
+}
+
+#[test]
+fn p32_vectors_match_the_committed_reference_corpus() {
+    let write = std::env::var("ZRO_VECTOR_WRITE")
+        .map(|value| value == "1")
+        .unwrap_or(false);
+    let root = p32_root();
+    let mut drift: Vec<String> = Vec::new();
+    let mut written = 0usize;
+
+    for (relative, text) in p32_corpus() {
+        let path = root.join(&relative);
+        if write {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).expect("reference directory is creatable");
+            }
+            fs::write(&path, text.as_bytes()).expect("reference vector is writable");
+            written += 1;
+        } else {
+            let committed = fs::read_to_string(&path).unwrap_or_else(|error| {
+                panic!(
+                    "missing reference vector {}: {error}\nrun with ZRO_VECTOR_WRITE=1 to regenerate",
+                    path.display()
+                )
+            });
+            if committed != text {
+                drift.push(relative);
+            }
+        }
+    }
+
+    if write {
+        println!("wrote {written} reference vector files under {}", root.display());
+    } else {
+        assert!(
+            drift.is_empty(),
+            "these reference vectors differ from the committed corpus: {drift:?}\n\
+             run with ZRO_VECTOR_WRITE=1 to regenerate, then review the diff"
+        );
+    }
+}
+
+#[test]
+fn p32_reference_fixtures_are_reproducible_and_pinned() {
+    let first = p32_corpus();
+    let second = p32_corpus();
+    assert_eq!(first, second, "two generations must be byte-identical");
+    assert_eq!(first.len(), 2, "one group plus the manifest");
+
+    let cases = merkle_root_cases();
+    assert_eq!(cases.len(), 20, "the pinned case count; p32_conformance.py pins the same number");
+
+    // The restated crate-private tag is still the tag the reference uses, and it
+    // is still the frozen 17 bytes. Both halves fail if the tag ever moves.
+    assert_eq!(
+        P32_EMPTY_MERKLE_TAG.len(),
+        17,
+        "the empty-tree tag is a frozen 17 bytes"
+    );
+    assert_eq!(
+        merkle_root(&[]),
+        sha256d(P32_EMPTY_MERKLE_TAG),
+        "the restated empty-tree tag no longer matches the reference"
+    );
+
+    // count == 1: the leaf is returned unchanged, so no hash and no tag.
+    let (a, b, c, d) = (p32_leaf(0x11), p32_leaf(0x22), p32_leaf(0x33), p32_leaf(0x44));
+    assert_eq!(merkle_root(&[a]), a, "a single leaf must be returned unchanged");
+
+    // count == 2: one internal node over the raw 64-byte pair.
+    assert_eq!(
+        merkle_root(&[a, b]),
+        p32_internal(&a, &b),
+        "two leaves must hash as one untagged raw pair"
+    );
+
+    // Duplicate-when-odd, expressed as an identity: appending a copy of the final
+    // node cannot change the root. Bitcoin's promotion rule fails both of these.
+    assert_eq!(
+        merkle_root(&[a, b, c]),
+        merkle_root(&[a, b, c, c]),
+        "an odd final node is duplicated, not promoted"
+    );
+    assert_eq!(
+        merkle_root(&[a, b, c, d, a]),
+        merkle_root(&[a, b, c, d, a, a]),
+        "the duplication rule repeats at every odd level"
+    );
+
+    // Positional order, and no deduplication.
+    assert_ne!(
+        merkle_root(&[a, b]),
+        merkle_root(&[b, a]),
+        "the tree is positional, so swapping children must change the root"
+    );
+    let x = p32_leaf(0x5a);
+    assert_eq!(
+        merkle_root(&[x, x]),
+        p32_internal(&x, &x),
+        "identical leaves must not be deduplicated"
+    );
+    assert_ne!(
+        merkle_root(&[x, x, x]),
+        merkle_root(&[x]),
+        "three identical leaves must not collapse to one"
+    );
+
+    // Every published case: the root is exactly one digest wide, its display form
+    // is the internal form reversed and nothing else, and the leaf array agrees
+    // with the count the file claims.
+    let published: std::collections::HashMap<String, String> = cases
+        .iter()
+        .map(|value| {
+            let id = value["id"].as_str().expect("case id").to_string();
+            let root = value["expected"]["root"]["internal_hex"]
+                .as_str()
+                .expect("internal_hex")
+                .to_string();
+            (id, root)
+        })
+        .collect();
+
+    for value in &cases {
+        let id = value["id"].as_str().expect("case id").to_string();
+        let expected = &value["expected"];
+        let internal = expected["root"]["internal_hex"]
+            .as_str()
+            .expect("internal_hex")
+            .to_string();
+        let display = expected["root"]["display_hex"]
+            .as_str()
+            .expect("display_hex")
+            .to_string();
+
+        assert_eq!(internal.len(), P32_DIGEST_LEN * 2, "{id}: internal_hex width");
+        assert_eq!(display.len(), P32_DIGEST_LEN * 2, "{id}: display_hex width");
+        assert_eq!(
+            expected["root_len"].as_u64(),
+            Some(P32_DIGEST_LEN as u64),
+            "{id}: root_len must be the digest width"
+        );
+
+        let mut reversed = hex::decode(&internal).expect("{id}: internal_hex decodes");
+        reversed.reverse();
+        assert_eq!(
+            display,
+            hex::encode(&reversed),
+            "{id}: display_hex is not the internal bytes reversed"
+        );
+
+        let leaves = value["input"]["leaves"].as_array().expect("leaves array");
+        assert_eq!(
+            leaves.len() as u64,
+            value["input"]["leaf_count"].as_u64().expect("leaf_count"),
+            "{id}: the published leaf count disagrees with the leaf array"
+        );
+        for leaf in leaves {
+            assert_eq!(
+                leaf["internal_hex"].as_str().expect("leaf internal_hex").len(),
+                P32_DIGEST_LEN * 2,
+                "{id}: a leaf is not one digest wide"
+            );
+        }
+    }
+
+    // The two ordering cases must disagree in the file itself, or the corpus
+    // stopped proving positionality, and the empty case must be the tag digest.
+    assert_eq!(
+        published.get("chain.merkle_root.empty").expect("empty case"),
+        &hx(&sha256d(P32_EMPTY_MERKLE_TAG).0),
+        "the published empty root is not sha256d of the frozen tag"
+    );
+    assert_ne!(
+        published
+            .get("chain.merkle_root.order_abc")
+            .expect("order_abc case"),
+        published
+            .get("chain.merkle_root.order_cba")
+            .expect("order_cba case"),
+        "reversing the published leaf order must change the published root"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Group: pow
 // ---------------------------------------------------------------------------
 
