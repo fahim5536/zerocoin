@@ -65,6 +65,32 @@ is removed. P2.1 created no service and started no phase.
 > historical fixture, vector or gate expectation changed; the new suite is one additive
 > `add_test` entry in a ctest set the existing gate scripts already run whole.
 
+> **P3.3B addendum (2026-10-25).** P3 gains its fourth derived implementation, and it is the
+> slice the P3.2B addendum named as undelivered: `kernel/src/merkle.cpp` now also ports
+> `Block::compute_merkle_root` (`src/consensus/block.rs:120`) as
+> `zk::merkle_root_from_transactions(const Transaction*, std::size_t)`, composing the P1
+> `Transaction::txid()` (C-2) with the P3.2B `zk::merkle_root` (C-5) — map each transaction to
+> its own id, in order, then apply the leaf rule. It owns no new consensus rule and introduces
+> no `Block` type, no ordering, sorting, deduplication, re-encoding or count limit of its own;
+> the composition is the two existing rules wired together. It is backed by 8 focused tests in
+> `kernel/tests/test_merkle.cpp` and a new `kernel_p33_conformance` target that replays the 22
+> committed cases in `test/p33-vectors/chain/merkle_root_from_txs.json` against
+> `source_commit b71d769`, re-deriving every transaction id and every root through
+> `test/harness/zro_vectors.py` before the runner is invoked and checking the id-to-leaf
+> mapping through the runner's `leaf_txids_hex` output. The corpus was generated first, by the
+> Rust exporter, so every expected root is a value the shipping reference produced; none is
+> transcribed, hand-calculated, or taken from C++ output. Header hashing and PoW engine
+> dispatch (C-4), a header decoder, the claimed-root comparison (B-1/B-14) and the
+> `RootMismatch` taxonomy, reward, anchors, params and genesis are **not** delivered, and P4
+> (`connect_block`, chain replay, acceptance) was not pulled forward: a transaction-level root
+> can now be computed in C++, but **no C++ code validates or accepts a block**, and this
+> milestone must not be read as a block-validation path. F-1 remains **deferred** and C-29's
+> obligation is still P4's. No historical fixture, vector or gate expectation changed; the new
+> suite is one additive `add_test` entry in a ctest set the existing gate scripts already run
+> whole, and the only documented contract departure is the composition's non-`noexcept`
+> signature (§2 rules 2 and 4 of `INTERFACE_CONTRACTS.md`), which follows from the allocating
+> P1 API it is built on.
+
 Related: doc `03` (the original phase proposal), `COMPONENT_OWNERSHIP.md`,
 `THREE_LANGUAGE_ARCHITECTURE.md`, `INTERFACE_CONTRACTS.md`,
 `CRYPTO_BACKEND_DECISION.md`.
@@ -103,7 +129,7 @@ Nothing in this table is restated in prose elsewhere; the gate regenerates it
 | **P2** | Script, sighash, signature verification | G2 | **Partial** at this snapshot — script and sighash complete; ECDSA blocked as G2c. Closed in P2.10: 22/22 with one signing deferral |
 | **P2.1** | Backend investigation, three-language architecture | none (documentation) | **Complete in this change** |
 | **P2.2–P2.10** | Backend evidence, provenance, integration, conformance, gate closure | G2 | **Complete** — CB-1…CB-4 RESOLVED, CB-5 CLOSED; G2c: GO (`CRYPTO_BLOCKER_REGISTER.md` §6) |
-| **P3** | Header, Merkle, difficulty, PoW, reward, anchors, params, genesis | G3 | In progress — P3.0 delivered difficulty; P3.1B delivered the header preimage and identity rule; P3.2B delivered the leaf-level Merkle root (PoW, reward, anchors, params, genesis, and the block/transaction layer that consumes Merkle remain) |
+| **P3** | Header, Merkle, difficulty, PoW, reward, anchors, params, genesis | G3 | In progress — P3.0 delivered difficulty; P3.1B delivered the header preimage and identity rule; P3.2B delivered the leaf-level Merkle root; P3.3B delivered the transaction-level Merkle root (PoW, reward, anchors, params, genesis, and the claimed-root comparison plus the block acceptance layer that consumes Merkle remain) |
 | **P4** | UTXO apply, `connect_block`, storage read | G4 | Not started |
 | **P5** | Storage write, P2P, RPC, wallet, keystore, CLI | G5 | Not started |
 | **P6** | Differential soak | G6 | Not started |

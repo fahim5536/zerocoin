@@ -169,3 +169,15 @@ add_test(NAME kernel_p32_conformance
           ${CMAKE_CURRENT_SOURCE_DIR}/tools/p32_conformance.py
           --vectors ${CMAKE_CURRENT_SOURCE_DIR}/../test/p32-vectors
           --runner $<TARGET_FILE:kernel_conformance>)
+
+# P3.3 replays the twenty-two transaction-level Merkle cases the P3.3B corpus
+# exports, from its own root test/p33-vectors and through the same runner binary.
+# That corpus is separate for the reason P3.1 and P3.2 each gave their own: the P0
+# manifest pins one source_commit across the 117 historical cases. Additive entry
+# only — no existing test changes count, and gate-g1.ps1 runs the whole ctest set,
+# so this line is the gate wiring.
+add_test(NAME kernel_p33_conformance
+  COMMAND ${PYTHON_EXECUTABLE}
+          ${CMAKE_CURRENT_SOURCE_DIR}/tools/p33_conformance.py
+          --vectors ${CMAKE_CURRENT_SOURCE_DIR}/../test/p33-vectors
+          --runner $<TARGET_FILE:kernel_conformance>)

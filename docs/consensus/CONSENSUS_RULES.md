@@ -101,6 +101,15 @@ lock_time    : u32 little-endian (4 bytes)
 (`src/ledger/transaction.rs:183`), **not** over the bytes that arrived on the wire. P0
 cases: `encoding.transaction` (5 cases).
 
+The id is also the Merkle leaf: `Block::compute_merkle_root` puts `tx.txid()` into the tree
+with no further transformation (§2.4), so a port that hashes the wire bytes, the canonical
+bytes a second time, or the id's display form produces a root that matches nothing. Since
+P3.3B the C++ kernel composes the two rules in `zk::merkle_root_from_transactions`, and
+`test/p33-vectors/chain/merkle_root_from_txs.json` publishes each case's per-transaction
+`serialized_hex`, `serialized_len` and `txid` alongside the root, so the replay checks the
+id-to-leaf mapping and not only the digest at the top of the tree.
+
+
 Rule **T-1** — Decoding MUST reject: truncated input (`Truncated`), non-minimal varints,
 more than `MAX_TX_INPUTS = 10_000` inputs, more than `MAX_TX_OUTPUTS = 10_000` outputs, and
 any single script longer than `MAX_TX_BYTES = 1_000_000`
@@ -163,7 +172,21 @@ is B-9, enforced in `validate_structure` (`src/consensus/block.rs:194`). A port 
 count limit into the root function would be inventing a rule.
 
 `Block::compute_merkle_root` (`src/consensus/block.rs:120`) builds the leaves as
-`tx.txid()` for each transaction in order.
+`tx.txid()` for each transaction in order. It is the same `merkle_root` above with no
+additional rule: no limit on the transaction count, no sorting, no deduplication, and no
+re-encoding of an id into a different byte order. Since P3.3B the C++ kernel carries this
+composition as `zk::merkle_root_from_transactions`, and the 22-case
+`chain.merkle_root_from_txs.*` group in
+`test/p33-vectors/chain/merkle_root_from_txs.json` is the set it is replayed against, via
+`kernel_p33_conformance`. Every expected root in that group is the return value of a direct
+call to this Rust function. Two of its properties are easy to lose in a port and are therefore
+named in case ids: `.order_abc` against `.order_cba` (the root is positional, so a reordered
+list is a different block) and `.two_identical_transactions` /
+`.three_copies_of_one_transaction` (a repeated transaction is a repeated leaf, never a
+collapsed one). `.empty` fixes the zero-transaction behaviour of the public function, which is
+the empty-tag branch, not an error. This is the root **computation** only: comparing a block's
+committed root against a header remains B-1/B-14 and is not implemented in C++.
+
 
 Rule **B-1** — A block's committed `merkle_root` MUST equal
 `Block::compute_merkle_root(transactions)` (`src/consensus/block.rs:217`–`219`). P0 cases:

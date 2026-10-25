@@ -107,7 +107,55 @@ allows. Still **not** implemented: the transaction-level leaf source of
 not invent a `Block` type or a transaction aggregation API), the header's claimed-root
 comparison (B-1/B-14), header hashing and the PoW engine dispatch (C-4). C-5 is therefore
 implemented as a primitive, not yet wired into an acceptance path, and no claim of full
-consensus parity is made.
+consensus parity is made. The first of those three gaps — the transaction-level leaf source —
+is closed by the P3.3B status below; the other two are not.
+
+**Implementation status (P3.3B, 2026-10-25).** `kernel/src/merkle.cpp` now also implements the
+**composition** half of C-5: `zk::merkle_root_from_transactions(const Transaction*,
+std::size_t)` is the port's spelling of the owner's two-line
+`Block::compute_merkle_root` (`src/consensus/block.rs:120`) — map each transaction to
+`tx.txid()` in list order, then hand that list to the leaf-level rule already delivered in
+P3.2B. It adds no hashing of its own: the leaf for a transaction **is** its C-2 id, produced by
+the P1 `Transaction::txid()` over the P1 canonical `serialize()`, so C-1, C-2 and C-5 are on
+one path and the composition cannot drift from either half. Nothing between the id and the leaf
+is inserted, and the test for that is direct: a single-transaction list roots to exactly that
+transaction's id, which is the single-leaf passthrough seen from the other side.
+Order is preserved and observable — `chain.merkle_root_from_txs.order_abc` and `.order_cba`
+are the same three transactions in opposite orders and are expected to differ — and the
+function neither sorts nor deduplicates, which is what
+`.two_identical_transactions` and `.three_copies_of_one_transaction` hold it to. The empty
+list is the reference's empty branch, `sha256d(kEmptyMerkleTag)`, not a zero digest and not an
+error, and it is the only case where a null pointer is meaningful: `txs == nullptr` requires
+`count == 0`, documented at the declaration in `kernel/include/zerocoin/merkle.h`.
+There is deliberately **no** transaction-count limit here either — `MAX_BLOCK_TRANSACTIONS`
+(B-9) is a `validate_structure` rule, and `kernel/tests/test_merkle.cpp` pins that 2049
+transactions still root — because folding a block rule into the root function would be
+inventing a consensus rule (C-12, C-11).
+
+The signature is not `noexcept`, which is the one place this milestone departs from the §2
+convention in `INTERFACE_CONTRACTS.md`, and the reason is that `Transaction::serialize()` and
+`Transaction::txid()` are already allocating, non-`noexcept` API: asserting `noexcept` here
+would promise a guarantee the callees cannot keep and would turn an allocation failure into
+`std::terminate` at a boundary the owner does not terminate on. Allocation is bounded and
+explicit — one `reserve(count)` of 32-byte leaves, then the leaf rule's own per-level
+buffer — mirroring the reference. `kernel/tools/p33_conformance.py` replays all 22 committed
+P3.3 cases in `test/p33-vectors/chain/merkle_root_from_txs.json` byte for byte, and
+cross-checks each case twice independently of the kernel: it re-derives every transaction id
+with `test/harness/zro_vectors.py::tx_txid` and every root with `merkle_root`, and it checks
+the id-to-leaf mapping itself through the runner's `leaf_txids_hex` output rather than only the
+digest at the top of the tree. Every expected value in that corpus is the return value of a
+direct call to the shipping Rust `Block::compute_merkle_root`; none is transcribed,
+hand-calculated, or produced by the C++ kernel.
+
+Still **not** implemented by this milestone, and unchanged by it: the claimed-root comparison
+against a header's committed `merkle_root` (B-1/B-14) and the `RootMismatch` half of the error
+taxonomy (C-14), a block header decoder, header hashing and PoW engine dispatch (C-4), any
+`Block` type, any validation order, and `connect_block`. Composing transaction ids into a root
+is a byte-identical artifact (C-5); it is **not** a block-validation or acceptance path, and a
+green P3.3 gate must not be read as one. F-1 remains **deferred** — the C++ half of the
+untrusted-height work is untouched — C-29's remaining obligation is still P4's, and no claim of
+full consensus parity, audit or production readiness is made.
+
 
 ---
 

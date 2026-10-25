@@ -1,17 +1,21 @@
-// Leaf-level Merkle root tests. The corpus in test/p32-vectors/chain/ is the
-// value oracle (kernel/tools/p32_conformance.py replays it byte for byte), so
-// nothing here copies an expected root out of a fixture and no test types a hash
-// by hand. What these tests pin instead is the structure a fixed corpus cannot
-// express on its own: which branch produces which digest, the direction of the
-// bytes inside a pair, the level at which the odd node gets duplicated, the fact
-// that order matters, and the absence of any leaf-count limit.
+// Merkle root tests: the leaf-level rule and the transaction-level composition.
+// The corpora in test/p32-vectors/chain/ and test/p33-vectors/chain/ are the
+// value oracles (kernel/tools/p32_conformance.py and p33_conformance.py replay
+// them byte for byte), so nothing here copies an expected root out of a fixture
+// and no test types a hash by hand. What these tests pin instead is the
+// structure a fixed corpus cannot express on its own: which branch produces
+// which digest, the direction of the bytes inside a pair, the level at which the
+// odd node gets duplicated, the fact that order matters, that the composition
+// adds nothing between a transaction's id and its leaf, and that neither entry
+// point has a count limit.
 //
-// Two helpers do the independent work. `fold_pair` re-derives one internal node
-// from the C-5 wording instead of calling anything in merkle.cpp, and
+// Three helpers do the independent work. `fold_pair` re-derives one internal
+// node from the C-5 wording instead of calling anything in merkle.cpp,
 // `spec_root` is a second, differently-shaped implementation of the whole loop
 // (it widens an odd level by copying its last node, then folds pairs with no odd
-// case left in it). A mutation inside merkle.cpp therefore disagrees with this
-// file rather than being repeated by it.
+// case left in it), and `id_from_encoding` re-derives a transaction id from the
+// C-2 wording instead of calling `Transaction::txid()`. A mutation in merkle.cpp
+// therefore disagrees with this file rather than being repeated by it.
 
 #include <algorithm>
 #include <array>
@@ -22,11 +26,17 @@
 
 #include "test_framework.h"
 #include "zerocoin/hash.h"
+#include "zerocoin/hex.h"
 #include "zerocoin/merkle.h"
+#include "zerocoin/transaction.h"
 
 namespace {
 
 using zk::Hash256;
+using zk::Outpoint;
+using zk::Transaction;
+using zk::TxIn;
+using zk::TxOut;
 
 constexpr std::size_t kWidth = Hash256::kWidth;
 constexpr std::size_t kPair = kWidth * 2;
@@ -93,6 +103,64 @@ Hash256 spec_root(const std::vector<Hash256>& leaves) {
 }
 
 std::vector<Hash256> concat(const Hash256& a, const Hash256& b) { return {a, b}; }
+
+// A transaction whose every field is a function of one seed byte, so a list of
+// them is a list of distinct serialisations that needs no lookup table. The same
+// shape the P3.3B corpus uses for its width cases.
+Transaction seeded(std::uint8_t seed) {
+  Transaction tx;
+  tx.version = 1;
+  tx.inputs.push_back(
+      TxIn{Outpoint{ramp(seed), seed}, {seed, static_cast<std::uint8_t>(seed + 1)}, 0xffff'ffff});
+  tx.outputs.push_back(
+      TxOut{(static_cast<std::uint64_t>(seed) + 1) * 1000, {0x76, 0xa9, 0x14, seed}});
+  tx.lock_time = seed;
+  return tx;
+}
+
+/// A coinbase by shape: one input that spends the null outpoint. Used to show the
+/// composition never consults it — B-12 and B-13 belong to `validate_structure`.
+Transaction coinbase_like(std::uint8_t seed) {
+  Transaction tx;
+  tx.version = 1;
+  tx.inputs.push_back(
+      TxIn{Outpoint::null(), {seed, static_cast<std::uint8_t>(seed + 1)}, 0xffff'ffff});
+  tx.outputs.push_back(
+      TxOut{(static_cast<std::uint64_t>(seed) + 1) * 1000, {0x76, 0xa9, 0x14, seed}});
+  tx.lock_time = 0;
+  return tx;
+}
+
+std::vector<Transaction> seeded_list(std::size_t count, std::uint8_t seed) {
+  std::vector<Transaction> txs;
+  txs.reserve(count);
+  for (std::size_t i = 0; i < count; ++i) {
+    txs.push_back(seeded(static_cast<std::uint8_t>(seed + i)));
+  }
+  return txs;
+}
+
+Hash256 root_of_txs(const std::vector<Transaction>& txs) {
+  return zk::merkle_root_from_transactions(txs.data(), txs.size());
+}
+
+/// The id re-derived from the C-2 wording — sha256d over the canonical
+/// serialisation — which is what `Transaction::txid()` does at
+/// `src/transaction.cpp:126-129`. Writing it out here is what catches a
+/// composition that fed something else to the tree.
+Hash256 id_from_encoding(const Transaction& tx) {
+  const std::vector<std::uint8_t> bytes = tx.serialize();
+  return zk::sha256d(bytes.data(), bytes.size());
+}
+
+std::vector<Hash256> ids_from_encoding(const std::vector<Transaction>& txs) {
+  std::vector<Hash256> ids;
+  ids.reserve(txs.size());
+  for (const Transaction& tx : txs) {
+    ids.push_back(id_from_encoding(tx));
+  }
+  return ids;
+}
 
 }  // namespace
 
@@ -347,4 +415,254 @@ ZK_TEST(merkle_widths_from_two_to_nine_match_the_spec_implementation) {
       ZK_CHECK(roots[i] != roots[j]);
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Transaction-level composition (P3.3B): zk::merkle_root_from_transactions
+// ---------------------------------------------------------------------------
+
+ZK_TEST(merkle_txs_empty_list_takes_the_reference_empty_branch) {
+  // A zero count is decided before the buffer is read, in both spellings, which
+  // is the order the reference uses and what makes a null list well defined.
+  const Transaction sentinel = seeded(0x5a);
+  const std::vector<Transaction> one{sentinel};
+  const Hash256 via_null = zk::merkle_root_from_transactions(nullptr, 0);
+  const Hash256 via_buffer = zk::merkle_root_from_transactions(one.data(), 0);
+
+  // The expectation is the public hash primitive over the tag — the same digest
+  // the leaf rule gives for no leaves — not a value copied from a fixture.
+  const Hash256 expected = zk::sha256d(zk::kEmptyMerkleTag, zk::kEmptyMerkleTagSize);
+  ZK_CHECK(via_null == expected);
+  ZK_CHECK(via_buffer == expected);
+  ZK_CHECK(via_null == zk::merkle_root(nullptr, 0));
+  ZK_CHECK(!via_null.is_zero());
+
+  // The empty tree is its own commitment, not some transaction's id.
+  ZK_CHECK(via_null != sentinel.txid());
+
+  // Reading a zero-length range wrote nothing and changed nothing.
+  ZK_CHECK(one.size() == 1 && one[0] == sentinel);
+}
+
+ZK_TEST(merkle_txs_single_transaction_root_is_that_transactions_id) {
+  // Three different one-item lists, including a coinbase-shaped one: in every
+  // case the root is the id that transaction's own encoding commits to, with no
+  // hash applied on top and no coinbase rule consulted.
+  const std::vector<Transaction> singles = {seeded(0x11), coinbase_like(0x27), seeded(0xff)};
+  for (const Transaction& tx : singles) {
+    const std::vector<Transaction> one{tx};
+    const Hash256 id = id_from_encoding(tx);
+    ZK_CHECK(id == tx.txid());
+    ZK_CHECK(root_of_txs(one) == id);
+    ZK_CHECK(root_of_txs(one) == zk::merkle_root(&id, 1));
+
+    // One transaction is not two copies of it, so a promoted-or-duplicated
+    // single leaf cannot masquerade as this result.
+    ZK_CHECK(root_of_txs(one) != fold_pair(id, id));
+    const std::vector<Transaction> twice{tx, tx};
+    ZK_CHECK(root_of_txs(twice) == fold_pair(id, id));
+    ZK_CHECK(root_of_txs(twice) != root_of_txs(one));
+  }
+
+  // A coinbase is an ordinary transaction here: the composition never asks.
+  const Transaction cb = coinbase_like(0x01);
+  ZK_CHECK(cb.is_coinbase());
+  ZK_CHECK(root_of_txs(std::vector<Transaction>{cb}) == cb.txid());
+}
+
+ZK_TEST(merkle_txs_composition_adds_nothing_between_the_id_and_the_leaf) {
+  // The whole contract of the new function in one statement: for every width,
+  // its root is the leaf rule applied to the ids re-derived here from the
+  // encodings — a second implementation of both halves, neither of which calls
+  // merkle_root_from_transactions.
+  for (std::size_t count = 0; count <= 9; ++count) {
+    const std::vector<Transaction> txs = seeded_list(count, 0x40);
+    const std::vector<Hash256> ids = ids_from_encoding(txs);
+    ZK_CHECK(ids.size() == count);
+    for (std::size_t i = 0; i < count; ++i) {
+      ZK_CHECK(ids[i] == txs[i].txid());
+    }
+    ZK_CHECK(root_of_txs(txs) == root_of(ids));
+    ZK_CHECK(root_of_txs(txs) == spec_root(ids));
+  }
+
+  // Seventeen transactions reach five levels deep, 17 -> 9 -> 5 -> 3 -> 2 -> 1.
+  const std::vector<Transaction> many = seeded_list(17, 0x10);
+  ZK_CHECK(root_of_txs(many) == spec_root(ids_from_encoding(many)));
+
+  // And the result is the stored digest, not its printing form: the display
+  // string is the same bytes reversed, and the two never coincide here.
+  const Hash256 root = root_of_txs(many);
+  std::array<std::uint8_t, kWidth> reversed{};
+  std::copy_n(root.bytes.rbegin(), kWidth, reversed.begin());
+  ZK_CHECK(root.to_hex().str() == zk::to_hex(root.bytes.data(), kWidth));
+  ZK_CHECK(root.to_display_hex().str() == zk::to_hex(reversed.data(), kWidth));
+  ZK_CHECK(root.to_hex().str() != root.to_display_hex().str());
+}
+
+ZK_TEST(merkle_txs_root_follows_transaction_order) {
+  // Two transactions, swapped. Asymmetric fixtures, so a rule that sorted the
+  // children by value would show up.
+  const Transaction a = seeded(0x01);
+  const Transaction b = seeded(0x02);
+  const std::vector<Transaction> ab{a, b};
+  const std::vector<Transaction> ba{b, a};
+  ZK_CHECK(root_of_txs(ab) == fold_pair(id_from_encoding(a), id_from_encoding(b)));
+  ZK_CHECK(root_of_txs(ab) != root_of_txs(ba));
+
+  // Three transactions, reversed, and a single adjacent swap in a wider list.
+  const std::vector<Transaction> abc = seeded_list(3, 0x70);
+  std::vector<Transaction> cba = abc;
+  std::reverse(cba.begin(), cba.end());
+  ZK_CHECK(root_of_txs(abc) != root_of_txs(cba));
+  ZK_CHECK(root_of_txs(cba) == spec_root(ids_from_encoding(cba)));
+
+  const std::vector<Transaction> four = seeded_list(4, 0x20);
+  std::vector<Transaction> swapped = four;
+  std::swap(swapped[1], swapped[2]);
+  ZK_CHECK(root_of_txs(four) != root_of_txs(swapped));
+
+  // Same transactions, same length, different order: the ids are a permutation of
+  // each other, so only the tree can differ.
+  const std::vector<Hash256> ids_ab = ids_from_encoding(abc);
+  const std::vector<Hash256> ids_cb = ids_from_encoding(cba);
+  ZK_CHECK(ids_ab.size() == ids_cb.size());
+  for (std::size_t i = 0; i < ids_ab.size(); ++i) {
+    ZK_CHECK(ids_ab[i] == ids_cb[ids_cb.size() - 1 - i]);
+  }
+}
+
+ZK_TEST(merkle_txs_odd_final_transaction_is_duplicated_not_promoted) {
+  const Transaction a = seeded(0x01);
+  const Transaction b = seeded(0x02);
+  const Transaction c = seeded(0x03);
+  const Hash256 ia = id_from_encoding(a);
+  const Hash256 ib = id_from_encoding(b);
+  const Hash256 ic = id_from_encoding(c);
+
+  // Level 1 folds (a,b) and (c,c); nothing carries c forward unhashed.
+  const std::vector<Transaction> three{a, b, c};
+  const Hash256 expected = fold_pair(fold_pair(ia, ib), fold_pair(ic, ic));
+  ZK_CHECK(root_of_txs(three) == expected);
+  ZK_CHECK(root_of_txs(three) != fold_pair(fold_pair(ia, ib), ic));
+  ZK_CHECK(root_of_txs(three) != root_of_txs(std::vector<Transaction>{a, b}));
+
+  // Appending a copy of the final transaction cannot change the root, because the
+  // odd rule makes that copy anyway. Stated as an equality over transactions.
+  const std::vector<Transaction> four{a, b, c, c};
+  ZK_CHECK(root_of_txs(four) == root_of_txs(three));
+
+  // Five transactions duplicate at two different levels: widths 5 -> 3 -> 2 -> 1.
+  const std::vector<Transaction> five = seeded_list(5, 0x30);
+  const std::vector<Hash256> five_ids = ids_from_encoding(five);
+  const Hash256 p0 = fold_pair(five_ids[0], five_ids[1]);
+  const Hash256 p1 = fold_pair(five_ids[2], five_ids[3]);
+  const Hash256 p2 = fold_pair(five_ids[4], five_ids[4]);
+  ZK_CHECK(root_of_txs(five) == fold_pair(fold_pair(p0, p1), fold_pair(p2, p2)));
+}
+
+ZK_TEST(merkle_txs_root_follows_transaction_content) {
+  const Transaction base = seeded(0x44);
+
+  // One field at a time, each a single byte wide in the encoding: every change
+  // moves the id, and so moves the root of an otherwise identical list.
+  Transaction value = base;
+  value.outputs[0].value += 1;
+  Transaction script = base;
+  script.outputs[0].script_pubkey.push_back(0xac);
+  Transaction sequence = base;
+  sequence.inputs[0].sequence -= 1;
+  Transaction outpoint = base;
+  outpoint.inputs[0].previous_output.vout += 1;
+  Transaction timelock = base;
+  timelock.lock_time += 1;
+  Transaction version = base;
+  version.version += 1;
+
+  const Transaction others = seeded(0x45);
+  const std::vector<Transaction> tail{others};
+  for (const Transaction& changed :
+       {base, value, script, sequence, outpoint, timelock, version}) {
+    std::vector<Transaction> list{changed};
+    list.insert(list.end(), tail.begin(), tail.end());
+    ZK_CHECK(id_from_encoding(changed) == changed.txid());
+    ZK_CHECK(root_of_txs(list) == spec_root(ids_from_encoding(list)));
+  }
+
+  // Each mutated transaction gives a different root against the same partner.
+  std::vector<Hash256> roots;
+  for (const Transaction& changed :
+       {value, script, sequence, outpoint, timelock, version}) {
+    std::vector<Transaction> list{changed};
+    list.insert(list.end(), tail.begin(), tail.end());
+    roots.push_back(root_of_txs(list));
+  }
+  std::vector<Transaction> unperturbed{base};
+  unperturbed.insert(unperturbed.end(), tail.begin(), tail.end());
+  roots.push_back(root_of_txs(unperturbed));
+  for (std::size_t i = 0; i < roots.size(); ++i) {
+    for (std::size_t j = i + 1; j < roots.size(); ++j) {
+      ZK_CHECK(roots[i] != roots[j]);
+    }
+  }
+
+  // The leaf source is the encoding, not the object graph: a transaction decoded
+  // from its own bytes composes to the same root.
+  const std::vector<std::uint8_t> bytes = base.serialize();
+  const zk::TxDecodeResult decoded = zk::deserialize_transaction(bytes.data(), bytes.size());
+  ZK_CHECK(static_cast<bool>(decoded));
+  ZK_CHECK(decoded.tx == base);
+  ZK_CHECK(root_of_txs(std::vector<Transaction>{decoded.tx, others}) ==
+           root_of_txs(std::vector<Transaction>{base, others}));
+}
+
+ZK_TEST(merkle_txs_never_writes_to_the_caller_transaction_list) {
+  std::vector<Transaction> txs = seeded_list(9, 0x0c);
+  const std::vector<Transaction> snapshot = txs;
+  const std::vector<std::string> encodings_before = [&txs] {
+    std::vector<std::string> out;
+    for (const Transaction& tx : txs) {
+      const std::vector<std::uint8_t> bytes = tx.serialize();
+      out.push_back(zk::to_hex(bytes.data(), bytes.size()));
+    }
+    return out;
+  }();
+
+  const Hash256 root = root_of_txs(txs);
+  ZK_CHECK(txs == snapshot);
+
+  std::vector<std::string> encodings_after;
+  for (const Transaction& tx : txs) {
+    const std::vector<std::uint8_t> bytes = tx.serialize();
+    encodings_after.push_back(zk::to_hex(bytes.data(), bytes.size()));
+  }
+  ZK_CHECK(encodings_before == encodings_after);
+  ZK_CHECK(root == spec_root(ids_from_encoding(snapshot)));
+
+  // A second call over the unchanged input repeats the first answer exactly.
+  ZK_CHECK(root_of_txs(txs) == root);
+}
+
+ZK_TEST(merkle_txs_accepts_more_transactions_than_the_block_rule_allows) {
+  // MAX_BLOCK_TRANSACTIONS (B-9) is enforced by validate_structure, outside the
+  // root rule. The composition must not grow its own limit, so a list above that
+  // count still reduces to the same root the leaf rule gives over its ids.
+  const std::vector<Transaction> many = seeded_list(2049, 0x00);
+  const Hash256 first = root_of_txs(many);
+  ZK_CHECK(!first.is_zero());
+  ZK_CHECK(first == root_of(ids_from_encoding(many)));
+  ZK_CHECK(first == spec_root(ids_from_encoding(many)));
+
+  // Seed bytes repeat past 256 entries, so this list is mostly duplicates and is
+  // still counted leaf by leaf — no deduplication at depth.
+  std::vector<Transaction> one_more = many;
+  one_more.push_back(many.back());
+  one_more.back().lock_time += 1;
+  ZK_CHECK(root_of_txs(one_more) != first);
+  ZK_CHECK(root_of_txs(one_more) == spec_root(ids_from_encoding(one_more)));
+
+  // A power-of-two width above the block bound reduces without any duplication.
+  const std::vector<Transaction> power = seeded_list(2048, 0x00);
+  ZK_CHECK(root_of_txs(power) == spec_root(ids_from_encoding(power)));
+  ZK_CHECK(root_of_txs(power) != first);
 }

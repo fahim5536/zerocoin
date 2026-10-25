@@ -634,6 +634,44 @@ Produced op_merkle_root(const Case& c) {
   };
 }
 
+// The transaction-level composition, the C++ shape of
+// `Block::compute_merkle_root`. One `IN tx_hex=<canonical bytes>` per
+// transaction, in corpus order; a case with no tx line is the empty list. Every
+// transaction is decoded, so what the kernel hashes is the id of the object its
+// own codec produced — the encoding rule C-1 and the id rule C-2 are both on the
+// path, not assumed by the fixture.
+Produced op_merkle_root_from_txs(const Case& c) {
+  const std::vector<std::string> hexes = c.all("tx_hex");
+  std::vector<Transaction> txs;
+  txs.reserve(hexes.size());
+  for (const std::string& hex : hexes) {
+    // `tx_of` fails the case on a bad decode or on trailing bytes, so an input
+    // that is not exactly one canonical transaction cannot be quietly dropped or
+    // padded into a plausible-looking root.
+    txs.push_back(tx_of(hex, "tx_hex"));
+  }
+
+  // The same call shape as op_merkle_root above: an empty list is a null pointer
+  // with a zero count, the one combination merkle.h documents as meaningful.
+  const Hash256 root = zk::merkle_root_from_transactions(txs.data(), txs.size());
+
+  // The leaf ids, concatenated in list order. Echoing them lets the wrapper check
+  // the id-to-leaf mapping instead of only the digest at the top of the tree, and
+  // its width is what proves one leaf per transaction reached the tree.
+  std::string leaves;
+  for (const Transaction& tx : txs) {
+    leaves += txid_internal(tx);
+  }
+
+  return {
+      {"internal_hex", root.to_hex().str()},
+      {"display_hex", root.to_display_hex().str()},
+      {"root_len", std::to_string(root.bytes.size())},
+      {"tx_count", std::to_string(txs.size())},
+      {"leaf_txids_hex", leaves},
+  };
+}
+
 Produced execute(const Case& c) {
   if (c.op == "sha256_utf8") return op_sha256_utf8(c);
   if (c.op == "sha256d_utf8") return op_sha256d_utf8(c);
@@ -659,6 +697,7 @@ Produced execute(const Case& c) {
   if (c.op == "header_preimage") return op_header_preimage(c);
   if (c.op == "header_identity") return op_header_identity(c);
   if (c.op == "merkle_root") return op_merkle_root(c);
+  if (c.op == "merkle_root_from_txs") return op_merkle_root_from_txs(c);
   fail("unknown OP: " + c.op);
 }
 

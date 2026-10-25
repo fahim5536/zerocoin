@@ -72,6 +72,37 @@ changes no code, no vector and no consensus rule.
 > obligation is still P4's. This addendum supersedes the clause in the P3.1B addendum that
 > "the **Merkle root (C-5) is not implemented**": the leaf-level rule now is.
 
+> **P3.3B addendum (2026-10-25).** The fourth P3 derived implementation is the composition
+> the P3.2B addendum listed as *not* covered, and it stays inside the same owner row and the
+> same two modules: `zk::merkle_root_from_transactions(const Transaction*, std::size_t)` in
+> `kernel/src/merkle.cpp` ports `Block::compute_merkle_root` (`src/consensus/block.rs:120`)
+> by mapping each transaction to the **already-owned** P1 `Transaction::txid()` (C-2) and
+> handing that ordered list to the **already-owned** P3.2B `zk::merkle_root` (C-5). It owns no
+> new rule: it introduces no hashing, no byte-order reinterpretation, no ordering change and
+> no count limit, and the milestone boundary forbade a `Block` type, so the pair of existing
+> rules is simply wired together. The gate is `kernel_p33_conformance`
+> (`kernel/tools/p33_conformance.py`, which replays all 22 committed cases in
+> `test/p33-vectors/chain/merkle_root_from_txs.json` against `source_commit b71d769`; the
+> composition itself entered `zerocoin/src` at `reference_commits.compute_merkle_root_introduced`
+> and `reference_commits.txid_introduced`, both `e464695f`) plus 8 focused unit
+> tests in `kernel/tests/test_merkle.cpp`. `test/harness/zro_vectors.py` is wired as an
+> independent verifier of the corpus at replay time — `tx_from_json`, `tx_serialize`,
+> `tx_txid` and `merkle_root` re-derive every leaf and every root from the published inputs —
+> and it is not the origin of any published value, nor is the C++ kernel. What is *not*
+> covered, and is the reason this row does not move to "Done": the claimed-root comparison
+> against a header's committed `merkle_root` (B-1/B-14) and the `RootMismatch` taxonomy, a
+> header decoder, header hashing and the engine dispatch (C-4), any `Block` abstraction, and
+> `connect_block` / chain replay / acceptance (P4). A root can now be computed from
+> transactions; **nothing in C++ validates or accepts a block**, and this milestone must not
+> be read as a block-validation path. Ownership has not moved and no phase moved: Rust is
+> still the oracle, and the P0 corpus, the P3.1A fixtures, the P3.2 corpus, the P3.3
+> exporter's inputs and the 121-case differential fixture were not touched. F-1 remains
+> **deferred** and C-29's remaining obligation is still P4's. This addendum supersedes the
+> clause in the P3.2B addendum that the transaction-level leaves of
+> `Block::compute_merkle_root` need "a C++ transaction-id surface this milestone was told not
+> to invent": that surface has existed since P1, and is what this slice used.
+
+
 Related: `THREE_LANGUAGE_ARCHITECTURE.md` (what each language may do),
 `INTERFACE_CONTRACTS.md` (the interfaces owners expose),
 `MIGRATION_ROADMAP.md` (when derived implementations are removed), and
@@ -118,7 +149,7 @@ file the phase produced or will produce; "—" means no C++ module exists yet.
 | Script interpreter | `src/ledger/script.rs` | `kernel/src/script.cpp` | P2 | Done |
 | Sighash preimage and digest | `src/ledger/sighash.rs` | `kernel/src/sighash.cpp` | P2 | Done |
 | ECDSA verification, SEC1, DER | `src/crypto/secp256k1.rs` (`k256 0.13.4`) | `kernel/src/secp256k1_verifier.cpp` (vendored libsecp256k1 0.8.0, PRIVATE link) | P2 / G2c | Done in P2.10 — verification only, signing stays Rust/test-only; `CRYPTO_BACKEND_SELECTION_AUDIT.md` §20 |
-| Block header and Merkle root | `src/consensus/block.rs` | `kernel/src/header.cpp`, `kernel/src/merkle.cpp` | P3 | Header slice done in P3.1B: the 107-byte preimage (C-3) and `validate_header_identity`. Leaf-level Merkle root (C-5) done in P3.2B: `zk::merkle_root` over 32-byte leaves. The transaction-level leaves of `Block::compute_merkle_root`, the claimed-root comparison (B-1/B-14), header hashing and PoW dispatch (C-4) are not started |
+| Block header and Merkle root | `src/consensus/block.rs` | `kernel/src/header.cpp`, `kernel/src/merkle.cpp` | P3 | Header slice done in P3.1B: the 107-byte preimage (C-3) and `validate_header_identity`. Leaf-level Merkle root (C-5) done in P3.2B: `zk::merkle_root` over 32-byte leaves. Transaction-level Merkle root (C-5) done in P3.3B: `zk::merkle_root_from_transactions`, the composition of the P1 `txid()` with the P3.2B leaf rule. The claimed-root comparison (B-1/B-14), a header decoder, header hashing and PoW dispatch (C-4) and any block acceptance path are not started |
 | Difficulty retarget | `src/consensus/difficulty.rs` | `kernel/src/difficulty.cpp` | P3 | Done in P3.0; reproduces F-6 and F-11, diverges deliberately on F-7 |
 | Proof of work | `src/consensus/pow.rs` | — | P3 | Not started |
 | Subsidy, maturity, coinbase split | `src/consensus/reward.rs` | — | P3 | Not started |
@@ -169,7 +200,8 @@ consensus code.
 | P3 conformance mapping | `kernel/tools/p3_conformance.py` | Owns the P3 slice, the corpus classification and the corruption self-check | 18 cases (6 corpus cases) |
 | P3.1 header conformance mapping | `kernel/tools/p31_conformance.py` | Owns the P3.1A corpus slice, the header field mapping, the printed deferral and the corruption self-check | 19 cases (10 preimage + 9 identity) |
 | P3.2 Merkle conformance mapping | `kernel/tools/p32_conformance.py` | Owns the P3.2 corpus slice, the repeated-leaf input mapping, the 32-byte leaf gate, the independent Python cross-check and the corruption self-check | 20 cases (0–9 leaves plus edge shapes) |
-| Conformance runner protocol | `kernel/conformance/main.cpp` | Owns the 24 verbs and `SUMMARY` output | Stable |
+| P3.3 transaction-to-Merkle conformance mapping | `kernel/tools/p33_conformance.py` | Owns the P3.3 corpus slice, the repeated-transaction input mapping, the per-leaf serialization/txid gates, the independent Python re-derivation of every id and root, the `leaf_txids_hex` mapping check and the corruption self-check | 22 cases (0–17 transactions, coinbases, order and duplicate shapes) |
+| Conformance runner protocol | `kernel/conformance/main.cpp` | Owns the 25 verbs and `SUMMARY` output | Stable |
 | Build and gate | `kernel/CMakeLists.txt`, `scripts/gate-g1.ps1`, `scripts/gate-p2-6.ps1`, `scripts/gate-p2-10-provenance.ps1` | Exit code is the verdict (doc `03` §1 rule 5) | Green |
 | Rust dependency set | `Cargo.toml`, `Cargo.lock` | `k256 0.13.4` is the curve implementation actually shipped | Locked |
 | Architecture records | `docs/architecture/**` | This set; decisions are recorded here, not in chat | New |

@@ -1,5 +1,6 @@
-// Leaf-level Merkle root. See merkle.h for the C-5 contract, the null-pointer
-// rule and the list of things this module deliberately does not do.
+// Merkle roots, leaf-level and transaction-level. See merkle.h for the C-5
+// contract, the null-pointer rule and the list of things this module deliberately
+// does not do.
 
 #include "zerocoin/merkle.h"
 
@@ -81,6 +82,25 @@ Hash256 merkle_root(const Hash256* leaves, std::size_t count) noexcept {
     level = std::move(next);
   }
   return level[0];
+}
+
+Hash256 merkle_root_from_transactions(const Transaction* txs, std::size_t count) {
+  // The reference's two lines, in its order: the leaves are the transactions' own
+  // ids, and the tree is `merkle_root` above. `reserve` sizes the buffer once
+  // instead of growing it per push, and `i < count` is the only bound the loop
+  // reads, so the leaf list is exactly as long as the transaction list.
+  std::vector<Hash256> leaves;
+  leaves.reserve(count);
+  for (std::size_t i = 0; i < count; ++i) {
+    leaves.push_back(txs[i].txid());
+  }
+
+  // `leaves.size()` rather than `count`, so the width handed to the leaf rule is
+  // the number of ids actually derived and the two cannot drift apart. With
+  // `count == 0` the vector is empty and `merkle_root` takes its tagged branch
+  // without reading the pointer, which is what keeps a null `txs` well defined
+  // here too.
+  return merkle_root(leaves.data(), leaves.size());
 }
 
 // The pairing rule is width-driven, so the reduction arithmetic above is only

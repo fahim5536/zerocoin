@@ -48,6 +48,17 @@ These rules apply to every header under `kernel/include/zerocoin/`.
    exhausted allocator terminates the process rather than returning a wrong root
    — the same outcome the Rust reference reaches by aborting, and deliberately
    chosen over inventing an error the owner does not have.
+   `zk::merkle_root_from_transactions` (P3.3B) allocates in the same shaped way —
+   one `reserve(count)` of 32-byte ids, then the leaf rule's per-level buffers — but
+   is **not** `noexcept`, because its inputs are `Transaction`s and the P1
+   `serialize()` / `txid()` it is built from are already allocating, non-`noexcept`
+   API. Marking the composition `noexcept` would assert a guarantee the callees
+   cannot provide and convert an allocation failure into `std::terminate` at a
+   boundary the owner does not terminate on; the exception policy stays "no
+   exception is *expected* across the kernel API", not "none can ever propagate".
+   The departure is a documented exception to rule 2, was reviewed before the
+   signature was added, and adds no error path: there is nothing for the caller to
+   check, and the reference's own two lines have none either.
 5. **Constants are `inline constexpr` and frozen by `static_assert`.** A change
    to a limit is a consensus change and cannot be a local edit.
 6. **Warnings are errors** for every target, tests included
@@ -307,13 +318,13 @@ stdout:
 exit: 0 all cases passed | 1 any case failed | 2 usage, fixture or I/O error
 ```
 
-The 24 verbs: `sha256_utf8`, `sha256d_utf8`, `hash160_sec1`, `display_reversal`,
+The 25 verbs: `sha256_utf8`, `sha256d_utf8`, `hash160_sec1`, `display_reversal`,
 `varint_encode`, `tx_build`, `tx_roundtrip`, `tx_decode_error`, `compact`,
 `script_push_data`, `p2pkh_script_pubkey`, `p2pkh_script_sig`, `script_verify`,
 `sighash`, `sighash_distinct`, `p2pkh_spend`, `difficulty_params`,
 `difficulty_validate_bits`, `difficulty_hash_meets_target`,
 `difficulty_required_work`, `difficulty_next`, `header_preimage`,
-`header_identity`, `merkle_root`.
+`header_identity`, `merkle_root`, `merkle_root_from_txs`.
 
 `p2pkh_spend` (added in P2.10 §7) is the only verb that checks a real
 signature: it deserialises the transaction, derives the sighash for the bound
@@ -340,12 +351,32 @@ of the protocol failure it is. Each `leaf` is parsed through the same helper the
 verbs use, which rejects anything that is not exactly 32 bytes, so a short or over-wide leaf
 is an error before the kernel is reached.
 
+`merkle_root_from_txs` (added in P3.3B) takes the same repeated-`IN` shape one level up: each
+transaction arrives as its own `IN tx_hex=<serialized hex>` line, so a case carries exactly as
+many input lines as `input.tx_count` claims and the zero-transaction case carries none. Each
+line is decoded through the existing `tx_of` helper, which fails the case on a bad decode *or*
+on trailing bytes, so no input can be quietly padded, truncated or dropped on the way into the
+tree — the verb exercises the C-1 codec and the C-2 id rule as part of the C-5 result rather
+than assuming them. It returns the root twice, `internal_hex` and `display_hex`, plus
+`root_len` and `tx_count`, for the same reason `merkle_root` does: a reversed digest is still
+64 characters, so only the pair pins which one is consensus bytes, and `tx_count` is echoed
+rather than inferred so the wrapper can prove every input line reached the tree. It additionally
+returns `leaf_txids_hex`, the per-transaction ids concatenated **in list order**. That last
+output is what makes the composition itself a checked artifact: a runner that reversed the
+leaf order, sorted or deduplicated the ids, hashed an id a second time, or fed display-order
+bytes to the tree would still be capable of returning *a* 32-byte digest, and only the
+concatenated leaf list distinguishes "the right root from the wrong leaves" from "the right
+leaves and a wrong tree". Its width is not a free variable: the wrapper requires one leaf
+object per published transaction and parses each leaf id as exactly 64 lowercase hex
+characters, so `leaf_txids_hex` is `64 × tx_count` characters before the runner is invoked.
+
 ### 7.2 The wrappers
 
 `kernel/tools/g1_conformance.py`, `p2_conformance.py` and `p3_conformance.py` own
 the translation from `test/vectors/**` JSON to the fixture grammar;
-`kernel/tools/p31_conformance.py` and `kernel/tools/p32_conformance.py` own the same
-translation for the header corpus and the leaf-level Merkle corpus in §7.3. They must:
+`kernel/tools/p31_conformance.py`, `kernel/tools/p32_conformance.py` and
+`kernel/tools/p33_conformance.py` own the same translation for the header corpus, the
+leaf-level Merkle corpus and the transaction-level Merkle corpus in §7.3. They must:
 
 1. read `source_commit` from the corpus and print it, so a stale build is visible;
 2. fail if a case is missing, duplicated or mapped twice;
@@ -405,6 +436,32 @@ Rust exporter is the origin and a Python disagreement means the corpus is at fau
 never reported as a Merkle root mismatch. The wrapper also validates each leaf as exactly 64
 lowercase hex characters before building the fixture, so malformed input surfaces as exit 2
 with the case id rather than as a wrong-root verdict against a padded value.
+
+`test/p33-vectors/**` is the fourth corpus root and holds one group,
+`chain.merkle_root_from_txs` (22 cases: the transaction counts 0, 1, 2, 3, 4, 5, 6, 7, 9 and 17,
+a coinbase-only list and the pinned genesis coinbase, a swapped pair and the `order_abc` /
+`order_cba` triple, two and three copies of one transaction, a near-identical pair, and a
+degenerate transaction). Its `source_commit` (b71d769) is the code that produced the roots and
+both `reference_commits` entries (`compute_merkle_root_introduced` and `txid_introduced`,
+e464695f) point at the commit where those two functions entered `zerocoin/src`; as in the P3.2
+manifest, the generator field says plainly that the `p33_*` exporter functions landed with the
+corpus, so no fixture claims a commit that did not contain its own exporter. Every expected
+value is produced by a direct call to the shipping Rust `Block::compute_merkle_root` and
+`Transaction::txid` — the roots are not derived from the leaf-level corpus, and nothing here is
+transcribed, hand-calculated or generated by the C++ kernel. Each case publishes, per
+transaction, the canonical `serialized_hex`, its `serialized_len` and its `txid`, so the
+id-to-leaf mapping is a fixture value rather than an inference. Since P3.3B the corpus is
+replayed by `kernel/tools/p33_conformance.py` and registered as the
+`kernel_p33_conformance` ctest entry, which the gate scripts pick up because they run the whole
+ctest set; it carries **zero** deferred expected keys and the wrapper refuses an expected key
+it has not mapped. This corpus has the same cross-check the leaf-level one has, and one more:
+the wrapper re-derives every transaction id with `test/harness/zro_vectors.py::tx_txid` and
+every root with `merkle_root` from the published inputs before the runner is invoked, and it
+also re-encodes each case's transaction fields with `tx_serialize` and requires the result to
+equal the Rust `serialized_hex` byte for byte — so a Python/Rust disagreement about the *encoder*
+is caught too, not only about the tree. All three are *fixture* assertions that surface as a
+mapping failure (exit 2) naming the derived value against the published one; none is ever
+reported as a Merkle root mismatch against the kernel.
 
 ---
 
