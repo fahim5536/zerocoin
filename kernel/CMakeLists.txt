@@ -69,6 +69,7 @@ add_library(zerocoin_kernel STATIC
   src/uint256.cpp
   src/difficulty.cpp
   src/header.cpp
+  src/pow.cpp
   src/merkle.cpp
   src/varint.cpp
   src/transaction.cpp
@@ -102,6 +103,7 @@ add_executable(kernel_tests
   tests/test_uint256.cpp
   tests/test_difficulty.cpp
   tests/test_header.cpp
+  tests/test_pow.cpp
   tests/test_merkle.cpp
   tests/test_varint.cpp
   tests/test_transaction.cpp
@@ -112,6 +114,13 @@ add_executable(kernel_tests
 )
 target_link_libraries(kernel_tests PRIVATE zerocoin_kernel)
 target_include_directories(kernel_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+# src/ holds exactly one header, pow_internal.h, and it is deliberately outside
+# include/ so the production interface cannot reach it. Only the test binary gets
+# this directory: P4.0 must corrupt a scratchpad round input and the finalization
+# prefix to prove those bytes are load-bearing, and the only honest way to do that
+# is through the engine's own internal helper rather than a public API added for
+# the test. PRIVATE means no consumer of zerocoin_kernel inherits it.
+target_include_directories(kernel_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 zerocoin_enable_warnings(kernel_tests)
 
 add_executable(kernel_conformance conformance/main.cpp)
@@ -180,4 +189,18 @@ add_test(NAME kernel_p33_conformance
   COMMAND ${PYTHON_EXECUTABLE}
           ${CMAKE_CURRENT_SOURCE_DIR}/tools/p33_conformance.py
           --vectors ${CMAKE_CURRENT_SOURCE_DIR}/../test/p33-vectors
+          --runner $<TARGET_FILE:kernel_conformance>)
+
+# P4.0 replays the eleven Proof-of-Work cases the Rust reference exports. This
+# corpus is unlike P3.1-P3.3 in one respect worth stating: it lives inside the
+# same test/vectors root the first three wrappers read, and it is registered in
+# the same manifest, but g1_conformance.py never loads it because that wrapper
+# walks an explicit four-file allowlist rather than the manifest. Reading the
+# file therefore takes no case away from, and adds no case to, any existing test.
+# Additive entry only — no existing test changes count, and gate-g1.ps1 runs the
+# whole ctest set, so this line is the gate wiring.
+add_test(NAME kernel_p4_conformance
+  COMMAND ${PYTHON_EXECUTABLE}
+          ${CMAKE_CURRENT_SOURCE_DIR}/tools/p4_conformance.py
+          --vectors ${CMAKE_CURRENT_SOURCE_DIR}/../test/vectors
           --runner $<TARGET_FILE:kernel_conformance>)

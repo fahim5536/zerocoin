@@ -30,6 +30,7 @@
 #include <exception>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <optional>
 #include <stdexcept>
@@ -42,6 +43,7 @@
 #include "zerocoin/header.h"
 #include "zerocoin/hex.h"
 #include "zerocoin/merkle.h"
+#include "zerocoin/pow.h"
 #include "zerocoin/script.h"
 #include "zerocoin/secp256k1_verifier.h"
 #include "zerocoin/sighash.h"
@@ -672,6 +674,140 @@ Produced op_merkle_root_from_txs(const Case& c) {
   };
 }
 
+// --- proof-of-work ----------------------------------------------------------
+
+// The corpus publishes the pad budget as a JSON integer; the kernel's parameters
+// are std::size_t, so a value that does not fit is a malformed fixture rather
+// than a silent truncation into a different pad.
+std::size_t parse_size(const std::string& text, const std::string& what) {
+  const std::uint64_t value = parse_u64(text, what);
+  if (value > static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) {
+    fail(what + ": does not fit in a size_t: " + text);
+  }
+  return static_cast<std::size_t>(value);
+}
+
+/// `pow.engine_ids`: the two identities the block header commits to. The engines
+/// come from the factories, so the ids and names the corpus asserts are what a
+/// node would actually report rather than a second table of constants, and each
+/// id is resolved back through `engine_for_id` so the case fails if that
+/// mapping stops agreeing with `id()` and `name()`.
+Produced op_pow_engine_ids(const Case& c) {
+  const std::vector<std::string> names = c.all("engine");
+  if (names.empty()) {
+    fail("engine: fixture declares no engines");
+  }
+  Produced out;
+  for (const std::string& name : names) {
+    // The scratchpad profile cannot influence id() or name(); the devnet one is
+    // named because the corpus case declares no parameters of its own.
+    const auto build = [](const std::string& which) -> std::optional<zk::PowEngine> {
+      if (which == "trivial") {
+        return zk::PowEngine::trivial();
+      }
+      if (which == "scratchpad") {
+        return zk::PowEngine::scratchpad(zk::kScratchpadDevnet);
+      }
+      return std::nullopt;
+    };
+    const std::optional<zk::PowEngine> engine = build(name);
+    if (!engine.has_value()) {
+      fail("engine: unknown engine name: " + name);
+    }
+    const std::optional<zk::PowEngine> back = zk::engine_for_id(engine->id(), zk::kScratchpadDevnet);
+    if (!back.has_value() || back->id() != engine->id() || back->name() != engine->name()) {
+      fail("engine: id " + std::to_string(engine->id()) + " does not resolve back to " + name);
+    }
+    out[name + "_id"] = std::to_string(engine->id());
+    out[name + "_name"] = std::string(engine->name());
+  }
+  return out;
+}
+
+/// `pow.trivial.*`: the reference's `TrivialEngine::hash` over a published
+/// preimage and candidate nonce. The preimage arrives as bytes, so the runner
+/// never re-serialises a header (C-4).
+Produced op_pow_trivial_hash(const Case& c) {
+  const std::vector<std::uint8_t> preimage = bytes_of(c.one("preimage_hex"), "preimage_hex");
+  const std::uint64_t nonce = parse_u64(c.one("nonce"), "nonce");
+  const Hash256 hash = zk::PowEngine::trivial().hash(preimage.data(), preimage.size(), nonce);
+  return {
+      {"internal_hex", hash.to_hex().str()},
+      {"display_hex", hash.to_display_hex().str()},
+  };
+}
+
+/// `pow.scratchpad.*`: the memory-hard engine at the budget the row declares.
+/// The engine is RESOLVED from the declared id through `engine_for_id`, and the
+/// id and name it reports are compared against the row's own declaration before
+/// anything is hashed — so a row cannot be replayed under a different algorithm
+/// than the corpus says it belongs to, and dispatch, `id()` and `name()` are all
+/// on the corpus path.
+Produced op_pow_scratchpad_hash(const Case& c) {
+  const std::vector<std::uint8_t> preimage = bytes_of(c.one("preimage_hex"), "preimage_hex");
+  const std::uint64_t nonce = parse_u64(c.one("nonce"), "nonce");
+  const std::string engine_text = c.one("engine_id");
+  const std::uint64_t declared_id = parse_u64(engine_text, "engine_id");
+  if (declared_id > 0xffull) {
+    fail("engine_id: does not fit in 8 bits: " + engine_text);
+  }
+  const std::string declared_name = c.one("engine_name");
+  const zk::ScratchPadParams params{parse_size(c.one("memory_bytes"), "memory_bytes"),
+                                    parse_size(c.one("rounds"), "rounds")};
+  const std::optional<zk::PowEngine> engine =
+      zk::engine_for_id(static_cast<std::uint8_t>(declared_id), params);
+  if (!engine.has_value()) {
+    fail("engine_id: the kernel resolves no engine for " + engine_text);
+  }
+  if (engine->id() != declared_id || engine->name() != declared_name) {
+    fail("engine identity: corpus declares id " + engine_text + ", name " + declared_name +
+         "; kernel reports id " + std::to_string(engine->id()) + ", name " +
+         std::string(engine->name()));
+  }
+  if (engine->scratchpad_params() != params) {
+    fail("engine identity: the resolved engine does not carry the declared budget");
+  }
+  const Hash256 hash = engine->hash(preimage.data(), preimage.size(), nonce);
+  // `cell_count` is the one pad arithmetic the row can be checked on without a
+  // second oracle: the wrapper derives it from the declared budget, independently
+  // of `scratchpad_cell_count`.
+  return {
+      {"internal_hex", hash.to_hex().str()},
+      {"display_hex", hash.to_display_hex().str()},
+      {"cell_count", std::to_string(zk::scratchpad_cell_count(params.memory_bytes))},
+  };
+}
+
+/// `pow.trivial.mine_from_zero`. The reference's `mine` is a miner-side nonce
+/// search — "used by a miner; a validator never calls this" — so it stays out of
+/// the production API and the search lives here, driven through `verify_pow` so
+/// the corpus also replays the verification path and the target comparison.
+/// The engine is the trivial one because the corpus row is `pow.trivial.*` and
+/// publishes no engine id; a scratchpad mine row would need one and does not
+/// exist in the committed corpus.
+Produced op_pow_mine_from_zero(const Case& c) {
+  const std::vector<std::uint8_t> preimage = bytes_of(c.one("preimage_hex"), "preimage_hex");
+  const std::uint32_t bits = parse_bits_u32(c.one("target_bits"));
+  const zk::Uint256 target = zk::block_target(bits);
+  const zk::PowEngine engine = zk::PowEngine::trivial();
+  // A bound rather than a sweep to U64::MAX: a case that finds no work inside it
+  // is a disagreement to report, not a hang. The committed row needs nonce 1.
+  constexpr std::uint64_t kSearchBound = 1000000;
+  for (std::uint64_t nonce = 0; nonce < kSearchBound; ++nonce) {
+    const zk::PowVerifyResult result =
+        zk::verify_pow(engine, preimage.data(), preimage.size(), nonce, target);
+    if (result.ok()) {
+      return {{"nonce", std::to_string(nonce)}};
+    }
+    if (result.kind != zk::PowErrorKind::kInsufficientWork) {
+      fail("mine_from_zero: nonce " + std::to_string(nonce) + " returned " +
+           std::string(zk::pow_error_kind_name(result.kind)));
+    }
+  }
+  fail("mine_from_zero: no nonce below " + std::to_string(kSearchBound) + " meets bits " +
+       std::to_string(bits));
+}
+
 Produced execute(const Case& c) {
   if (c.op == "sha256_utf8") return op_sha256_utf8(c);
   if (c.op == "sha256d_utf8") return op_sha256d_utf8(c);
@@ -698,6 +834,10 @@ Produced execute(const Case& c) {
   if (c.op == "header_identity") return op_header_identity(c);
   if (c.op == "merkle_root") return op_merkle_root(c);
   if (c.op == "merkle_root_from_txs") return op_merkle_root_from_txs(c);
+  if (c.op == "pow_engine_ids") return op_pow_engine_ids(c);
+  if (c.op == "pow_trivial_hash") return op_pow_trivial_hash(c);
+  if (c.op == "pow_scratchpad_hash") return op_pow_scratchpad_hash(c);
+  if (c.op == "pow_mine_from_zero") return op_pow_mine_from_zero(c);
   fail("unknown OP: " + c.op);
 }
 
