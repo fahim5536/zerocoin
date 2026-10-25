@@ -77,9 +77,37 @@ copied in stored order, because display hex is not consensus bytes.
 committed cases byte for byte, and `kernel/tests/test_header.cpp` pins what a fixture
 file cannot express — the high-bit and all-bits-set `u32`/`u64` encodings, `engine_id`
 at 0/1/255, and that five different nonces produce one identical preimage. C-4
-(`engine.hash(preimage, nonce)`) and C-5 (Merkle root) are **not** implemented, and
-there is no header decoder, so the encoder output is not yet the input of any
-acceptance path.
+(`engine.hash(preimage, nonce)`) is **not** implemented and there is no header decoder, so
+the encoder output is not yet the input of any acceptance path. C-5 was **not** implemented
+at that milestone; the leaf-level rule is delivered by the P3.2B status below.
+
+**Implementation status (P3.2B, 2026-10-24).** `kernel/src/merkle.cpp` implements the
+leaf-level half of C-5. `zk::merkle_root(const Hash256*, std::size_t) noexcept` is a total
+function — it has no error path to invent, matching the owner's infallible `merkle_root`,
+and it returns the double-SHA-256 of `kEmptyMerkleTag` whose 17 bytes and whose final
+explicit NUL are frozen by `static_assert` in `kernel/include/zerocoin/merkle.h`, together
+with `Hash256::kWidth == 32` and the 64-byte internal-node input (so the `CONSENSUS_RULES.md`
+§2.4 requirement "each pair is `sha256d(left || right)`", with no tag, prefix or separator,
+is a compile-time fact, not a test). The digest width and the pair length are the only two
+numbers the rule depends on, and both are asserted. Nothing is sorted, deduplicated,
+reversed or reinterpreted: leaves go in as stored internal bytes and the pair is
+`left || right` in that order, so the root is order-sensitive at every width and never
+depends on host byte order (C-11). Odd nodes are duplicated at **every** level,
+not promoted, and the level-width arithmetic is `width / 2 + width % 2` so no `width + 1`
+overflow hazard is formed (C-12). There is deliberately **no** leaf-count limit in this
+function: `MAX_BLOCK_TRANSACTIONS` is a block rule enforced in `validate_structure`, and a
+Merkle-level limit would be an invented consensus rule. `kernel/tools/p32_conformance.py`
+replays all 20 committed P3.2 cases byte for byte and cross-checks each root against
+`test/harness/zro_vectors.py::merkle_root`, an implementation independent of the kernel;
+`kernel/tests/test_merkle.cpp` pins what a fixture cannot express — that the empty case
+reads no caller bytes, that `nullptr` is valid only at `count == 0`, that the caller's leaf
+buffer is never written, and that the function accepts more leaves than the block rule
+allows. Still **not** implemented: the transaction-level leaf source of
+`Block::compute_merkle_root` (this milestone was scoped to leaf-level calculation and must
+not invent a `Block` type or a transaction aggregation API), the header's claimed-root
+comparison (B-1/B-14), header hashing and the PoW engine dispatch (C-4). C-5 is therefore
+implemented as a primitive, not yet wired into an acceptance path, and no claim of full
+consensus parity is made.
 
 ---
 

@@ -143,19 +143,30 @@ regtest genesis preimage in `chain.anchors.regtest_genesis`.
 
 ### 2.4 Merkle root
 
-`merkle_root` (`src/consensus/block.rs:220`) hashes leaves with `sha256d` in raw internal
+`merkle_root` (`src/consensus/block.rs:237`–`257`) hashes leaves with `sha256d` in raw internal
 byte order:
 
 - empty list → `sha256d("ZRO/merkle:empty\0")` (tag at `src/consensus/block.rs:28`);
 - a single leaf is returned **unchanged** (not hashed again);
-- odd trailing element is duplicated (`level[i]` used as its own right sibling);
+- odd trailing element is duplicated (`level[i]` used as its own right sibling), at **every**
+  level, not only the first;
 - each pair is `sha256d(left || right)` with left/right in raw internal order.
+
+Cases: the five historical `chain.merkle.*` cases (`test/vectors/chain/header.json`) verify
+this rule inside the P0 harness; the 20-case `chain.merkle_root.*` group in
+`test/p32-vectors/chain/merkle_root.json` is the set the C++ kernel is replayed against, via
+`kernel_p32_conformance`. Neither set changed in P3.2B, and the P0 harness did not gain or lose
+a case.
+
+`merkle_root` itself imposes **no** limit on the number of leaves; the 2000-transaction bound
+is B-9, enforced in `validate_structure` (`src/consensus/block.rs:194`). A port that folds a
+count limit into the root function would be inventing a rule.
 
 `Block::compute_merkle_root` (`src/consensus/block.rs:120`) builds the leaves as
 `tx.txid()` for each transaction in order.
 
 Rule **B-1** — A block's committed `merkle_root` MUST equal
-`Block::compute_merkle_root(transactions)` (`src/consensus/block.rs:201`). P0 cases:
+`Block::compute_merkle_root(transactions)` (`src/consensus/block.rs:217`–`219`). P0 cases:
 `chain.anchors.genesis_coinbase` and `chain.anchors.pinned_constants`
 (`genesis_merkle_root` is the txid of the single genesis coinbase, i.e. the single-leaf rule
 observed in the corpus).
@@ -241,8 +252,17 @@ this order; the first failure is the error returned:
 | B-11 | any of `transactions[1..]` is a coinbase | `DuplicateCoinbase` | `block.rs:184` |
 | B-12 | `header.timestamp <= median_time_past` | `TimestampTooOld` | `block.rs:187` |
 | B-13 | `header.timestamp > now + 7200` | `TimestampTooFarFuture` | `block.rs:193` |
-| B-14 | `header.merkle_root != compute_merkle_root(txs)` | `RootMismatch` | `block.rs:201` |
+| B-14 | `header.merkle_root != compute_merkle_root(txs)` | `RootMismatch` | `block.rs:218` |
 | B-15 | header hash does not meet its own compact target | `InsufficientProofOfWork` | `block.rs:205` |
+
+Line-reference provenance: the Merkle rows of §2.4 and this table (B-1, B-14) were rechecked
+on 2026-10-24 against `zerocoin/src/consensus/block.rs` and corrected to the current
+statements. The **other** rows of this table were not rechecked in that pass and their
+citations are not guaranteed current; the visible pattern is a single uniform shift down the
+`validate_structure` body, consistent with `validate_header_identity` having been extracted
+into its own function above it. Correcting those rows is a separate documentation change and
+is deliberately **not** part of the P3.2B milestone, which touched no validation order and no
+rule text.
 
 Boundary notes, observed and tested:
 

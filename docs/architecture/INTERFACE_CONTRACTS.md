@@ -41,7 +41,13 @@ These rules apply to every header under `kernel/include/zerocoin/`.
    kernel does not retain a pointer past the call unless the class documents it
    (`TxSigChecker` retains `script_code`, and says so).
 4. **No allocation in a validation decision** beyond the types returned
-   (`std::vector` in builders and `SigHash::preimage` are intentional).
+   (`std::vector` in builders and `SigHash::preimage` are intentional). A pure
+   computation may allocate the way its owner does: `zk::merkle_root` (P3.2B) keeps
+   one working level and builds the next, mirroring the Rust reference's
+   per-level `Vec::with_capacity`. Because that signature is `noexcept`, an
+   exhausted allocator terminates the process rather than returning a wrong root
+   — the same outcome the Rust reference reaches by aborting, and deliberately
+   chosen over inventing an error the owner does not have.
 5. **Constants are `inline constexpr` and frozen by `static_assert`.** A change
    to a limit is a consensus change and cannot be a local edit.
 6. **Warnings are errors** for every target, tests included
@@ -301,13 +307,13 @@ stdout:
 exit: 0 all cases passed | 1 any case failed | 2 usage, fixture or I/O error
 ```
 
-The 23 verbs: `sha256_utf8`, `sha256d_utf8`, `hash160_sec1`, `display_reversal`,
+The 24 verbs: `sha256_utf8`, `sha256d_utf8`, `hash160_sec1`, `display_reversal`,
 `varint_encode`, `tx_build`, `tx_roundtrip`, `tx_decode_error`, `compact`,
 `script_push_data`, `p2pkh_script_pubkey`, `p2pkh_script_sig`, `script_verify`,
 `sighash`, `sighash_distinct`, `p2pkh_spend`, `difficulty_params`,
 `difficulty_validate_bits`, `difficulty_hash_meets_target`,
 `difficulty_required_work`, `difficulty_next`, `header_preimage`,
-`header_identity`.
+`header_identity`, `merkle_root`.
 
 `p2pkh_spend` (added in P2.10 §7) is the only verb that checks a real
 signature: it deserialises the transaction, derives the sighash for the bound
@@ -322,12 +328,24 @@ appending it is the engine's job (C-4). The validator returns the verdict, the
 error kind, and only on a rejection the two unsigned `expected`/`found` payloads,
 so an acceptance case that grew a payload fails instead of matching a null.
 
+`merkle_root` (added in P3.2B) is the first verb whose input is a *list*: the leaf array
+arrives as repeated `IN leaf=<internal-hex>` lines, so a case carries exactly as many input
+lines as it has leaves and the empty-tree case carries none. It returns the root twice —
+`internal_hex` and `display_hex` — plus `root_len` and `leaf_count`. The second hex is not
+redundancy: a caller that reversed the digest would still produce a 64-character string, and
+only the pair pins which one is consensus bytes. `leaf_count` is echoed rather than inferred
+so the wrapper can prove the runner consumed every leaf line it was given; a verb that
+silently read one leaf and returned a root would otherwise look like a root mismatch instead
+of the protocol failure it is. Each `leaf` is parsed through the same helper the other digest
+verbs use, which rejects anything that is not exactly 32 bytes, so a short or over-wide leaf
+is an error before the kernel is reached.
+
 ### 7.2 The wrappers
 
 `kernel/tools/g1_conformance.py`, `p2_conformance.py` and `p3_conformance.py` own
 the translation from `test/vectors/**` JSON to the fixture grammar;
-`kernel/tools/p31_conformance.py` owns the same translation for the header corpus
-in §7.3. They must:
+`kernel/tools/p31_conformance.py` and `kernel/tools/p32_conformance.py` own the same
+translation for the header corpus and the leaf-level Merkle corpus in §7.3. They must:
 
 1. read `source_commit` from the corpus and print it, so a stale build is visible;
 2. fail if a case is missing, duplicated or mapped twice;
@@ -363,6 +381,30 @@ is registered as the `kernel_p31_conformance` ctest entry, which the existing
 gate scripts already pick up because they run the whole ctest set. Its one
 deferred expected key is `preimage_digest`, printed on every run: that value is a
 header hash, and header hashing is C-4, not this milestone.
+
+`test/p32-vectors/**` is the third corpus root and holds one group, `chain.merkle_root`
+(20 cases: the widths 0–9, a repeated pair and triple, high-bit first bytes, an all-`0xff`
+leaf, an all-zero leaf, zero-then-nonzero, the empty-tree root used as a leaf and as one half
+of a pair, and `[a,b,c]` against `[c,b,a]`). Its `source_commit` (b71d769) is the code that
+produced the roots and its `reference_commits.merkle_introduced` (e464695f) is where
+`merkle_root` and `EMPTY_MERKLE_TAG` entered `zerocoin/src`; the generator field says plainly
+that the `p32_*` exporter functions were added by the commit that lands the corpus, so no
+fixture claims to have existed before its own exporter did. Every expected root is the return
+value of a direct call to the shipping Rust `consensus::block::merkle_root` — none is
+transcribed from the Python harness, computed by hand, or typed from this document. Since
+P3.2B the corpus is replayed by `kernel/tools/p32_conformance.py` and registered as the
+`kernel_p32_conformance` ctest entry, which the gate scripts pick up because they run the
+whole ctest set; it carries **zero** deferred expected keys, and the wrapper treats a future
+deferral as a decision that has to be written down rather than a silent skip. Unlike the
+header corpus it does have a second implementation available for cross-checking — the Python
+`merkle_root` that already serves the five historical `chain.merkle.*` P0 cases — so the
+wrapper re-derives all 20 roots from the corpus inputs before the runner is invoked. That
+cross-check is a *fixture* assertion, not a kernel assertion: if the two disagree the wrapper
+fails as a mapping error and names the derived value against the published one, because the
+Rust exporter is the origin and a Python disagreement means the corpus is at fault. It is
+never reported as a Merkle root mismatch. The wrapper also validates each leaf as exactly 64
+lowercase hex characters before building the fixture, so malformed input surfaces as exit 2
+with the case id rather than as a wrong-root verdict against a padded value.
 
 ---
 

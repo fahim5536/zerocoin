@@ -1,0 +1,350 @@
+// Leaf-level Merkle root tests. The corpus in test/p32-vectors/chain/ is the
+// value oracle (kernel/tools/p32_conformance.py replays it byte for byte), so
+// nothing here copies an expected root out of a fixture and no test types a hash
+// by hand. What these tests pin instead is the structure a fixed corpus cannot
+// express on its own: which branch produces which digest, the direction of the
+// bytes inside a pair, the level at which the odd node gets duplicated, the fact
+// that order matters, and the absence of any leaf-count limit.
+//
+// Two helpers do the independent work. `fold_pair` re-derives one internal node
+// from the C-5 wording instead of calling anything in merkle.cpp, and
+// `spec_root` is a second, differently-shaped implementation of the whole loop
+// (it widens an odd level by copying its last node, then folds pairs with no odd
+// case left in it). A mutation inside merkle.cpp therefore disagrees with this
+// file rather than being repeated by it.
+
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#include "test_framework.h"
+#include "zerocoin/hash.h"
+#include "zerocoin/merkle.h"
+
+namespace {
+
+using zk::Hash256;
+
+constexpr std::size_t kWidth = Hash256::kWidth;
+constexpr std::size_t kPair = kWidth * 2;
+
+// A leaf of one repeated byte.
+Hash256 filled(std::uint8_t value) {
+  Hash256 leaf{};
+  leaf.bytes.fill(value);
+  return leaf;
+}
+
+// A leaf with pairwise distinct, asymmetric bytes, so a reversal, a rotation or
+// a wrong-offset copy can never equal what it replaced.
+Hash256 ramp(std::uint8_t seed) {
+  Hash256 leaf{};
+  for (std::size_t i = 0; i < kWidth; ++i) {
+    leaf.bytes[i] = static_cast<std::uint8_t>(seed + i);
+  }
+  return leaf;
+}
+
+std::vector<Hash256> ramps(std::size_t count, std::uint8_t seed) {
+  std::vector<Hash256> leaves;
+  leaves.reserve(count);
+  for (std::size_t i = 0; i < count; ++i) {
+    leaves.push_back(ramp(static_cast<std::uint8_t>(seed + i)));
+  }
+  return leaves;
+}
+
+Hash256 root_of(const std::vector<Hash256>& leaves) noexcept {
+  return zk::merkle_root(leaves.data(), leaves.size());
+}
+
+/// One internal node, written from `sha256d(left_internal || right_internal)`.
+/// Deliberately not the implementation under test.
+Hash256 fold_pair(const Hash256& left, const Hash256& right) {
+  std::array<std::uint8_t, kPair> buffer{};
+  std::copy_n(left.bytes.begin(), kWidth, buffer.begin());
+  std::copy_n(right.bytes.begin(), kWidth, buffer.begin() + kWidth);
+  return zk::sha256d(buffer.data(), buffer.size());
+}
+
+/// A second implementation of the whole reduction, shaped differently from
+/// merkle.cpp: an odd level is widened with a copy of its own final node first,
+/// after which every fold is an unguarded pair. Equal rules, different code.
+Hash256 spec_root(const std::vector<Hash256>& leaves) {
+  if (leaves.empty()) {
+    return zk::sha256d(zk::kEmptyMerkleTag, zk::kEmptyMerkleTagSize);
+  }
+  std::vector<Hash256> level = leaves;
+  while (level.size() > 1) {
+    if (level.size() % 2 != 0) {
+      level.push_back(level.back());
+    }
+    std::vector<Hash256> parents;
+    parents.reserve(level.size() / 2);
+    for (std::size_t i = 0; i < level.size(); i += 2) {
+      parents.push_back(fold_pair(level[i], level[i + 1]));
+    }
+    level = std::move(parents);
+  }
+  return level.front();
+}
+
+std::vector<Hash256> concat(const Hash256& a, const Hash256& b) { return {a, b}; }
+
+}  // namespace
+
+ZK_TEST(merkle_empty_tree_is_the_tag_digest_and_reads_nothing) {
+  // count == 0 must not touch the pointer, in either spelling.
+  const Hash256 sentinel = filled(0xa5);
+  const Hash256 via_null = zk::merkle_root(nullptr, 0);
+  const Hash256 via_buffer = zk::merkle_root(&sentinel, 0);
+
+  // The expectation is the public hash primitive over the tag, not a call into
+  // merkle.cpp.
+  const Hash256 expected = zk::sha256d(zk::kEmptyMerkleTag, zk::kEmptyMerkleTagSize);
+  ZK_CHECK(via_null == expected);
+  ZK_CHECK(via_buffer == expected);
+  ZK_CHECK(via_null == via_buffer);
+
+  // Not the zero digest, and not the tag itself: the point of the tag is that
+  // the empty tree has a fixed non-zero identity.
+  ZK_CHECK(!via_null.is_zero());
+  ZK_CHECK(std::equal(std::begin(zk::kEmptyMerkleTag), std::end(zk::kEmptyMerkleTag),
+                      via_null.bytes.begin()) == false);
+  ZK_CHECK(zk::kEmptyMerkleTagSize == 17);
+
+  // The spelling, not only the length. A one-character change to the tag is a
+  // different consensus commitment, and the compile-time freeze in merkle.h can
+  // only see the width and the terminating byte — so the ASCII itself is pinned
+  // here, against the string the Rust owner writes at
+  // `src/consensus/block.rs:28`. The C string's implicit NUL and the Rust
+  // literal's explicit `\0` are the same seventeenth byte.
+  static constexpr char kExpectedTag[] = "ZRO/merkle:empty";
+  static_assert(sizeof(kExpectedTag) == zk::kEmptyMerkleTagSize,
+                "the tag is sixteen visible characters plus one NUL");
+  ZK_CHECK(std::equal(std::begin(kExpectedTag), std::begin(kExpectedTag) + 16,
+                      std::begin(zk::kEmptyMerkleTag),
+                      [](char lhs, std::uint8_t rhs) {
+                        return static_cast<std::uint8_t>(lhs) == rhs;
+                      }));
+  ZK_CHECK(zk::kEmptyMerkleTag[16] == 0);
+}
+
+ZK_TEST(merkle_single_leaf_is_returned_unchanged) {
+  const Hash256 leaf = ramp(0x11);
+  ZK_CHECK(zk::merkle_root(&leaf, 1) == leaf);
+
+  // A single leaf is never hashed, so it is not its own pair digest, and the
+  // two-copy tree above it is something else entirely.
+  const Hash256 doubled = fold_pair(leaf, leaf);
+  ZK_CHECK(zk::merkle_root(&leaf, 1) != doubled);
+  const std::vector<Hash256> two_copies = {leaf, leaf};
+  ZK_CHECK(root_of(two_copies) == doubled);
+  ZK_CHECK(root_of(two_copies) != leaf);
+
+  // The empty-tree root used as a single leaf passes through unchanged: the
+  // root of one leaf is that leaf even when the leaf is itself a root.
+  const Hash256 empty = zk::merkle_root(nullptr, 0);
+  ZK_CHECK(zk::merkle_root(&empty, 1) == empty);
+}
+
+ZK_TEST(merkle_internal_node_is_the_ordered_pair_digest_over_64_bytes) {
+  const Hash256 a = ramp(0x01);
+  const Hash256 b = ramp(0x40);
+
+  // Exactly 64 bytes in, no tag, no separator, no length.
+  static_assert(kPair == 64, "an internal node input is 64 bytes");
+  ZK_CHECK(root_of(concat(a, b)) == fold_pair(a, b));
+
+  // The children are not sorted, so the lower-valued child is not always first.
+  ZK_CHECK(root_of(concat(a, b)) != root_of(concat(b, a)));
+  ZK_CHECK(root_of(concat(a, b)) == spec_root(concat(a, b)));
+
+  // Byte direction: the implementation must feed the internal bytes to the hash.
+  // A port that reversed into display order would agree with nothing here.
+  ZK_CHECK(a.to_hex().str() ==
+           "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20");
+  ZK_CHECK(a.to_display_hex().str() ==
+           "201f1e1d1c1b1a191817161514131211100f0e0d0c0b0a090807060504030201");
+  const Hash256 root = root_of(concat(a, b));
+  ZK_CHECK(root != a && root != b);
+  ZK_CHECK(root.to_hex().str().size() == 64);
+}
+
+ZK_TEST(merkle_three_leaves_duplicates_the_last_leaf) {
+  const Hash256 a = ramp(0x01);
+  const Hash256 b = ramp(0x02);
+  const Hash256 c = ramp(0x03);
+  const std::vector<Hash256> leaves = {a, b, c};
+
+  // Level 1: fold(a,b) and fold(c,c). Level 2: the pair of those. Written out by
+  // hand from the spec, so a promoted-final-node rule fails here.
+  const Hash256 expected = fold_pair(fold_pair(a, b), fold_pair(c, c));
+  ZK_CHECK(root_of(leaves) == expected);
+  ZK_CHECK(root_of(leaves) == spec_root(leaves));
+
+  // Duplication, not promotion: dropping the odd leaf, or carrying it forward
+  // unhashed, both give a different answer than the reference contract.
+  ZK_CHECK(root_of(leaves) != root_of(concat(a, b)));
+  ZK_CHECK(root_of(leaves) != fold_pair(fold_pair(a, b), c));
+
+  // [a,b,c] and [a,b,c,c] are the same tree, because the third level-1 node is
+  // the copy that the odd rule makes anyway.
+  const std::vector<Hash256> four = {a, b, c, c};
+  ZK_CHECK(root_of(leaves) == root_of(four));
+
+  // ... but the reverse ordering is a different tree.
+  const std::vector<Hash256> reversed = {c, b, a};
+  ZK_CHECK(root_of(reversed) != root_of(leaves));
+}
+
+ZK_TEST(merkle_odd_duplication_happens_at_every_odd_level) {
+  // Five leaves: widths 5 -> 3 -> 2 -> 1. Both 5 and 3 are odd, so the rule
+  // fires twice; a single-level fix does not survive this.
+  const std::vector<Hash256> five = ramps(5, 0x10);
+  const Hash256 n0 = fold_pair(five[0], five[1]);
+  const Hash256 n1 = fold_pair(five[2], five[3]);
+  const Hash256 n2 = fold_pair(five[4], five[4]);
+  const Hash256 m0 = fold_pair(n0, n1);
+  const Hash256 m1 = fold_pair(n2, n2);
+  ZK_CHECK(root_of(five) == fold_pair(m0, m1));
+  ZK_CHECK(root_of(five) == spec_root(five));
+
+  // Six leaves: widths 6 -> 3 -> 2 -> 1. The first level is even, the second is
+  // odd, so the duplication happens one level down from where it does for five.
+  const std::vector<Hash256> six = ramps(6, 0x20);
+  const Hash256 s0 = fold_pair(six[0], six[1]);
+  const Hash256 s1 = fold_pair(six[2], six[3]);
+  const Hash256 s2 = fold_pair(six[4], six[5]);
+  ZK_CHECK(root_of(six) == fold_pair(fold_pair(s0, s1), fold_pair(s2, s2)));
+  ZK_CHECK(root_of(six) == spec_root(six));
+
+  // Seven leaves: widths 7 -> 4 -> 2 -> 1, odd only at the bottom.
+  const std::vector<Hash256> seven = ramps(7, 0x30);
+  const Hash256 q3 = fold_pair(seven[6], seven[6]);
+  const Hash256 q0 = fold_pair(seven[0], seven[1]);
+  const Hash256 q1 = fold_pair(seven[2], seven[3]);
+  const Hash256 q2 = fold_pair(seven[4], seven[5]);
+  ZK_CHECK(root_of(seven) == fold_pair(fold_pair(q0, q1), fold_pair(q2, q3)));
+  ZK_CHECK(root_of(seven) == spec_root(seven));
+}
+
+ZK_TEST(merkle_root_depends_on_leaf_order_at_every_width) {
+  const std::vector<Hash256> abc = ramps(3, 0x01);
+  std::vector<Hash256> cba = abc;
+  std::reverse(cba.begin(), cba.end());
+  ZK_CHECK(root_of(abc) != root_of(cba));
+  ZK_CHECK(root_of(cba) == spec_root(cba));
+
+  // A swap of two adjacent leaves changes the root: no sorting is applied.
+  const std::vector<Hash256> four = ramps(4, 0x40);
+  std::vector<Hash256> swapped = four;
+  std::swap(swapped[1], swapped[2]);
+  ZK_CHECK(root_of(four) != root_of(swapped));
+
+  // Even the smallest asymmetric case is order-sensitive, so a lexicographic
+  // child-ordering rule cannot hide behind a symmetric pair of leaves.
+  const Hash256 low = ramp(0x01);
+  const Hash256 high = ramp(0xf0);
+  ZK_CHECK(root_of(concat(low, high)) == root_of(concat(low, high)));
+  ZK_CHECK(root_of(concat(low, high)) != root_of(concat(high, low)));
+  ZK_CHECK(fold_pair(low, high) != fold_pair(high, low));
+}
+
+ZK_TEST(merkle_repeated_leaves_are_never_deduplicated) {
+  const Hash256 x = filled(0x7f);
+  const std::vector<Hash256> two = {x, x};
+  const std::vector<Hash256> three = {x, x, x};
+
+  ZK_CHECK(root_of(two) == fold_pair(x, x));
+  ZK_CHECK(root_of(three) == fold_pair(fold_pair(x, x), fold_pair(x, x)));
+  ZK_CHECK(root_of(three) == spec_root(three));
+
+  // Three is not one, and not two: a deduplicating port would collapse them.
+  ZK_CHECK(root_of(three) != zk::merkle_root(&x, 1));
+  ZK_CHECK(root_of(three) != root_of(two));
+
+  // All-0xff and all-zero leaves are ordinary values, not sentinels.
+  const Hash256 ff = filled(0xff);
+  const Hash256 zero = Hash256::zero();
+  ZK_CHECK(root_of(concat(zero, ff)) == fold_pair(zero, ff));
+  ZK_CHECK(root_of(concat(zero, ff)) != root_of(concat(ff, zero)));
+  ZK_CHECK(zk::merkle_root(&zero, 1) == zero);
+  ZK_CHECK(zk::merkle_root(&ff, 1) == ff);
+
+  // A high-bit first byte must not be treated as a sign or an end marker.
+  const Hash256 high_bit = [] {
+    Hash256 leaf = ramp(0x00);
+    leaf.bytes[0] = 0x80;
+    leaf.bytes[31] = 0x01;
+    return leaf;
+  }();
+  ZK_CHECK(root_of({high_bit, high_bit}) == fold_pair(high_bit, high_bit));
+  ZK_CHECK(root_of({high_bit, zero, high_bit}) == spec_root({high_bit, zero, high_bit}));
+}
+
+ZK_TEST(merkle_accepts_more_leaves_than_the_block_rule_allows) {
+  // MAX_BLOCK_TRANSACTIONS is a block rule checked outside merkle_root, so the
+  // leaf function must not grow its own limit. 2049 is both above that rule and
+  // an odd width, so it exercises the duplication path at depth as well.
+  const std::vector<Hash256> many = ramps(2049, 0x00);
+  const Hash256 first = root_of(many);
+  ZK_CHECK(!first.is_zero());
+  ZK_CHECK(first == spec_root(many));
+
+  // Deterministic and independent of how the buffer was built.
+  ZK_CHECK(first == root_of(many));
+
+  // A power-of-two width reaches the root without a single duplication.
+  const std::vector<Hash256> power = ramps(1024, 0x00);
+  ZK_CHECK(root_of(power) == spec_root(power));
+
+  // And one more leaf changes it, so the deep path is not being truncated.
+  std::vector<Hash256> power_plus = power;
+  power_plus.push_back(ramp(0x80));
+  ZK_CHECK(root_of(power_plus) != root_of(power));
+}
+
+ZK_TEST(merkle_never_writes_to_the_caller_leaf_buffer) {
+  std::vector<Hash256> leaves = ramps(9, 0x07);
+  const std::vector<Hash256> snapshot = leaves;
+  const Hash256 root = root_of(leaves);
+
+  ZK_CHECK(leaves == snapshot);
+  ZK_CHECK(root == spec_root(snapshot));
+
+  // Nine leaves reduce 9 -> 5 -> 3 -> 2 -> 1, so the odd rule fires on three
+  // consecutive levels. Every node below is written from the leaves in order.
+  const Hash256 n0 = fold_pair(leaves[0], leaves[1]);
+  const Hash256 n1 = fold_pair(leaves[2], leaves[3]);
+  const Hash256 n2 = fold_pair(leaves[4], leaves[5]);
+  const Hash256 n3 = fold_pair(leaves[6], leaves[7]);
+  const Hash256 n4 = fold_pair(leaves[8], leaves[8]);
+  const Hash256 m0 = fold_pair(n0, n1);
+  const Hash256 m1 = fold_pair(n2, n3);
+  const Hash256 m2 = fold_pair(n4, n4);
+  const Hash256 p0 = fold_pair(m0, m1);
+  const Hash256 p1 = fold_pair(m2, m2);
+  ZK_CHECK(root == fold_pair(p0, p1));
+}
+
+ZK_TEST(merkle_widths_from_two_to_nine_match_the_spec_implementation) {
+  for (std::size_t count = 0; count <= 9; ++count) {
+    const std::vector<Hash256> leaves = ramps(count, 0x60);
+    ZK_CHECK(root_of(leaves) == spec_root(leaves));
+  }
+  // Every width is distinct: none of these roots collide, which is what a
+  // silently truncated or short-circuited level would break.
+  std::vector<Hash256> roots;
+  for (std::size_t count = 1; count <= 9; ++count) {
+    roots.push_back(root_of(ramps(count, 0x60)));
+  }
+  for (std::size_t i = 0; i < roots.size(); ++i) {
+    for (std::size_t j = i + 1; j < roots.size(); ++j) {
+      ZK_CHECK(roots[i] != roots[j]);
+    }
+  }
+}

@@ -4,7 +4,9 @@
 // and nothing about JSON, so a passing run means the C++ kernel reproduced
 // bytes that the Rust reference produced. Since P3.1B the header corpus is
 // replayed the same way; it lives outside that root, in test/p31-vectors/chain/, and
-// tools/p31_conformance.py renders it.
+// tools/p31_conformance.py renders it. Since P3.2B the leaf-level Merkle corpus
+// is replayed the same way too, from test/p32-vectors/chain/, rendered by
+// tools/p32_conformance.py.
 //
 // Fixture grammar (one directive per line, `value` is everything after the
 // first '=' so empty values are unambiguous):
@@ -39,6 +41,7 @@
 #include "zerocoin/hash.h"
 #include "zerocoin/header.h"
 #include "zerocoin/hex.h"
+#include "zerocoin/merkle.h"
 #include "zerocoin/script.h"
 #include "zerocoin/secp256k1_verifier.h"
 #include "zerocoin/sighash.h"
@@ -605,6 +608,32 @@ Produced op_header_identity(const Case& c) {
   return produced;
 }
 
+// The leaf-level Merkle root (C-5). One `IN leaf=<internal hex>` per leaf, in
+// corpus order; a case with no leaf lines is the empty tree.
+Produced op_merkle_root(const Case& c) {
+  const std::vector<std::string> hexes = c.all("leaf");
+  std::vector<Hash256> leaves;
+  leaves.reserve(hexes.size());
+  for (const std::string& hex : hexes) {
+    // `hash256_of` insists on exactly 32 bytes, so a short or long leaf fails the
+    // case as a malformed fixture instead of being padded or truncated into a
+    // plausible-looking root.
+    leaves.push_back(hash256_of(hex, "leaf"));
+  }
+  // For an empty corpus case `data()` is null and `size()` is 0, which is the one
+  // combination merkle.h documents as meaningful; the empty branch returns before
+  // the buffer is read.
+  const Hash256 root = zk::merkle_root(leaves.data(), leaves.size());
+  return {
+      {"internal_hex", root.to_hex().str()},
+      {"display_hex", root.to_display_hex().str()},
+      {"root_len", std::to_string(root.bytes.size())},
+      // Echoed so the wrapper can prove the runner consumed every leaf line it
+      // emitted rather than quietly dropping one.
+      {"leaf_count", std::to_string(leaves.size())},
+  };
+}
+
 Produced execute(const Case& c) {
   if (c.op == "sha256_utf8") return op_sha256_utf8(c);
   if (c.op == "sha256d_utf8") return op_sha256d_utf8(c);
@@ -629,6 +658,7 @@ Produced execute(const Case& c) {
     if (c.op == "difficulty_next") return op_difficulty_next(c);
   if (c.op == "header_preimage") return op_header_preimage(c);
   if (c.op == "header_identity") return op_header_identity(c);
+  if (c.op == "merkle_root") return op_merkle_root(c);
   fail("unknown OP: " + c.op);
 }
 
