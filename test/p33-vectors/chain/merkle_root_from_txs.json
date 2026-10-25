@@ -1,0 +1,2628 @@
+{
+  "case_count": 22,
+  "cases": [
+    {
+      "expected": {
+        "leaves": [],
+        "root": {
+          "display_hex": "ebbcf2fd9a0d55c5bb840db45530046692a16cd2d6588b932ce23d954ffadfde",
+          "internal_hex": "dedffa4f953de22c938b58d6d26ca19266043055b40d84bbc5550d9afdf2bceb"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.empty",
+      "independent_check": "sha256d of the 17-byte `ZRO/merkle:empty\\0` tag; no transaction is serialised or hashed",
+      "input": {
+        "transactions": [],
+        "tx_count": 0
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "010000000111111111111111111111111111111111111111111111111111111111111111110000000003010203ffffffff0100f2052a010000000376a91400000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "81fcbe67eaea8241646540b55678284eda3e249fcd72e42d4d01bdbe7d5681f0",
+              "internal_hex": "f081567dbebd014d2de472cd9f243eda4e287856b54065644182eaea67befc81"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "81fcbe67eaea8241646540b55678284eda3e249fcd72e42d4d01bdbe7d5681f0",
+          "internal_hex": "f081567dbebd014d2de472cd9f243eda4e287856b54065644182eaea67befc81"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.single_transaction",
+      "independent_check": "one leaf is returned unchanged, so the root is exactly this transaction's own txid",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010203",
+                "sequence": 4294967295,
+                "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+                "vout": 0
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914",
+                "value": 5000000000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 1
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0c029300085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 97,
+            "txid": {
+              "display_hex": "94da684a4970e8b8b59fd8a7adbb3dcfeb1493b91838d0766d2da5d97dfa03a9",
+              "internal_hex": "a903fa7dd9a52d6d76d03818b99314ebcf3dbbada7d89fb5b8e870494a68da94"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "94da684a4970e8b8b59fd8a7adbb3dcfeb1493b91838d0766d2da5d97dfa03a9",
+          "internal_hex": "a903fa7dd9a52d6d76d03818b99314ebcf3dbbada7d89fb5b8e870494a68da94"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.single_coinbase",
+      "independent_check": "a coinbase is an ordinary transaction here: the root is its txid, with no block rule applied",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "029300085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 1
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff40003e4e6f207072656d696e652c206e6f206f776e65723a205a65726f436f696e20697320697373756564206f6e6c792062792070726f6f66206f6620776f726bffffffff0000000000",
+            "serialized_len": 115,
+            "txid": {
+              "display_hex": "89415a3d161cf54e14af337cea0e4b2a13ddd5d0804340c36463d9f8369c4de9",
+              "internal_hex": "e94d9c36f8d96364c3404380d0d5dd132a4b0eea7c33af144ef51c163d5a4189"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "89415a3d161cf54e14af337cea0e4b2a13ddd5d0804340c36463d9f8369c4de9",
+          "internal_hex": "e94d9c36f8d96364c3404380d0d5dd132a4b0eea7c33af144ef51c163d5a4189"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.single_genesis_coinbase",
+      "independent_check": "the crate's own `genesis_coinbase()` under the single-leaf rule, i.e. the shape `GENESIS_MERKLE_ROOT` has",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "003e4e6f207072656d696e652c206e6f206f776e65723a205a65726f436f696e20697320697373756564206f6e6c792062792070726f6f66206f6620776f726b",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [],
+            "version": 1
+          }
+        ],
+        "tx_count": 1
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "010000000111111111111111111111111111111111111111111111111111111111111111110000000003010203ffffffff0100f2052a010000000376a91400000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "81fcbe67eaea8241646540b55678284eda3e249fcd72e42d4d01bdbe7d5681f0",
+              "internal_hex": "f081567dbebd014d2de472cd9f243eda4e287856b54065644182eaea67befc81"
+            }
+          },
+          {
+            "serialized_hex": "010000000222222222222222222222222222222222222222222222222222222222222222220100000000feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700",
+            "serialized_len": 111,
+            "txid": {
+              "display_hex": "35bd8c8b65be3b3e69dbc1bf3d037696d692944d8255e18f56734bbbd95bcd63",
+              "internal_hex": "63cd5bd9bb4b73568fe155824d9492d69676033dbfc1db693e3bbe658b8cbd35"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "460a14d9123b651a3ab95df58871c29ddc4933bb12c18a8ddd65426c11d5de58",
+          "internal_hex": "58ded5116c4265dd8d8ac112bb3349dc9dc27188f55db93a1a653b12d9140a46"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.two_transactions",
+      "independent_check": "sha256d over the 64 raw bytes of txid(sample) || txid(payment), with no tag between them",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010203",
+                "sequence": 4294967295,
+                "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+                "vout": 0
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914",
+                "value": 5000000000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "",
+                "sequence": 4294967294,
+                "txid_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+                "vout": 1
+              },
+              {
+                "script_sig_hex": "",
+                "sequence": 0,
+                "txid_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+                "vout": 7
+              }
+            ],
+            "lock_time": 500000,
+            "outputs": [
+              {
+                "script_pubkey_hex": "",
+                "value": 1
+              },
+              {
+                "script_pubkey_hex": "6a",
+                "value": 2100000000000000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 2
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "010000000222222222222222222222222222222222222222222222222222222222222222220100000000feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700",
+            "serialized_len": 111,
+            "txid": {
+              "display_hex": "35bd8c8b65be3b3e69dbc1bf3d037696d692944d8255e18f56734bbbd95bcd63",
+              "internal_hex": "63cd5bd9bb4b73568fe155824d9492d69676033dbfc1db693e3bbe658b8cbd35"
+            }
+          },
+          {
+            "serialized_hex": "010000000111111111111111111111111111111111111111111111111111111111111111110000000003010203ffffffff0100f2052a010000000376a91400000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "81fcbe67eaea8241646540b55678284eda3e249fcd72e42d4d01bdbe7d5681f0",
+              "internal_hex": "f081567dbebd014d2de472cd9f243eda4e287856b54065644182eaea67befc81"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "91a7a15680edfabc6f62dfe1b51753bccecb9725edebb35e4f6b4ebe25083409",
+          "internal_hex": "09340825be4e6b4f5eb3ebed2597cbcebc5317b5e1df626fbcfaed8056a1a791"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.two_swapped",
+      "independent_check": "the same two transactions in the opposite order, so the tree is positional and not a set",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "",
+                "sequence": 4294967294,
+                "txid_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+                "vout": 1
+              },
+              {
+                "script_sig_hex": "",
+                "sequence": 0,
+                "txid_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+                "vout": 7
+              }
+            ],
+            "lock_time": 500000,
+            "outputs": [
+              {
+                "script_pubkey_hex": "",
+                "value": 1
+              },
+              {
+                "script_pubkey_hex": "6a",
+                "value": 2100000000000000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010203",
+                "sequence": 4294967295,
+                "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+                "vout": 0
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914",
+                "value": 5000000000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 2
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "010000000111111111111111111111111111111111111111111111111111111111111111110000000003010203ffffffff0100f2052a010000000376a91400000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "81fcbe67eaea8241646540b55678284eda3e249fcd72e42d4d01bdbe7d5681f0",
+              "internal_hex": "f081567dbebd014d2de472cd9f243eda4e287856b54065644182eaea67befc81"
+            }
+          },
+          {
+            "serialized_hex": "010000000111111111111111111111111111111111111111111111111111111111111111110000000003010203ffffffff0100f2052a010000000376a91400000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "81fcbe67eaea8241646540b55678284eda3e249fcd72e42d4d01bdbe7d5681f0",
+              "internal_hex": "f081567dbebd014d2de472cd9f243eda4e287856b54065644182eaea67befc81"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "89326684839de5b127fbd1867999cf58097dd36b7c0a45e1ac06d25f86ac8162",
+          "internal_hex": "6281ac865fd206ace1450a7c6bd37d0958cf997986d1fb27b1e59d8384663289"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.two_identical_transactions",
+      "independent_check": "a repeated transaction is two leaves, not one: the pair is txid || txid with the digest twice",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010203",
+                "sequence": 4294967295,
+                "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+                "vout": 0
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914",
+                "value": 5000000000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010203",
+                "sequence": 4294967295,
+                "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+                "vout": 0
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914",
+                "value": 5000000000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 2
+      },
+      "intent": "oddity"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "010000000111111111111111111111111111111111111111111111111111111111111111110000000003010203ffffffff0100f2052a010000000376a91400000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "81fcbe67eaea8241646540b55678284eda3e249fcd72e42d4d01bdbe7d5681f0",
+              "internal_hex": "f081567dbebd014d2de472cd9f243eda4e287856b54065644182eaea67befc81"
+            }
+          },
+          {
+            "serialized_hex": "010000000222222222222222222222222222222222222222222222222222222222222222220100000000feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700",
+            "serialized_len": 111,
+            "txid": {
+              "display_hex": "35bd8c8b65be3b3e69dbc1bf3d037696d692944d8255e18f56734bbbd95bcd63",
+              "internal_hex": "63cd5bd9bb4b73568fe155824d9492d69676033dbfc1db693e3bbe658b8cbd35"
+            }
+          },
+          {
+            "serialized_hex": "01000000022222222222222222222222222222222222222222222222222222222222222222010000006b48304502210096b22dddb2b93b4eb6a4a649ee126c4493a81855257b03758c5735a052ffee890220199b56aa206063c815ca731c2193c1a66d0da05f8045d7242145dba365dc3a4f01210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700",
+            "serialized_len": 218,
+            "txid": {
+              "display_hex": "32b8b28edc0ce7a4e5281fc315adc4ab839918466fa0180662c70d7260fbec7d",
+              "internal_hex": "7decfb60720dc7620618a06f46189983abc4ad15c31f28e5a4e70cdc8eb2b832"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "7bfd80b59a0cb53a8441467b4aafa972cb4e14fa00bffcfd1f3dac878f98ef38",
+          "internal_hex": "38ef988f87ac3d1ffdfcbf00fa144ecb72a9af4a7b4641843ab50c9ab580fd7b"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.three_transactions",
+      "independent_check": "an odd level duplicates the final txid rather than promoting it: root([a,b,c]) == root([a,b,c,c])",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010203",
+                "sequence": 4294967295,
+                "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+                "vout": 0
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914",
+                "value": 5000000000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "",
+                "sequence": 4294967294,
+                "txid_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+                "vout": 1
+              },
+              {
+                "script_sig_hex": "",
+                "sequence": 0,
+                "txid_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+                "vout": 7
+              }
+            ],
+            "lock_time": 500000,
+            "outputs": [
+              {
+                "script_pubkey_hex": "",
+                "value": 1
+              },
+              {
+                "script_pubkey_hex": "6a",
+                "value": 2100000000000000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "48304502210096b22dddb2b93b4eb6a4a649ee126c4493a81855257b03758c5735a052ffee890220199b56aa206063c815ca731c2193c1a66d0da05f8045d7242145dba365dc3a4f01210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                "sequence": 4294967294,
+                "txid_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+                "vout": 1
+              },
+              {
+                "script_sig_hex": "",
+                "sequence": 0,
+                "txid_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+                "vout": 7
+              }
+            ],
+            "lock_time": 500000,
+            "outputs": [
+              {
+                "script_pubkey_hex": "",
+                "value": 1
+              },
+              {
+                "script_pubkey_hex": "6a",
+                "value": 2100000000000000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 3
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          },
+          {
+            "serialized_hex": "01000000011112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3011000000021112ffffffff0150460000000000000476a9141111000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "bfaa9062e1a47401ad3f91a999ece5695d2ef7ed3462ce440ed1c3c2490d115e",
+              "internal_hex": "5e110d49c2c3d10e44ce6234edf72e5d69e5ec99a9913fad0174a4e16290aabf"
+            }
+          },
+          {
+            "serialized_hex": "010000000112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303112000000021213ffffffff01384a0000000000000476a9141212000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "e5393cef33d2bebef6e02c9a048de97f19f9b7fc49ab2c5ed1231d59b7923ffa",
+              "internal_hex": "fa3f92b7591d23d15e2cab49fcb7f9197fe98d049a2ce0f6bebed233ef3c39e5"
+            }
+          },
+          {
+            "serialized_hex": "0100000001131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30313213000000021314ffffffff01204e0000000000000476a9141313000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "6bf7b47486a5ab1f30f9b053af25f2cda9f5afbb1f225f7ab389f02fdb945bca",
+              "internal_hex": "ca5b94db2ff089b37a5f221fbbaff5a9cdf225af53b0f9301faba58674b4f76b"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "9eb2cbba5e2dc114d1f6f22588cc659b745113da89552166ef986a9d68b24b49",
+          "internal_hex": "494bb2689d6a98ef66215589da1351749b65cc8825f2f6d114c12d5ebacbb29e"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.four_transactions",
+      "independent_check": "two pairs fold to one level and then to the root",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1112",
+                "sequence": 4294967295,
+                "txid_hex": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+                "vout": 17
+              }
+            ],
+            "lock_time": 17,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91411",
+                "value": 18000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1213",
+                "sequence": 4294967295,
+                "txid_hex": "12131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031",
+                "vout": 18
+              }
+            ],
+            "lock_time": 18,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91412",
+                "value": 19000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1314",
+                "sequence": 4294967295,
+                "txid_hex": "131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132",
+                "vout": 19
+              }
+            ],
+            "lock_time": 19,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91413",
+                "value": 20000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 4
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "0100000001202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f20000000022021ffffffff01e8800000000000000476a9142020000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "388fbfc3c9d352cd1b9ca4caca242929e2719ccaac5b17518c2c0e7c3d9f36a4",
+              "internal_hex": "a4369f3d7c0e2c8c51175bacca9c71e2292924cacaa49c1bcd52d3c9c3bf8f38"
+            }
+          },
+          {
+            "serialized_hex": "01000000012122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f4021000000022122ffffffff01d0840000000000000476a9142121000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "5af93a6af3efee5b9dd80da85db1836a09afcbda560bd182dac3752edf215127",
+              "internal_hex": "275121df2e75c3da82d10b56dacbaf096a83b15da80dd89d5beeeff36a3af95a"
+            }
+          },
+          {
+            "serialized_hex": "010000000122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404122000000022223ffffffff01b8880000000000000476a9142222000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "c32d9eaa6695d8077bcd3b3c8a151c74838f07414f276bfcc5d87063fd6d248e",
+              "internal_hex": "8e246dfd6370d8c5fc6b274f41078f83741c158a3c3bcd7b07d89566aa9e2dc3"
+            }
+          },
+          {
+            "serialized_hex": "0100000001232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40414223000000022324ffffffff01a08c0000000000000476a9142323000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "ada03c12c5e4a1abba36e975af9e4372a371cbc1e826cf0c17cf9153c1de1ae3",
+              "internal_hex": "e31adec15391cf170ccf26e8c1cb71a372439eaf75e936baaba1e4c5123ca0ad"
+            }
+          },
+          {
+            "serialized_hex": "01000000012425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f4041424324000000022425ffffffff0188900000000000000476a9142424000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "d79b3c7680c92618c694e16e7ecde66f48671ba37c264246af611098a76174bf",
+              "internal_hex": "bf7461a7981061af4642267ca31b67486fe6cd7e6ee194c61826c980763c9bd7"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "c218d44058529d614dd82f542f25d2ac69869f1b72158cf2780207bd2631656e",
+          "internal_hex": "6e653126bd070278f28c15721b9f8669acd2252f542fd84d619d525840d418c2"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.five_transactions",
+      "independent_check": "the fifth txid is duplicated at the first level and the resulting width 3 is odd again",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "2021",
+                "sequence": 4294967295,
+                "txid_hex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+                "vout": 32
+              }
+            ],
+            "lock_time": 32,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91420",
+                "value": 33000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "2122",
+                "sequence": 4294967295,
+                "txid_hex": "2122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40",
+                "vout": 33
+              }
+            ],
+            "lock_time": 33,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91421",
+                "value": 34000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "2223",
+                "sequence": 4294967295,
+                "txid_hex": "22232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f4041",
+                "vout": 34
+              }
+            ],
+            "lock_time": 34,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91422",
+                "value": 35000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "2324",
+                "sequence": 4294967295,
+                "txid_hex": "232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142",
+                "vout": 35
+              }
+            ],
+            "lock_time": 35,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91423",
+                "value": 36000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "2425",
+                "sequence": 4294967295,
+                "txid_hex": "2425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40414243",
+                "vout": 36
+              }
+            ],
+            "lock_time": 36,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91424",
+                "value": 37000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 5
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "0100000001303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f30000000023031ffffffff0168bf0000000000000476a9143030000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "c080b0f0aa08d9e9ad4f88641b4be07c3dbca5866362f4b1d71491a6bebd95c2",
+              "internal_hex": "c295bdbea69114d7b1f4626386a5bc3d7ce04b1b64884fade9d908aaf0b080c0"
+            }
+          },
+          {
+            "serialized_hex": "01000000013132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f5031000000023132ffffffff0150c30000000000000476a9143131000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "eb7d000cbc1cc3dc378865822e16039f205a434fa3e19ce9171dc3415ebb5c2d",
+              "internal_hex": "2d5cbb5e41c31d17e99ce1a34f435a209f03162e82658837dcc31cbc0c007deb"
+            }
+          },
+          {
+            "serialized_hex": "010000000132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505132000000023233ffffffff0138c70000000000000476a9143232000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "1c663661bdc0a5290d55ccd7347938131302d5f6770704e2f25c1fdafef136ff",
+              "internal_hex": "ff36f1feda1f5cf2e2040777f6d5021313387934d7cc550d29a5c0bd6136661c"
+            }
+          },
+          {
+            "serialized_hex": "0100000001333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f50515233000000023334ffffffff0120cb0000000000000476a9143333000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "25038732c368f4795ed045217a0a652b6a6bf71596706b752ce04cd8f1714148",
+              "internal_hex": "484171f1d84ce02c756b709615f76b6a2b650a7a2145d05e79f468c332870325"
+            }
+          },
+          {
+            "serialized_hex": "01000000013435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f5051525334000000023435ffffffff0108cf0000000000000476a9143434000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "9eed90622ad22bf40f11d7c74dd475aa442948e57d44c7d0f78c6fed2022d671",
+              "internal_hex": "71d62220ed6f8cf7d0c7447de5482944aa75d44dc7d7110ff42bd22a6290ed9e"
+            }
+          },
+          {
+            "serialized_hex": "010000000135363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535435000000023536ffffffff01f0d20000000000000476a9143535000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "0b4ccb4c6f994498df77284ef67e972fdca3c3abd31788058cc626c0114c6f8c",
+              "internal_hex": "8c6f4c11c026c68c058817d3abc3a3dc2f977ef64e2877df9844996f4ccb4c0b"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "ded45d53545964ce918e61c42038c7abadf6409c701f00b6f6bacb13068d0805",
+          "internal_hex": "05088d0613cbbaf6b6001f709c40f6adabc73820c4618e91ce645954535dd4de"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.six_transactions",
+      "independent_check": "width 6 reduces to 3, which is odd, so the duplication applies on the second level too",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3031",
+                "sequence": 4294967295,
+                "txid_hex": "303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f",
+                "vout": 48
+              }
+            ],
+            "lock_time": 48,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91430",
+                "value": 49000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3132",
+                "sequence": 4294967295,
+                "txid_hex": "3132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f50",
+                "vout": 49
+              }
+            ],
+            "lock_time": 49,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91431",
+                "value": 50000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3233",
+                "sequence": 4294967295,
+                "txid_hex": "32333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f5051",
+                "vout": 50
+              }
+            ],
+            "lock_time": 50,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91432",
+                "value": 51000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3334",
+                "sequence": 4294967295,
+                "txid_hex": "333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152",
+                "vout": 51
+              }
+            ],
+            "lock_time": 51,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91433",
+                "value": 52000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3435",
+                "sequence": 4294967295,
+                "txid_hex": "3435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f50515253",
+                "vout": 52
+              }
+            ],
+            "lock_time": 52,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91434",
+                "value": 53000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3536",
+                "sequence": 4294967295,
+                "txid_hex": "35363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f5051525354",
+                "vout": 53
+              }
+            ],
+            "lock_time": 53,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91435",
+                "value": 54000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 6
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "0100000001404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f40000000024041ffffffff01e8fd0000000000000476a9144040000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "d875799ecc03cd4dbb04656024c919a02e031391137da2443a8c3c452d444c14",
+              "internal_hex": "144c442d453c8c3a44a27d139113032ea019c924606504bb4dcd03cc9e7975d8"
+            }
+          },
+          {
+            "serialized_hex": "01000000014142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f6041000000024142ffffffff01d0010100000000000476a9144141000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "dce4d85663ad4ec918954568244045cf1371f4a5205c96a57df9f7c40c2e2600",
+              "internal_hex": "00262e0cc4f7f97da5965c20a5f47113cf45402468459518c94ead6356d8e4dc"
+            }
+          },
+          {
+            "serialized_hex": "010000000142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606142000000024243ffffffff01b8050100000000000476a9144242000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "afe3a216f5012b216dde6a4a51cd36542b49b0bc3f9713617a0b9c51ec0868e7",
+              "internal_hex": "e76808ec519c0b7a6113973fbcb0492b5436cd514a6ade6d212b01f516a2e3af"
+            }
+          },
+          {
+            "serialized_hex": "0100000001434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616243000000024344ffffffff01a0090100000000000476a9144343000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "b86283c10b224e1517657885b3a12ff74621e21fe059940746d5736d0ef5ee43",
+              "internal_hex": "43eef50e6d73d546079459e01fe22146f72fa1b385786517154e220bc18362b8"
+            }
+          },
+          {
+            "serialized_hex": "01000000014445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f6061626344000000024445ffffffff01880d0100000000000476a9144444000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "5ddeded9fa19effcc41befc373675c6e77d49e365beb6d85562a98b9506a8b46",
+              "internal_hex": "468b6a50b9982a56856deb5b369ed4776e5c6773c3ef1bc4fcef19fad9dede5d"
+            }
+          },
+          {
+            "serialized_hex": "010000000145464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636445000000024546ffffffff0170110100000000000476a9144545000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "4ab9d6a189e341b6c366284f5911bb8a3ebfde92d733249c8183a431db4b2f2e",
+              "internal_hex": "2e2f4bdb31a483819c2433d792debf3e8abb11594f2866c3b641e389a1d6b94a"
+            }
+          },
+          {
+            "serialized_hex": "0100000001464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616263646546000000024647ffffffff0158150100000000000476a9144646000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "8602f2aebca85444b184af969d80f6495af49eefef5db10be220502969480700",
+              "internal_hex": "00074869295020e20bb15defef9ef45a49f6809d96af84b14454a8bcaef20286"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "6a113a7209a5b0663812327354db42cfcc1a259dec728e447d488e5b4ebd841e",
+          "internal_hex": "1e84bd4e5b8e487d448e72ec9d251acccf42db547332123866b0a509723a116a"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.seven_transactions",
+      "independent_check": "width 7 duplicates its final node twice in a row: 7 to 4 to 2 to 1",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4041",
+                "sequence": 4294967295,
+                "txid_hex": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+                "vout": 64
+              }
+            ],
+            "lock_time": 64,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91440",
+                "value": 65000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4142",
+                "sequence": 4294967295,
+                "txid_hex": "4142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60",
+                "vout": 65
+              }
+            ],
+            "lock_time": 65,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91441",
+                "value": 66000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4243",
+                "sequence": 4294967295,
+                "txid_hex": "42434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f6061",
+                "vout": 66
+              }
+            ],
+            "lock_time": 66,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91442",
+                "value": 67000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4344",
+                "sequence": 4294967295,
+                "txid_hex": "434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162",
+                "vout": 67
+              }
+            ],
+            "lock_time": 67,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91443",
+                "value": 68000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4445",
+                "sequence": 4294967295,
+                "txid_hex": "4445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616263",
+                "vout": 68
+              }
+            ],
+            "lock_time": 68,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91444",
+                "value": 69000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4546",
+                "sequence": 4294967295,
+                "txid_hex": "45464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f6061626364",
+                "vout": 69
+              }
+            ],
+            "lock_time": 69,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91445",
+                "value": 70000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4647",
+                "sequence": 4294967295,
+                "txid_hex": "464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465",
+                "vout": 70
+              }
+            ],
+            "lock_time": 70,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91446",
+                "value": 71000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 7
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "0100000001505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f50000000025051ffffffff01683c0100000000000476a9145050000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "53204937dc665b138380990f373d5ebfedd12161196bb99f51d41367e55c3848",
+              "internal_hex": "48385ce56713d4519fb96b196121d1edbf5e3d370f998083135b66dc37492053"
+            }
+          },
+          {
+            "serialized_hex": "01000000015152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f7051000000025152ffffffff0150400100000000000476a9145151000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "8954bf47af6e181fa54ad0e72549a11c72d38ebaa73b95a64e35447b7537056d",
+              "internal_hex": "6d0537757b44354ea6953ba7ba8ed3721ca14925e7d04aa51f186eaf47bf5489"
+            }
+          },
+          {
+            "serialized_hex": "010000000152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707152000000025253ffffffff0138440100000000000476a9145252000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "915d094bc1e964627ce8b29c837cfcb3ce4b2ca3536b5f075ebe9da61d05c8f8",
+              "internal_hex": "f8c8051da69dbe5e075f6b53a32c4bceb3fc7c839cb2e87c6264e9c14b095d91"
+            }
+          },
+          {
+            "serialized_hex": "0100000001535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f70717253000000025354ffffffff0120480100000000000476a9145353000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "128760eb1d24df5e2d1c59e10ec88ff7d8112e7118814cef7ec8c83b0e70a9eb",
+              "internal_hex": "eba9700e3bc8c87eef4c8118712e11d8f78fc80ee1591c2d5edf241deb608712"
+            }
+          },
+          {
+            "serialized_hex": "01000000015455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f7071727354000000025455ffffffff01084c0100000000000476a9145454000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "de1e0fc70fb8089a89257d35c91557ec342d02c51b60bfa3a740a5fbd7bac1bc",
+              "internal_hex": "bcc1bad7fba540a7a3bf601bc5022d34ec5715c9357d25899a08b80fc70f1ede"
+            }
+          },
+          {
+            "serialized_hex": "010000000155565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737455000000025556ffffffff01f04f0100000000000476a9145555000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "dcc8bd7b51f5c7d537b531197d6a98b5561d1ef45443c4e944200b4216e7de74",
+              "internal_hex": "74dee716420b2044e9c44354f41e1d56b5986a7d1931b537d5c7f5517bbdc8dc"
+            }
+          },
+          {
+            "serialized_hex": "0100000001565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f70717273747556000000025657ffffffff01d8530100000000000476a9145656000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "ff4e6a6d1f633aaac768ab6fe30739cd60ea84dec85a530d7f0b39a222ef9a9e",
+              "internal_hex": "9e9aef22a2390b7f0d535ac8de84ea60cd3907e36fab68c7aa3a631f6d6a4eff"
+            }
+          },
+          {
+            "serialized_hex": "01000000015758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f7071727374757657000000025758ffffffff01c0570100000000000476a9145757000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "d25579fbdb43658cf5e17c2880f42e572c7edd71ec0450380668305853e30a6d",
+              "internal_hex": "6d0ae35358306806385004ec71dd7e2c572ef480287ce1f58c6543dbfb7955d2"
+            }
+          },
+          {
+            "serialized_hex": "010000000158595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767758000000025859ffffffff01a85b0100000000000476a9145858000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "2557d828381e069e9fd15b498ad7025f9d25595b6a16f77645cf0458a96746d3",
+              "internal_hex": "d34667a95804cf4576f7166a5b59259d5f02d78a495bd19f9e061e3828d85725"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "426d163e73814bd557cd0736c42eaeb8c310a184baa5da6167fa099e767f737b",
+          "internal_hex": "7b737f769e09fa6761daa5ba84a110c3b8ae2ec43607cd57d54b81733e166d42"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.nine_transactions",
+      "independent_check": "four levels deep, the widths the P3.2B reduction arithmetic was pinned against",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "5051",
+                "sequence": 4294967295,
+                "txid_hex": "505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f",
+                "vout": 80
+              }
+            ],
+            "lock_time": 80,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91450",
+                "value": 81000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "5152",
+                "sequence": 4294967295,
+                "txid_hex": "5152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f70",
+                "vout": 81
+              }
+            ],
+            "lock_time": 81,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91451",
+                "value": 82000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "5253",
+                "sequence": 4294967295,
+                "txid_hex": "52535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f7071",
+                "vout": 82
+              }
+            ],
+            "lock_time": 82,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91452",
+                "value": 83000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "5354",
+                "sequence": 4294967295,
+                "txid_hex": "535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172",
+                "vout": 83
+              }
+            ],
+            "lock_time": 83,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91453",
+                "value": 84000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "5455",
+                "sequence": 4294967295,
+                "txid_hex": "5455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f70717273",
+                "vout": 84
+              }
+            ],
+            "lock_time": 84,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91454",
+                "value": 85000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "5556",
+                "sequence": 4294967295,
+                "txid_hex": "55565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f7071727374",
+                "vout": 85
+              }
+            ],
+            "lock_time": 85,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91455",
+                "value": 86000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "5657",
+                "sequence": 4294967295,
+                "txid_hex": "565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475",
+                "vout": 86
+              }
+            ],
+            "lock_time": 86,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91456",
+                "value": 87000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "5758",
+                "sequence": 4294967295,
+                "txid_hex": "5758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f70717273747576",
+                "vout": 87
+              }
+            ],
+            "lock_time": 87,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91457",
+                "value": 88000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "5859",
+                "sequence": 4294967295,
+                "txid_hex": "58595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f7071727374757677",
+                "vout": 88
+              }
+            ],
+            "lock_time": 88,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91458",
+                "value": 89000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 9
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "0100000001606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f60000000026061ffffffff01e87a0100000000000476a9146060000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "3805ebec0e3a45530f691f0fd32cba08d0c096131982bd8919d4404fc888c78b",
+              "internal_hex": "8bc788c84f40d41989bd82191396c0d008ba2cd30f1f690f53453a0eeceb0538"
+            }
+          },
+          {
+            "serialized_hex": "01000000016162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f8061000000026162ffffffff01d07e0100000000000476a9146161000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "8fd493c0d0c9b6118af4005ab332f286be231cf95dbbf39331de2d48fbc0bbde",
+              "internal_hex": "debbc0fb482dde3193f3bb5df91c23be86f232b35a00f48a11b6c9d0c093d48f"
+            }
+          },
+          {
+            "serialized_hex": "010000000162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808162000000026263ffffffff01b8820100000000000476a9146262000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "6ead6f07f98ce2a3204665429b85a9c4f3779f0995b50794a70205a3e3e3ee8d",
+              "internal_hex": "8deee3e3a30502a79407b595099f77f3c4a9859b42654620a3e28cf9076fad6e"
+            }
+          },
+          {
+            "serialized_hex": "0100000001636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818263000000026364ffffffff01a0860100000000000476a9146363000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "4cf260e7eff694d57195195c92d169fc1f996f13a82d58610fbfbc9b725eab2b",
+              "internal_hex": "2bab5e729bbcbf0f61582da8136f991ffc69d1925c199571d594f6efe760f24c"
+            }
+          },
+          {
+            "serialized_hex": "01000000016465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f8081828364000000026465ffffffff01888a0100000000000476a9146464000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "3433b730f74bbd085cf9b1a70dc45dfd1f0c567613343f6a408737d0402008b0",
+              "internal_hex": "b0082040d03787406a3f341376560c1ffd5dc40da7b1f95c08bd4bf730b73334"
+            }
+          },
+          {
+            "serialized_hex": "010000000165666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838465000000026566ffffffff01708e0100000000000476a9146565000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "62cacd00fbbb78a4091b0e096b19443b145eb981512096167de8e2177c8becad",
+              "internal_hex": "adec8b7c17e2e87d1696205181b95e143b44196b090e1b09a478bbfb00cdca62"
+            }
+          },
+          {
+            "serialized_hex": "0100000001666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283848566000000026667ffffffff0158920100000000000476a9146666000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "211d11166e6e4ae784dc0c985226296c1dd1c69d7f1737d095becf0f813b62ab",
+              "internal_hex": "ab623b810fcfbe95d037177f9dc6d11d6c292652980cdc84e74a6e6e16111d21"
+            }
+          },
+          {
+            "serialized_hex": "01000000016768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f8081828384858667000000026768ffffffff0140960100000000000476a9146767000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "9bfd7b589a7f7871ef6cf0f1ef79486b26e40b8422691bef4ba01c1ec64d91f8",
+              "internal_hex": "f8914dc61e1ca04bef1b6922840be4266b4879eff1f06cef71787f9a587bfd9b"
+            }
+          },
+          {
+            "serialized_hex": "010000000168696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868768000000026869ffffffff01289a0100000000000476a9146868000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "6f16a6f6d8bf8951a5eaa9e86587bd7bd35db75764ea1d68160ad0dcd8a28ee2",
+              "internal_hex": "e28ea2d8dcd00a16681dea6457b75dd37bbd8765e8a9eaa55189bfd8f6a6166f"
+            }
+          },
+          {
+            "serialized_hex": "0100000001696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f8081828384858687886900000002696affffffff01109e0100000000000476a9146969000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "9f460588b83c6770ed922f653d9697263669529ccc7e7189bd8dd9faea8a1887",
+              "internal_hex": "87188aeafad98dbd89717ecc9c5269362697963d652f92ed70673cb88805469f"
+            }
+          },
+          {
+            "serialized_hex": "01000000016a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788896a000000026a6bffffffff01f8a10100000000000476a9146a6a000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "6f7960915da33b6bb4a7c3f038af38433c0cbd9a997b0928866a58556901059a",
+              "internal_hex": "9a05016955586a8628097b999abd0c3c4338af38f0c3a7b46b3ba35d9160796f"
+            }
+          },
+          {
+            "serialized_hex": "01000000016b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a6b000000026b6cffffffff01e0a50100000000000476a9146b6b000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "d4513433cf40cb80b1d92dcaa6c3d128dca76faedec4c3366af4dc40824b3495",
+              "internal_hex": "95344b8240dcf46a36c3c4deae6fa7dc28d1c3a6ca2dd9b180cb40cf333451d4"
+            }
+          },
+          {
+            "serialized_hex": "01000000016c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b6c000000026c6dffffffff01c8a90100000000000476a9146c6c000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "2ed4cb8076a0121f8b92b3aca1797e6c4e431a941f067b56f375e7f0dd70ad84",
+              "internal_hex": "84ad70ddf0e775f3567b061f941a434e6c7e79a1acb3928b1f12a07680cbd42e"
+            }
+          },
+          {
+            "serialized_hex": "01000000016d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c6d000000026d6effffffff01b0ad0100000000000476a9146d6d000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "29047a4b7dc66cd2d39b9a3e5a3eb336bacdffc64d91f186f0f514fb5d0e1e12",
+              "internal_hex": "121e0e5dfb14f5f086f1914dc6ffcdba36b33e5a3e9a9bd3d26cc67d4b7a0429"
+            }
+          },
+          {
+            "serialized_hex": "01000000016e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d6e000000026e6fffffffff0198b10100000000000476a9146e6e000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "7b8f5ad12c750984dcb1aebb8ca668cdc5e1824f1ba9e86d2f58752cc32c170d",
+              "internal_hex": "0d172cc32c75582f6de8a91b4f82e1c5cd68a68cbbaeb1dc8409752cd15a8f7b"
+            }
+          },
+          {
+            "serialized_hex": "01000000016f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e6f000000026f70ffffffff0180b50100000000000476a9146f6f000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "b7e2b41524ad8a0ab3a902b94506f2def1017f569639cedb5da76377c2ad6d4f",
+              "internal_hex": "4f6dadc27763a75ddbce3996567f01f1def20645b902a9b30a8aad2415b4e2b7"
+            }
+          },
+          {
+            "serialized_hex": "0100000001707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f70000000027071ffffffff0168b90100000000000476a9147070000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "79deb4a301dfc8c9b5db494b6d5e910a4b4e2ddb382ceea9cae64daccc6a0021",
+              "internal_hex": "21006accac4de6caa9ee2c38db2d4e4b0a915e6d4b49dbb5c9c8df01a3b4de79"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "16aed9818323ff1cf390a538f03cfd229ed43b18386a85e50de24c941b9b4936",
+          "internal_hex": "36499b1b944ce20de5856a38183bd49e22fd3cf038a590f31cff238381d9ae16"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.seventeen_transactions",
+      "independent_check": "five levels: 17 to 9 to 5 to 3 to 2 to 1, odd at every level but the last",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "6061",
+                "sequence": 4294967295,
+                "txid_hex": "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f",
+                "vout": 96
+              }
+            ],
+            "lock_time": 96,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91460",
+                "value": 97000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "6162",
+                "sequence": 4294967295,
+                "txid_hex": "6162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80",
+                "vout": 97
+              }
+            ],
+            "lock_time": 97,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91461",
+                "value": 98000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "6263",
+                "sequence": 4294967295,
+                "txid_hex": "62636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f8081",
+                "vout": 98
+              }
+            ],
+            "lock_time": 98,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91462",
+                "value": 99000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "6364",
+                "sequence": 4294967295,
+                "txid_hex": "636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182",
+                "vout": 99
+              }
+            ],
+            "lock_time": 99,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91463",
+                "value": 100000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "6465",
+                "sequence": 4294967295,
+                "txid_hex": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+                "vout": 100
+              }
+            ],
+            "lock_time": 100,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91464",
+                "value": 101000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "6566",
+                "sequence": 4294967295,
+                "txid_hex": "65666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f8081828384",
+                "vout": 101
+              }
+            ],
+            "lock_time": 101,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91465",
+                "value": 102000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "6667",
+                "sequence": 4294967295,
+                "txid_hex": "666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485",
+                "vout": 102
+              }
+            ],
+            "lock_time": 102,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91466",
+                "value": 103000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "6768",
+                "sequence": 4294967295,
+                "txid_hex": "6768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283848586",
+                "vout": 103
+              }
+            ],
+            "lock_time": 103,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91467",
+                "value": 104000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "6869",
+                "sequence": 4294967295,
+                "txid_hex": "68696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f8081828384858687",
+                "vout": 104
+              }
+            ],
+            "lock_time": 104,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91468",
+                "value": 105000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "696a",
+                "sequence": 4294967295,
+                "txid_hex": "696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788",
+                "vout": 105
+              }
+            ],
+            "lock_time": 105,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91469",
+                "value": 106000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "6a6b",
+                "sequence": 4294967295,
+                "txid_hex": "6a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283848586878889",
+                "vout": 106
+              }
+            ],
+            "lock_time": 106,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a9146a",
+                "value": 107000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "6b6c",
+                "sequence": 4294967295,
+                "txid_hex": "6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a",
+                "vout": 107
+              }
+            ],
+            "lock_time": 107,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a9146b",
+                "value": 108000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "6c6d",
+                "sequence": 4294967295,
+                "txid_hex": "6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b",
+                "vout": 108
+              }
+            ],
+            "lock_time": 108,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a9146c",
+                "value": 109000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "6d6e",
+                "sequence": 4294967295,
+                "txid_hex": "6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c",
+                "vout": 109
+              }
+            ],
+            "lock_time": 109,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a9146d",
+                "value": 110000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "6e6f",
+                "sequence": 4294967295,
+                "txid_hex": "6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d",
+                "vout": 110
+              }
+            ],
+            "lock_time": 110,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a9146e",
+                "value": 111000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "6f70",
+                "sequence": 4294967295,
+                "txid_hex": "6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e",
+                "vout": 111
+              }
+            ],
+            "lock_time": 111,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a9146f",
+                "value": 112000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "7071",
+                "sequence": 4294967295,
+                "txid_hex": "707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f",
+                "vout": 112
+              }
+            ],
+            "lock_time": 112,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91470",
+                "value": 113000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 17
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "010000000111111111111111111111111111111111111111111111111111111111111111110000000003010203ffffffff0100f2052a010000000376a91400000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "81fcbe67eaea8241646540b55678284eda3e249fcd72e42d4d01bdbe7d5681f0",
+              "internal_hex": "f081567dbebd014d2de472cd9f243eda4e287856b54065644182eaea67befc81"
+            }
+          },
+          {
+            "serialized_hex": "010000000222222222222222222222222222222222222222222222222222222222222222220100000000feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700",
+            "serialized_len": 111,
+            "txid": {
+              "display_hex": "35bd8c8b65be3b3e69dbc1bf3d037696d692944d8255e18f56734bbbd95bcd63",
+              "internal_hex": "63cd5bd9bb4b73568fe155824d9492d69676033dbfc1db693e3bbe658b8cbd35"
+            }
+          },
+          {
+            "serialized_hex": "01000000022222222222222222222222222222222222222222222222222222222222222222010000006b48304502210096b22dddb2b93b4eb6a4a649ee126c4493a81855257b03758c5735a052ffee890220199b56aa206063c815ca731c2193c1a66d0da05f8045d7242145dba365dc3a4f01210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700",
+            "serialized_len": 218,
+            "txid": {
+              "display_hex": "32b8b28edc0ce7a4e5281fc315adc4ab839918466fa0180662c70d7260fbec7d",
+              "internal_hex": "7decfb60720dc7620618a06f46189983abc4ad15c31f28e5a4e70cdc8eb2b832"
+            }
+          },
+          {
+            "serialized_hex": "01000000022222222222222222222222222222222222222222222222222222222222222222010000006b48304502210096b22dddb2b93b4eb6a4a649ee126c4493a81855257b03758c5735a052ffee890220199b56aa206063c815ca731c2193c1a66d0da05f8045d7242145dba365dc3a4f01210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700",
+            "serialized_len": 218,
+            "txid": {
+              "display_hex": "32b8b28edc0ce7a4e5281fc315adc4ab839918466fa0180662c70d7260fbec7d",
+              "internal_hex": "7decfb60720dc7620618a06f46189983abc4ad15c31f28e5a4e70cdc8eb2b832"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "7bfd80b59a0cb53a8441467b4aafa972cb4e14fa00bffcfd1f3dac878f98ef38",
+          "internal_hex": "38ef988f87ac3d1ffdfcbf00fa144ecb72a9af4a7b4641843ab50c9ab580fd7b"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.odd_tail_duplicated",
+      "independent_check": "appending a copy of the final transaction cannot change the root; a Bitcoin promotion rule changes it",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010203",
+                "sequence": 4294967295,
+                "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+                "vout": 0
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914",
+                "value": 5000000000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "",
+                "sequence": 4294967294,
+                "txid_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+                "vout": 1
+              },
+              {
+                "script_sig_hex": "",
+                "sequence": 0,
+                "txid_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+                "vout": 7
+              }
+            ],
+            "lock_time": 500000,
+            "outputs": [
+              {
+                "script_pubkey_hex": "",
+                "value": 1
+              },
+              {
+                "script_pubkey_hex": "6a",
+                "value": 2100000000000000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "48304502210096b22dddb2b93b4eb6a4a649ee126c4493a81855257b03758c5735a052ffee890220199b56aa206063c815ca731c2193c1a66d0da05f8045d7242145dba365dc3a4f01210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                "sequence": 4294967294,
+                "txid_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+                "vout": 1
+              },
+              {
+                "script_sig_hex": "",
+                "sequence": 0,
+                "txid_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+                "vout": 7
+              }
+            ],
+            "lock_time": 500000,
+            "outputs": [
+              {
+                "script_pubkey_hex": "",
+                "value": 1
+              },
+              {
+                "script_pubkey_hex": "6a",
+                "value": 2100000000000000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "48304502210096b22dddb2b93b4eb6a4a649ee126c4493a81855257b03758c5735a052ffee890220199b56aa206063c815ca731c2193c1a66d0da05f8045d7242145dba365dc3a4f01210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                "sequence": 4294967294,
+                "txid_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+                "vout": 1
+              },
+              {
+                "script_sig_hex": "",
+                "sequence": 0,
+                "txid_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+                "vout": 7
+              }
+            ],
+            "lock_time": 500000,
+            "outputs": [
+              {
+                "script_pubkey_hex": "",
+                "value": 1
+              },
+              {
+                "script_pubkey_hex": "6a",
+                "value": 2100000000000000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 4
+      },
+      "intent": "oddity"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "010000000111111111111111111111111111111111111111111111111111111111111111110000000003010203ffffffff0100f2052a010000000376a91400000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "81fcbe67eaea8241646540b55678284eda3e249fcd72e42d4d01bdbe7d5681f0",
+              "internal_hex": "f081567dbebd014d2de472cd9f243eda4e287856b54065644182eaea67befc81"
+            }
+          },
+          {
+            "serialized_hex": "010000000111111111111111111111111111111111111111111111111111111111111111110000000003010203ffffffff0100f2052a010000000376a91400000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "81fcbe67eaea8241646540b55678284eda3e249fcd72e42d4d01bdbe7d5681f0",
+              "internal_hex": "f081567dbebd014d2de472cd9f243eda4e287856b54065644182eaea67befc81"
+            }
+          },
+          {
+            "serialized_hex": "010000000111111111111111111111111111111111111111111111111111111111111111110000000003010203ffffffff0100f2052a010000000376a91400000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "81fcbe67eaea8241646540b55678284eda3e249fcd72e42d4d01bdbe7d5681f0",
+              "internal_hex": "f081567dbebd014d2de472cd9f243eda4e287856b54065644182eaea67befc81"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "0b490fcee7836f16da1bfb507aa39ffa1aebe2fd39933c4e0936ad806cb7013b",
+          "internal_hex": "3b01b76c80ad36094e3c9339fde2eb1afa9fa37a50fb1bda166f83e7ce0f490b"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.three_copies_of_one_transaction",
+      "independent_check": "three identical leaves must not collapse to one, and must not equal the single-leaf root",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010203",
+                "sequence": 4294967295,
+                "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+                "vout": 0
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914",
+                "value": 5000000000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010203",
+                "sequence": 4294967295,
+                "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+                "vout": 0
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914",
+                "value": 5000000000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010203",
+                "sequence": 4294967295,
+                "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+                "vout": 0
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914",
+                "value": 5000000000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 3
+      },
+      "intent": "oddity"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "010000000111111111111111111111111111111111111111111111111111111111111111110000000003010203ffffffff0100f2052a010000000376a91400000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "81fcbe67eaea8241646540b55678284eda3e249fcd72e42d4d01bdbe7d5681f0",
+              "internal_hex": "f081567dbebd014d2de472cd9f243eda4e287856b54065644182eaea67befc81"
+            }
+          },
+          {
+            "serialized_hex": "010000000111111111111111111111111111111111111111111111111111111111111111110000000003010203ffffffff0101f2052a010000000376a91400000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "024a7e7f1609e1724a4e4c221f35ee2480749a8872e5325de07226da19827061",
+              "internal_hex": "61708219da2672e05d32e572889a748024ee351f224c4e4a72e109167f7e4a02"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "2cf56236dec7fa140bf5f6c04a9d5aa0baecc42491f1172123596b856be1ad79",
+          "internal_hex": "79ade16b856b59232117f19124c4ecbaa05a9d4ac0f6f50b14fac7de3662f52c"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.near_identical_pair",
+      "independent_check": "two transactions one output-value byte apart must not share a root with two identical ones",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010203",
+                "sequence": 4294967295,
+                "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+                "vout": 0
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914",
+                "value": 5000000000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010203",
+                "sequence": 4294967295,
+                "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+                "vout": 0
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914",
+                "value": 5000000001
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 2
+      },
+      "intent": "oddity"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "02000000000000000000",
+            "serialized_len": 10,
+            "txid": {
+              "display_hex": "4ebd325a4b394cff8c57e8317ccf5a8d0e2bdf1b8526f8aad6c8e43d8240621a",
+              "internal_hex": "1a6240823de4c8d6aaf826851bdf2b0e8d5acf7c31e8578cff4c394b5a32bd4e"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "4ebd325a4b394cff8c57e8317ccf5a8d0e2bdf1b8526f8aad6c8e43d8240621a",
+          "internal_hex": "1a6240823de4c8d6aaf826851bdf2b0e8d5acf7c31e8578cff4c394b5a32bd4e"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.degenerate_transaction_only",
+      "independent_check": "a transaction with no inputs and no outputs still has an id, and one id is the whole root",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [],
+            "lock_time": 0,
+            "outputs": [],
+            "version": 2
+          }
+        ],
+        "tx_count": 1
+      },
+      "intent": "oddity"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "0100000001909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeaf90000000029091ffffffff0168360200000000000476a9149090000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "58088204be55c9920aaac19e64a37b2ee27bbced074fbc208e4ba2dccaca1dff",
+              "internal_hex": "ff1dcacadca24b8e20bc4f07edbc7be22e7ba3649ec1aa0a92c955be04820858"
+            }
+          },
+          {
+            "serialized_hex": "01000000019192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb091000000029192ffffffff01503a0200000000000476a9149191000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "c6b3377f9d2b518777f4c6802fa11d13e73a0a9b926c47cb9d490bc675f8d594",
+              "internal_hex": "94d5f875c60b499dcb476c929b0a3ae7131da12f80c6f47787512b9d7f37b3c6"
+            }
+          },
+          {
+            "serialized_hex": "010000000192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b192000000029293ffffffff01383e0200000000000476a9149292000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "c54b76d008ced4494bb228b5d66aa06b3057614924d0c8ce7472812af4e925af",
+              "internal_hex": "af25e9f42a817274cec8d024496157306ba06ad6b528b24b49d4ce08d0764bc5"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "1e27a4c2aabf644138203ca26163ff96d39e76647fba2c41be72456d3ba2177e",
+          "internal_hex": "7e17a23b6d4572be412cba7f64769ed396ff6361a23c20384164bfaac2a4271e"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.order_abc",
+      "independent_check": "the same three transactions in list order a, b, c",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "9091",
+                "sequence": 4294967295,
+                "txid_hex": "909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+                "vout": 144
+              }
+            ],
+            "lock_time": 144,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91490",
+                "value": 145000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "9192",
+                "sequence": 4294967295,
+                "txid_hex": "9192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0",
+                "vout": 145
+              }
+            ],
+            "lock_time": 145,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91491",
+                "value": 146000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "9293",
+                "sequence": 4294967295,
+                "txid_hex": "92939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1",
+                "vout": 146
+              }
+            ],
+            "lock_time": 146,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91492",
+                "value": 147000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 3
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "010000000192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b192000000029293ffffffff01383e0200000000000476a9149292000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "c54b76d008ced4494bb228b5d66aa06b3057614924d0c8ce7472812af4e925af",
+              "internal_hex": "af25e9f42a817274cec8d024496157306ba06ad6b528b24b49d4ce08d0764bc5"
+            }
+          },
+          {
+            "serialized_hex": "01000000019192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb091000000029192ffffffff01503a0200000000000476a9149191000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "c6b3377f9d2b518777f4c6802fa11d13e73a0a9b926c47cb9d490bc675f8d594",
+              "internal_hex": "94d5f875c60b499dcb476c929b0a3ae7131da12f80c6f47787512b9d7f37b3c6"
+            }
+          },
+          {
+            "serialized_hex": "0100000001909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeaf90000000029091ffffffff0168360200000000000476a9149090000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "58088204be55c9920aaac19e64a37b2ee27bbced074fbc208e4ba2dccaca1dff",
+              "internal_hex": "ff1dcacadca24b8e20bc4f07edbc7be22e7ba3649ec1aa0a92c955be04820858"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "181ca13d7deb002a59a436fb0cb3bdc38406fdfcdb4d0f0861ba66c151244a6f",
+          "internal_hex": "6f4a2451c166ba61080f4ddbfcfd0684c3bdb30cfb36a4592a00eb7d3da11c18"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.order_cba",
+      "independent_check": "the reverse order of `order_abc`, and it must disagree with it",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "9293",
+                "sequence": 4294967295,
+                "txid_hex": "92939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1",
+                "vout": 146
+              }
+            ],
+            "lock_time": 146,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91492",
+                "value": 147000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "9192",
+                "sequence": 4294967295,
+                "txid_hex": "9192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0",
+                "vout": 145
+              }
+            ],
+            "lock_time": 145,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91491",
+                "value": 146000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "9091",
+                "sequence": 4294967295,
+                "txid_hex": "909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+                "vout": 144
+              }
+            ],
+            "lock_time": 144,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91490",
+                "value": 145000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 3
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0c029300085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 97,
+            "txid": {
+              "display_hex": "94da684a4970e8b8b59fd8a7adbb3dcfeb1493b91838d0766d2da5d97dfa03a9",
+              "internal_hex": "a903fa7dd9a52d6d76d03818b99314ebcf3dbbada7d89fb5b8e870494a68da94"
+            }
+          },
+          {
+            "serialized_hex": "010000000111111111111111111111111111111111111111111111111111111111111111110000000003010203ffffffff0100f2052a010000000376a91400000000",
+            "serialized_len": 66,
+            "txid": {
+              "display_hex": "81fcbe67eaea8241646540b55678284eda3e249fcd72e42d4d01bdbe7d5681f0",
+              "internal_hex": "f081567dbebd014d2de472cd9f243eda4e287856b54065644182eaea67befc81"
+            }
+          },
+          {
+            "serialized_hex": "01000000022222222222222222222222222222222222222222222222222222222222222222010000006b48304502210096b22dddb2b93b4eb6a4a649ee126c4493a81855257b03758c5735a052ffee890220199b56aa206063c815ca731c2193c1a66d0da05f8045d7242145dba365dc3a4f01210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700",
+            "serialized_len": 218,
+            "txid": {
+              "display_hex": "32b8b28edc0ce7a4e5281fc315adc4ab839918466fa0180662c70d7260fbec7d",
+              "internal_hex": "7decfb60720dc7620618a06f46189983abc4ad15c31f28e5a4e70cdc8eb2b832"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "a430f2120b888468af37c3b80bc65324fa82de519100e1b19870102f2100484d",
+          "internal_hex": "4d4800212f107098b1e1009151de82fa2453c60bb8c337af6884880b12f230a4"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.coinbase_then_two_spends",
+      "independent_check": "a coinbase followed by two spends, committed positionally; nothing checks the order is legal",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "029300085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010203",
+                "sequence": 4294967295,
+                "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+                "vout": 0
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914",
+                "value": 5000000000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "48304502210096b22dddb2b93b4eb6a4a649ee126c4493a81855257b03758c5735a052ffee890220199b56aa206063c815ca731c2193c1a66d0da05f8045d7242145dba365dc3a4f01210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                "sequence": 4294967294,
+                "txid_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+                "vout": 1
+              },
+              {
+                "script_sig_hex": "",
+                "sequence": 0,
+                "txid_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+                "vout": 7
+              }
+            ],
+            "lock_time": 500000,
+            "outputs": [
+              {
+                "script_pubkey_hex": "",
+                "value": 1
+              },
+              {
+                "script_pubkey_hex": "6a",
+                "value": 2100000000000000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 3
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "leaves": [
+          {
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0101085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "txid": {
+              "display_hex": "a67ef7d15890b51827fa53da0672d8b419bb61a5bbc0ab61ade764c16fd72051",
+              "internal_hex": "5120d76fc164e7ad61abc0bba561bb19b4d87206da53fa2718b59058d1f77ea6"
+            }
+          },
+          {
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0102085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "txid": {
+              "display_hex": "bdd182784c8e6dda031fc7a0e745af0cedfec98ec1d6e5cb428f32ed5cbce287",
+              "internal_hex": "87e2bc5ced328f42cbe5d6c18ec9feed0caf45e7a0c71f03da6d8e4c7882d1bd"
+            }
+          },
+          {
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0103085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "txid": {
+              "display_hex": "f34ed811d9c255e61643ffb5db97e4f1aafe1af61c37a0164d5ee3f8cffc4eda",
+              "internal_hex": "da4efccff8e35e4d16a0371cf61afeaaf1e497dbb5ff4316e655c2d911d84ef3"
+            }
+          }
+        ],
+        "root": {
+          "display_hex": "db31a7b07d142c17f93666aa7e18908679f6109441b608df3d8339893cf7d5b9",
+          "internal_hex": "b9d5f73c8939833ddf08b6419410f6798690187eaa6636f9172c147db0a731db"
+        },
+        "root_len": 32
+      },
+      "id": "chain.merkle_root_from_txs.three_coinbases",
+      "independent_check": "a coinbase-only list of three heights, so the ids differ and the tree is not degenerate",
+      "input": {
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0101085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0102085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0103085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "version": 1
+          }
+        ],
+        "tx_count": 3
+      },
+      "intent": "rule"
+    }
+  ],
+  "generator": "zerocoin/tests/export_baseline_vectors.rs, `p33_*` functions, added by the P3.3B commit that lands immediately after the baseline; a fixture cannot truthfully record the hash of the commit that contains it, so `source_commit` names the code and this field names the exporter separately",
+  "group": "chain.merkle_root_from_txs",
+  "intent": "rule",
+  "note": "Transaction-level Merkle composition: `Block::compute_merkle_root` derives each leaf as that transaction's `txid()` and hands the ordered ids to `merkle_root`. Each case publishes the transactions field by field, the exact bytes each id commits to, the resulting leaf list and the root, in internal and display form.",
+  "provenance": "every expected root was produced by a direct call to the shipping `zerocoin/` Rust function `consensus::block::Block::compute_merkle_root` at `source_commit`, and every expected leaf id by that transaction's own `Transaction::txid`; no root is transcribed from another implementation, computed by hand, typed from a document, or re-derived by this exporter",
+  "reference_commits": {
+    "compute_merkle_root_introduced": "e464695f92f6884e6d25c6947d452d5fb24229a6",
+    "txid_introduced": "e464695f92f6884e6d25c6947d452d5fb24229a6"
+  },
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+  "source_commit": "b71d769be8357bcf10d768d915770125cf7f7c24"
+}

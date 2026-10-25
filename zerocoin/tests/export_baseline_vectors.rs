@@ -1955,6 +1955,761 @@ fn p32_reference_fixtures_are_reproducible_and_pinned() {
 }
 
 // ---------------------------------------------------------------------------
+// Group: chain.merkle_root_from_txs (P3.3B)
+//
+// The composition half the P3.2B corpus names as a later milestone: an ordered
+// transaction list in, one Merkle root out, produced by the shipping
+// `Block::compute_merkle_root`. Every expected root is that function's return
+// value, and every published leaf is the transaction's own `txid()` together with
+// the bytes it hashed, so the txid-to-leaf mapping can be checked independently of
+// the final digest — not just the root.
+//
+// Scope is the composition only. No case assembles a `Block` value, encodes or
+// hashes a header, compares a root against a claimed one, dispatches a proof-of-work
+// engine, or validates a block: `Block::compute_merkle_root` is an inherent method
+// used here as the public reference path for the two lines it contains.
+//
+// Its own corpus root (`test/p33-vectors`) for the same reason the P3.1A and P3.2B
+// groups have one: the P0 manifest stamps a single `source_commit` on all 117
+// historical cases, so adding cases there would either re-state a commit that did
+// not produce them or rewrite every historical file.
+// ---------------------------------------------------------------------------
+
+/// Every transaction id and every Merkle node in this corpus is one sha256d digest.
+const P33_DIGEST_LEN: usize = 32;
+
+/// `block::EMPTY_MERKLE_TAG` is crate-private, so this section restates it the way
+/// the P3.2B section does. `p33_reference_fixtures_are_reproducible_and_pinned`
+/// proves the restatement still matches the reference: the published empty root
+/// must equal `sha256d` of exactly these bytes.
+const P33_EMPTY_MERKLE_TAG: &[u8] = b"ZRO/merkle:empty\0";
+
+/// The commit whose `zerocoin/` production code produced every value in this
+/// corpus: the newest commit that touches a Rust build input. `zerocoin/src` is
+/// byte-identical here and at the P3.3B baseline, so no value depends on a later
+/// test-only or documentation-only commit.
+const P33_SOURCE_COMMIT: &str = "b71d769be8357bcf10d768d915770125cf7f7c24";
+
+/// Where `Block::compute_merkle_root` (`src/consensus/block.rs`) and
+/// `Transaction::txid` (`src/ledger/transaction.rs`) both entered `zerocoin/src`.
+/// Neither has been edited since, so the roots published here are the roots that
+/// commit already produced.
+const P33_REFERENCE_COMMIT: &str = "e464695f92f6884e6d25c6947d452d5fb24229a6";
+
+/// A transaction whose every byte is a function of one seed byte, so a list of them
+/// is a list of distinct serialisations that needs no lookup table. The transaction
+/// analogue of the repeated-byte leaves the P3.2B corpus uses.
+fn p33_tx(seed: u8) -> Transaction {
+    let mut previous = [0u8; P33_DIGEST_LEN];
+    for (index, byte) in previous.iter_mut().enumerate() {
+        *byte = seed.wrapping_add(index as u8);
+    }
+    Transaction {
+        version: 1,
+        inputs: vec![TxIn {
+            previous_output: Outpoint {
+                txid: Hash256(previous),
+                vout: seed as u32,
+            },
+            script_sig: vec![seed, seed.wrapping_add(1)],
+            sequence: 0xffff_ffff,
+        }],
+        outputs: vec![TxOut {
+            value: (seed as u64 + 1) * 1_000,
+            script_pubkey: vec![0x76, 0xa9, 0x14, seed],
+        }],
+        lock_time: seed as u32,
+    }
+}
+
+/// `count` transactions built from consecutive seeds, so a permutation of a slice
+/// of this list is the same set of transactions in a different order.
+fn p33_txs(count: usize, first_seed: u8) -> Vec<Transaction> {
+    (0..count)
+        .map(|index| p33_tx(first_seed.wrapping_add(index as u8)))
+        .collect()
+}
+
+/// The coinbase the P0 `encoding.transaction` group already uses: a fixed height,
+/// the published private key `1`, and the subsidy that height entitles.
+fn p33_coinbase(height: u64) -> Transaction {
+    coinbase_transaction(height, &scalar(1).public_key(), block_subsidy(height))
+}
+
+/// A transaction that differs from `sample_tx()` in exactly one output value byte,
+/// so a root can be shown to depend on transaction *content* and not only on the
+/// number or the order of the entries.
+fn p33_bumped_sample() -> Transaction {
+    let mut tx = sample_tx();
+    tx.outputs[0].value += 1;
+    tx
+}
+
+/// Publish a transaction field by field, exactly as the P0 `tx_json` closure in
+/// `transaction_cases` does. That closure is local to its own function, and moving
+/// it would rewrite historical exporter code for no change in output, so this
+/// section restates it instead — and the pinned test below proves the restatement
+/// is byte-identical to what the P0 corpus publishes for the same fixture.
+fn p33_tx_json(tx: &Transaction) -> Value {
+    json!({
+        "version": tx.version,
+        "inputs": tx
+            .inputs
+            .iter()
+            .map(|input| json!({
+                "txid_hex": hx(&input.previous_output.txid.0),
+                "vout": input.previous_output.vout,
+                "script_sig_hex": hx(&input.script_sig),
+                "sequence": input.sequence,
+            }))
+            .collect::<Vec<_>>(),
+        "outputs": tx
+            .outputs
+            .iter()
+            .map(|output| json!({
+                "value": output.value,
+                "script_pubkey_hex": hx(&output.script_pubkey),
+            }))
+            .collect::<Vec<_>>(),
+        "lock_time": tx.lock_time,
+    })
+}
+
+/// One composition case: the ordered transactions go in, the reference's own root
+/// comes out, and each leaf is published as the id the reference derived for that
+/// transaction plus the exact bytes that id commits to. The width assertion makes
+/// the exporter fail loudly if a digest ever stops being one sha256d wide, so a
+/// stale expectation cannot be published silently.
+fn p33_case(
+    id: &str,
+    intent: &str,
+    transactions: &[Transaction],
+    independent_check: &str,
+) -> Value {
+    let root = Block::compute_merkle_root(transactions);
+    let internal = hex::encode(root.0);
+    assert_eq!(
+        internal.len(),
+        P33_DIGEST_LEN * 2,
+        "{id}: the reference root is no longer one digest wide"
+    );
+
+    let leaves: Vec<Value> = transactions
+        .iter()
+        .map(|tx| {
+            let bytes = tx.serialize();
+            json!({
+                "txid": hash256_json(&tx.txid()),
+                "serialized_hex": hx(&bytes),
+                "serialized_len": bytes.len(),
+            })
+        })
+        .collect();
+
+    case(
+        id,
+        intent,
+        json!({
+            "tx_count": transactions.len(),
+            "transactions": transactions.iter().map(p33_tx_json).collect::<Vec<Value>>(),
+        }),
+        json!({
+            "leaves": leaves,
+            "root": hash256_json(&root),
+            "root_len": internal.len() / 2,
+        }),
+        independent_check,
+    )
+}
+
+fn merkle_root_from_txs_cases() -> Vec<Value> {
+    // The three P0 fixture transactions, in the order the encoding corpus names
+    // them: a sample, a two-in/two-out payment, and the signed spend.
+    let sample = sample_tx();
+    let payment = payment_tx();
+    let signed = signed_payment().0;
+    let genesis = genesis_coinbase();
+    let coinbase = p33_coinbase(147);
+    let degenerate = Transaction {
+        version: 2,
+        inputs: Vec::new(),
+        outputs: Vec::new(),
+        lock_time: 0,
+    };
+    // Seeds 0x90.. are chosen so this triple never overlaps the seed ranges the
+    // width cases below already occupy (0x10.. through 0x60..0x70).
+    let (x, y, z) = (p33_tx(0x90), p33_tx(0x91), p33_tx(0x92));
+
+    vec![
+        // The empty list: the public reference path supports it and the pinned
+        // test below proves it is the tag digest, not an assumed value.
+        p33_case(
+            "chain.merkle_root_from_txs.empty",
+            "rule",
+            &[],
+            "sha256d of the 17-byte `ZRO/merkle:empty\\0` tag; no transaction is serialised or hashed",
+        ),
+        // One transaction per case, so the single-leaf passthrough is visible three
+        // different ways: an ordinary tx, a coinbase, and the frozen genesis coinbase.
+        p33_case(
+            "chain.merkle_root_from_txs.single_transaction",
+            "rule",
+            &[sample.clone()],
+            "one leaf is returned unchanged, so the root is exactly this transaction's own txid",
+        ),
+        p33_case(
+            "chain.merkle_root_from_txs.single_coinbase",
+            "rule",
+            &[coinbase.clone()],
+            "a coinbase is an ordinary transaction here: the root is its txid, with no block rule applied",
+        ),
+        p33_case(
+            "chain.merkle_root_from_txs.single_genesis_coinbase",
+            "rule",
+            &[genesis],
+            "the crate's own `genesis_coinbase()` under the single-leaf rule, i.e. the shape `GENESIS_MERKLE_ROOT` has",
+        ),
+        // Two, and the same two reversed: the pair is the only internal node, so the
+        // two published roots must disagree.
+        p33_case(
+            "chain.merkle_root_from_txs.two_transactions",
+            "rule",
+            &[sample.clone(), payment.clone()],
+            "sha256d over the 64 raw bytes of txid(sample) || txid(payment), with no tag between them",
+        ),
+        p33_case(
+            "chain.merkle_root_from_txs.two_swapped",
+            "rule",
+            &[payment.clone(), sample.clone()],
+            "the same two transactions in the opposite order, so the tree is positional and not a set",
+        ),
+        p33_case(
+            "chain.merkle_root_from_txs.two_identical_transactions",
+            "oddity",
+            &[sample.clone(), sample.clone()],
+            "a repeated transaction is two leaves, not one: the pair is txid || txid with the digest twice",
+        ),
+        // Three through seven, then nine and seventeen: even widths, odd widths, and
+        // a list deep enough to reduce through five levels (17, 9, 5, 3, 2, 1).
+        p33_case(
+            "chain.merkle_root_from_txs.three_transactions",
+            "rule",
+            &[sample.clone(), payment.clone(), signed.clone()],
+            "an odd level duplicates the final txid rather than promoting it: root([a,b,c]) == root([a,b,c,c])",
+        ),
+        p33_case(
+            "chain.merkle_root_from_txs.four_transactions",
+            "rule",
+            &p33_txs(4, 0x10),
+            "two pairs fold to one level and then to the root",
+        ),
+        p33_case(
+            "chain.merkle_root_from_txs.five_transactions",
+            "rule",
+            &p33_txs(5, 0x20),
+            "the fifth txid is duplicated at the first level and the resulting width 3 is odd again",
+        ),
+        p33_case(
+            "chain.merkle_root_from_txs.six_transactions",
+            "rule",
+            &p33_txs(6, 0x30),
+            "width 6 reduces to 3, which is odd, so the duplication applies on the second level too",
+        ),
+        p33_case(
+            "chain.merkle_root_from_txs.seven_transactions",
+            "rule",
+            &p33_txs(7, 0x40),
+            "width 7 duplicates its final node twice in a row: 7 to 4 to 2 to 1",
+        ),
+        p33_case(
+            "chain.merkle_root_from_txs.nine_transactions",
+            "rule",
+            &p33_txs(9, 0x50),
+            "four levels deep, the widths the P3.2B reduction arithmetic was pinned against",
+        ),
+        p33_case(
+            "chain.merkle_root_from_txs.seventeen_transactions",
+            "rule",
+            &p33_txs(17, 0x60),
+            "five levels: 17 to 9 to 5 to 3 to 2 to 1, odd at every level but the last",
+        ),
+        // The duplicate-last rule stated as an equality over transactions.
+        p33_case(
+            "chain.merkle_root_from_txs.odd_tail_duplicated",
+            "oddity",
+            &[
+                sample.clone(),
+                payment.clone(),
+                signed.clone(),
+                signed.clone(),
+            ],
+            "appending a copy of the final transaction cannot change the root; a Bitcoin promotion rule changes it",
+        ),
+        p33_case(
+            "chain.merkle_root_from_txs.three_copies_of_one_transaction",
+            "oddity",
+            &[sample.clone(), sample.clone(), sample.clone()],
+            "three identical leaves must not collapse to one, and must not equal the single-leaf root",
+        ),
+        p33_case(
+            "chain.merkle_root_from_txs.near_identical_pair",
+            "oddity",
+            &[sample.clone(), p33_bumped_sample()],
+            "two transactions one output-value byte apart must not share a root with two identical ones",
+        ),
+        p33_case(
+            "chain.merkle_root_from_txs.degenerate_transaction_only",
+            "oddity",
+            &[degenerate],
+            "a transaction with no inputs and no outputs still has an id, and one id is the whole root",
+        ),
+        // An explicit ordering triple over one fixed set of transactions.
+        p33_case(
+            "chain.merkle_root_from_txs.order_abc",
+            "rule",
+            &[x.clone(), y.clone(), z.clone()],
+            "the same three transactions in list order a, b, c",
+        ),
+        p33_case(
+            "chain.merkle_root_from_txs.order_cba",
+            "rule",
+            &[z.clone(), y.clone(), x.clone()],
+            "the reverse order of `order_abc`, and it must disagree with it",
+        ),
+        // Block-shaped lists, without any block rule being applied here: B-9, B-12,
+        // B-13 and B-14 belong to `validate_structure`, not to this composition.
+        p33_case(
+            "chain.merkle_root_from_txs.coinbase_then_two_spends",
+            "rule",
+            &[coinbase, sample.clone(), signed.clone()],
+            "a coinbase followed by two spends, committed positionally; nothing checks the order is legal",
+        ),
+        p33_case(
+            "chain.merkle_root_from_txs.three_coinbases",
+            "rule",
+            &[
+                p33_coinbase(1),
+                p33_coinbase(2),
+                p33_coinbase(3),
+            ],
+            "a coinbase-only list of three heights, so the ids differ and the tree is not degenerate",
+        ),
+    ]
+}
+
+/// The P3.3B envelope: the P0 envelope plus the reference commits, so one file
+/// answers "which code produced this" without consulting the manifest.
+fn p33_envelope(group: &str, intent: &str, note: &str, cases: Vec<Value>) -> String {
+    let doc = json!({
+        "schema": "zro-baseline-vectors/1",
+        "group": group,
+        "intent": intent,
+        "note": note,
+        "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+        "source_commit": P33_SOURCE_COMMIT,
+        "provenance": "every expected root was produced by a direct call to the shipping `zerocoin/` Rust function `consensus::block::Block::compute_merkle_root` at `source_commit`, and every expected leaf id by that transaction's own `Transaction::txid`; no root is transcribed from another implementation, computed by hand, typed from a document, or re-derived by this exporter",
+        "reference_commits": {
+            "compute_merkle_root_introduced": P33_REFERENCE_COMMIT,
+            "txid_introduced": P33_REFERENCE_COMMIT,
+        },
+        "generator": "zerocoin/tests/export_baseline_vectors.rs, `p33_*` functions, added by the P3.3B commit that lands immediately after the baseline; a fixture cannot truthfully record the hash of the commit that contains it, so `source_commit` names the code and this field names the exporter separately",
+        "case_count": cases.len(),
+        "cases": cases,
+    });
+    let mut text = serde_json::to_string_pretty(&doc).expect("reference document serialises");
+    text.push('\n');
+    text
+}
+
+/// The P3.3B corpus, mirroring `p32_corpus()` above: same `add!` shape, same
+/// manifest, same write-versus-compare protocol, different root.
+fn p33_corpus() -> Vec<(String, String)> {
+    let mut files: Vec<(String, String)> = Vec::new();
+    let mut counts: Vec<Value> = Vec::new();
+
+    macro_rules! add {
+        ($path:expr, $group:expr, $intent:expr, $note:expr, $cases:expr) => {{
+            let cases: Vec<Value> = $cases;
+            counts.push(json!({"path": $path, "group": $group, "cases": cases.len()}));
+            files.push(($path.to_string(), p33_envelope($group, $intent, $note, cases)));
+        }};
+    }
+
+    add!(
+        "chain/merkle_root_from_txs.json",
+        "chain.merkle_root_from_txs",
+        "rule",
+        "Transaction-level Merkle composition: `Block::compute_merkle_root` derives each leaf as \
+         that transaction's `txid()` and hands the ordered ids to `merkle_root`. Each case publishes \
+         the transactions field by field, the exact bytes each id commits to, the resulting leaf \
+         list and the root, in internal and display form.",
+        merkle_root_from_txs_cases()
+    );
+
+    let manifest = json!({
+        "schema": "zro-baseline-vectors/1",
+        "phase": "P3.3B",
+        "description": "Rust reference vectors for the transaction-level Merkle composition `zerocoin::consensus::block::Block::compute_merkle_root` (ordered `Transaction::txid` leaves fed to `merkle_root`), generated for the C++ kernel's `zk::merkle_root_from_transactions`.",
+        "provenance": "every expected root was produced by a direct call to `consensus::block::Block::compute_merkle_root` in the shipping `zerocoin/` Rust code at `source_commit`, and every expected leaf by `Transaction::txid` on the same published transaction. `Block::compute_merkle_root` and `Transaction::txid` both entered `zerocoin/src` at `reference_commits` and have not been edited since, so the roots published here are the roots that commit already produced. Nothing in this corpus is computed by hand, transcribed from documentation, or generated by the C++ kernel.",
+        "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+        "source_commit": P33_SOURCE_COMMIT,
+        "source_commit_rule": "the newest commit that touches a Rust build input (`zerocoin/src`, `zerocoin/Cargo.toml`, `zerocoin/Cargo.lock`, `zerocoin/build.rs`) and therefore the production code that produced every value here; `zerocoin/src` is byte-identical between it and the baseline this corpus is committed on. Unlike the P0 corpus this is not the commit that introduced the exporter, so `generator` names the exporter separately.",
+        "generator": "zerocoin/tests/export_baseline_vectors.rs, `p33_*` functions, added by the P3.3B commit that lands immediately after the baseline; no fixture can record the hash of the commit that contains it, and none here claims to have existed before this exporter did",
+        "reference_commits": {
+            "compute_merkle_root_introduced": P33_REFERENCE_COMMIT,
+            "txid_introduced": P33_REFERENCE_COMMIT,
+        },
+        "regenerate": "ZRO_VECTOR_WRITE=1 with the same command, then review the diff",
+        "independent_verifier": "test/harness/zro_vectors.py already provides `tx_from_json`, `tx_serialize`, `tx_txid` and `merkle_root`, which compose into this same rule with no new primitive; `run_vectors.py` registers no verifier for this group and this corpus does not wire it in, so the Rust exporter remains the origin of every value published here",
+        "determinism": [
+            "no wall clock, RNG, wallet, data directory or network is used",
+            "every transaction is a literal: one of the three P0 fixture transactions, the crate's own `genesis_coinbase()`, `coinbase_transaction` at a fixed height paying the published key `1`, or a function of one seed byte",
+            "the signed transaction is the same `signed_payment()` fixture the P0 corpus already publishes, whose DER signature is deterministic",
+            "inputs are ordered transaction lists, so a change in transaction order or content changes the file",
+            "JSON object keys are emitted in sorted order by serde_json",
+        ],
+        "contract": {
+            "leaf_source": "the ordered `Transaction::txid()` of every transaction in the list; the composition adds nothing between the id and the leaf",
+            "txid": "sha256d over the canonical re-serialisation of the published fields (C-1, C-2), never over bytes taken as already-encoded input",
+            "internal_node": "sha256d(left_internal_bytes || right_internal_bytes) over exactly 64 bytes, with no node tag, prefix or separator",
+            "empty_input": "an empty transaction list is supported by the public reference path and yields sha256d over the 17-byte `ZRO/merkle:empty\\0` tag, not sha256d of an empty message and not the all-zero digest",
+            "single_transaction": "the only transaction id is returned unchanged: no hash is applied to a single leaf",
+            "odd_level": "the final node is duplicated at every affected level, never promoted unchanged",
+            "transaction_order": "positional; list order is leaf order, and nothing sorts, deduplicates, reverses or reinterprets digest bytes",
+            "byte_order": "digests stay in internal byte order; `display_hex` is a separate printing-only representation and is the reverse of `internal_hex`",
+            "transaction_count_limit": "none: the composition is defined on any number of transactions. `MAX_BLOCK_TRANSACTIONS` (2000) is block rule B-9, checked in `validate_structure` and deliberately not exercised or implied here",
+            "claimed_root_comparison": "none: no case builds a header or compares a root against a claimed one; B-1 and B-14 stay with the Rust `validate_structure`",
+            "digest_width_bytes": P33_DIGEST_LEN,
+            "internal_node_input_bytes": P33_DIGEST_LEN * 2,
+            "empty_tree_tag_bytes": P33_EMPTY_MERKLE_TAG.len(),
+            "empty_tree_tag_hex": hx(P33_EMPTY_MERKLE_TAG),
+            "empty_tree_tag_hex_note": "a restatement of the crate-private tag, pinned by an assertion in `p33_reference_fixtures_are_reproducible_and_pinned` that the published empty root equals sha256d of exactly these bytes",
+        },
+        "files": counts,
+        "total_cases": counts
+            .iter()
+            .map(|entry| entry["cases"].as_u64().unwrap_or(0))
+            .sum::<u64>(),
+        "notes": [
+            "Separate from test/vectors on purpose: the P0 manifest carries one `source_commit` (7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c) for all 117 historical cases, so adding these cases there would either re-state that commit for values it did not generate or rewrite every historical file. Nothing under test/vectors, test/p31-vectors or test/p32-vectors was touched.",
+            "Composition only. The kernel has no `Block` type and this corpus gives it none: no case encodes a header, hashes one, dispatches a proof-of-work engine, compares a root against a claimed root, or validates and accepts a block. Producing a root from transactions is not a block-validation path.",
+            "`chain.merkle_root_from_txs.empty` records the reference's own public behavior for an empty slice — `Block::compute_merkle_root(&[])` returns the tagged empty-tree digest, which `src/chain.rs` and the `block.rs` tests already rely on — rather than an assumed value.",
+            "`odd_tail_duplicated` must agree with `three_transactions` and `three_copies_of_one_transaction` must disagree with `single_transaction`: those equalities are the transaction-level statement of the duplicate-last rule and of the absence of any deduplication.",
+            "`two_swapped` against `two_transactions`, and `order_cba` against `order_abc`, are the ordering pairs; `near_identical_pair` is the content pair, one output-value byte wide.",
+            "List lengths 4, 5, 6, 7, 9 and 17 are chosen for tree shape — even and odd widths at successive levels — and `seventeen_transactions` reduces 17 to 9 to 5 to 3 to 2 to 1, five levels deep. They are not a claim about any permitted block size.",
+            "`coinbase_then_two_spends` and `three_coinbases` are block-shaped lists, not block validation: the coinbase-position, duplicate-coinbase and count rules (B-12, B-13, B-9) are enforced in `validate_structure` and are out of scope for this milestone.",
+            "These 22 cases are new with the `p33_*` exporter. `reference_commits` names the commit whose code is under test, not the commit that introduced these cases, because a fixture cannot truthfully claim to predate its own generator.",
+        ],
+    });
+    let mut text = serde_json::to_string_pretty(&manifest).expect("reference manifest serialises");
+    text.push('\n');
+    files.push(("manifest.json".to_string(), text));
+
+    files.sort_by(|left, right| left.0.cmp(&right.0));
+    files
+}
+
+fn p33_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("test")
+        .join("p33-vectors")
+}
+
+#[test]
+fn p33_vectors_match_the_committed_reference_corpus() {
+    let write = std::env::var("ZRO_VECTOR_WRITE")
+        .map(|value| value == "1")
+        .unwrap_or(false);
+    let root = p33_root();
+    let mut drift: Vec<String> = Vec::new();
+    let mut written = 0usize;
+
+    for (relative, text) in p33_corpus() {
+        let path = root.join(&relative);
+        if write {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).expect("reference directory is creatable");
+            }
+            fs::write(&path, text.as_bytes()).expect("reference vector is writable");
+            written += 1;
+        } else {
+            let committed = fs::read_to_string(&path).unwrap_or_else(|error| {
+                panic!(
+                    "missing reference vector {}: {error}\nrun with ZRO_VECTOR_WRITE=1 to regenerate",
+                    path.display()
+                )
+            });
+            if committed != text {
+                drift.push(relative);
+            }
+        }
+    }
+
+    if write {
+        println!("wrote {written} reference vector files under {}", root.display());
+    } else {
+        assert!(
+            drift.is_empty(),
+            "these reference vectors differ from the committed corpus: {drift:?}\n\
+             run with ZRO_VECTOR_WRITE=1 to regenerate, then review the diff"
+        );
+    }
+}
+
+#[test]
+fn p33_reference_fixtures_are_reproducible_and_pinned() {
+    let first = p33_corpus();
+    let second = p33_corpus();
+    assert_eq!(first, second, "two generations must be byte-identical");
+    assert_eq!(first.len(), 2, "one group plus the manifest");
+
+    let cases = merkle_root_from_txs_cases();
+    assert_eq!(cases.len(), 22, "the pinned case count; p33_conformance.py pins the same number");
+
+    // The restated crate-private tag is still the tag the reference uses, still 17
+    // bytes, and the composition agrees with the leaf rule on the empty input.
+    assert_eq!(P33_EMPTY_MERKLE_TAG.len(), 17, "the empty-tree tag is a frozen 17 bytes");
+    assert_eq!(
+        merkle_root(&[]),
+        sha256d(P33_EMPTY_MERKLE_TAG),
+        "the restated empty-tree tag no longer matches the leaf-level reference"
+    );
+    assert_eq!(
+        Block::compute_merkle_root(&[]),
+        sha256d(P33_EMPTY_MERKLE_TAG),
+        "the public composition no longer maps an empty list onto the tagged empty-tree digest"
+    );
+
+    // One transaction: the root is that transaction's id, unchanged. Two: one
+    // untagged internal node over the two ids as stored.
+    let sample = sample_tx();
+    let payment = payment_tx();
+    assert_eq!(
+        Block::compute_merkle_root(&[sample.clone()]),
+        sample.txid(),
+        "a single transaction must yield its own txid"
+    );
+    assert_eq!(
+        Block::compute_merkle_root(&[sample.clone(), payment.clone()]),
+        p32_internal(&sample.txid(), &payment.txid()),
+        "two transactions must hash as one untagged raw pair of ids"
+    );
+
+    // Positional order, and no deduplication of repeated transactions.
+    assert_ne!(
+        Block::compute_merkle_root(&[sample.clone(), payment.clone()]),
+        Block::compute_merkle_root(&[payment.clone(), sample.clone()]),
+        "the tree is positional, so swapping the two transactions must change the root"
+    );
+    assert_eq!(
+        Block::compute_merkle_root(&[sample.clone(), sample.clone()]),
+        p32_internal(&sample.txid(), &sample.txid()),
+        "a repeated transaction must not be deduplicated"
+    );
+    assert_ne!(
+        Block::compute_merkle_root(&[sample.clone(), sample.clone(), sample.clone()]),
+        sample.txid(),
+        "three identical transactions must not collapse to one leaf"
+    );
+
+    // Duplicate-when-odd, expressed over transactions.
+    let signed = signed_payment().0;
+    assert_eq!(
+        Block::compute_merkle_root(&[sample.clone(), payment.clone(), signed.clone()]),
+        Block::compute_merkle_root(&[
+            sample.clone(),
+            payment.clone(),
+            signed.clone(),
+            signed.clone()
+        ]),
+        "an odd final node is duplicated, not promoted"
+    );
+
+    // Content, not only order, reaches the root: one output-value byte is enough.
+    assert_ne!(
+        Block::compute_merkle_root(&[sample.clone(), p33_bumped_sample()]),
+        Block::compute_merkle_root(&[sample.clone(), sample.clone()]),
+        "two transactions one value byte apart must not share a root with two identical ones"
+    );
+
+    // The restated transaction publisher must still agree with the P0 corpus's own
+    // field-by-field form, byte for byte, or the two corpora have drifted apart.
+    let p0_sample = &transaction_cases()[0];
+    assert_eq!(
+        p0_sample["id"].as_str(),
+        Some("encoding.transaction.sample"),
+        "the P0 encoding group no longer starts with the sample transaction"
+    );
+    assert_eq!(
+        p0_sample["input"],
+        p33_tx_json(&sample),
+        "p33_tx_json no longer publishes exactly what the P0 corpus publishes for the same fixture"
+    );
+
+    // Every published case: the leaf list has one entry per transaction, each leaf
+    // id is sha256d of the bytes the file says it hashed, those bytes decode back to
+    // the fixture transaction, the display form is the internal form reversed and
+    // nothing else, and the whole published input reproduces the published root.
+    for value in &cases {
+        let id = value["id"].as_str().expect("case id").to_string();
+        let expected = &value["expected"];
+        let internal = expected["root"]["internal_hex"]
+            .as_str()
+            .expect("internal_hex")
+            .to_string();
+        let display = expected["root"]["display_hex"]
+            .as_str()
+            .expect("display_hex")
+            .to_string();
+
+        assert_eq!(internal.len(), P33_DIGEST_LEN * 2, "{id}: internal_hex width");
+        assert_eq!(display.len(), P33_DIGEST_LEN * 2, "{id}: display_hex width");
+        assert_eq!(
+            expected["root_len"].as_u64(),
+            Some(P33_DIGEST_LEN as u64),
+            "{id}: root_len must be the digest width"
+        );
+
+        let mut reversed = hex::decode(&internal).expect("internal_hex decodes");
+        reversed.reverse();
+        assert_eq!(
+            display,
+            hex::encode(&reversed),
+            "{id}: display_hex is not the internal bytes reversed"
+        );
+
+        let declared = value["input"]["tx_count"].as_u64().expect("tx_count");
+        let published = value["input"]["transactions"]
+            .as_array()
+            .expect("transactions array");
+        let leaves = expected["leaves"].as_array().expect("leaves array");
+        assert_eq!(published.len() as u64, declared, "{id}: the published tx_count is wrong");
+        assert_eq!(leaves.len() as u64, declared, "{id}: the leaf list is not one id per transaction");
+
+        let mut rebuilt: Vec<Transaction> = Vec::new();
+        for (index, leaf) in leaves.iter().enumerate() {
+            let bytes = hex::decode(
+                leaf["serialized_hex"].as_str().expect("serialized_hex"),
+            )
+            .expect("serialized_hex decodes");
+            assert_eq!(
+                leaf["serialized_len"].as_u64(),
+                Some(bytes.len() as u64),
+                "{id}: leaf {index} publishes a length that disagrees with its own bytes"
+            );
+            assert_eq!(
+                leaf["txid"]["internal_hex"].as_str().expect("leaf internal_hex").len(),
+                P33_DIGEST_LEN * 2,
+                "{id}: leaf {index} is not one digest wide"
+            );
+
+            // The id must be sha256d of exactly the published bytes: that is the
+            // txid-to-leaf mapping, checked without calling the composition at all.
+            let digest = sha256d(&bytes);
+            assert_eq!(
+                hash256_json(&digest),
+                leaf["txid"].clone(),
+                "{id}: leaf {index} is not sha256d of the bytes this file publishes"
+            );
+
+            let tx = Transaction::deserialize(&bytes)
+                .unwrap_or_else(|error| panic!("{id}: leaf {index} does not decode: {error:?}"));
+            assert_eq!(
+                tx.serialize(),
+                bytes,
+                "{id}: leaf {index} does not re-serialize to the bytes this file publishes"
+            );
+            assert_eq!(
+                tx,
+                Transaction::deserialize(&tx.serialize()).expect("re-decode agrees"),
+                "{id}: leaf {index} does not round-trip"
+            );
+            assert_eq!(
+                p33_tx_json(&tx),
+                published[index],
+                "{id}: leaf {index} disagrees with the transaction published as this case's input"
+            );
+            rebuilt.push(tx);
+        }
+
+        assert_eq!(
+            Block::compute_merkle_root(&rebuilt),
+            Hash256::from_slice(&hex::decode(&internal).expect("internal hex decodes"))
+                .expect("the published root is one digest"),
+            "{id}: the published root does not reproduce from this case's own published input"
+        );
+    }
+
+    // The pairs that exist to prove positionality and content sensitivity must
+    // disagree in the file itself, or the corpus stopped proving anything.
+    let published: std::collections::HashMap<String, String> = cases
+        .iter()
+        .map(|value| {
+            let id = value["id"].as_str().expect("case id").to_string();
+            let root = value["expected"]["root"]["internal_hex"]
+                .as_str()
+                .expect("internal_hex")
+                .to_string();
+            (id, root)
+        })
+        .collect();
+
+    assert_eq!(
+        published
+            .get("chain.merkle_root_from_txs.empty")
+            .expect("empty case"),
+        &hx(&sha256d(P33_EMPTY_MERKLE_TAG).0),
+        "the published empty root is not sha256d of the frozen tag"
+    );
+    assert_eq!(
+        published
+            .get("chain.merkle_root_from_txs.three_transactions")
+            .expect("three_transactions case"),
+        published
+            .get("chain.merkle_root_from_txs.odd_tail_duplicated")
+            .expect("odd_tail_duplicated case"),
+        "duplicating the final transaction must not change the published root"
+    );
+    for (left, right) in [
+        ("two_transactions", "two_swapped"),
+        ("order_abc", "order_cba"),
+        ("single_transaction", "three_copies_of_one_transaction"),
+        ("two_identical_transactions", "near_identical_pair"),
+    ] {
+        assert_ne!(
+            published
+                .get(&format!("chain.merkle_root_from_txs.{left}"))
+                .unwrap_or_else(|| panic!("{left}: case is missing")),
+            published
+                .get(&format!("chain.merkle_root_from_txs.{right}"))
+                .unwrap_or_else(|| panic!("{right}: case is missing")),
+            "{left} and {right} must publish different roots"
+        );
+    }
+
+    // The single-transaction cases must publish their own transaction's id as the
+    // root, which is the one identity a reader can check without a tree at all.
+    for id in [
+        "single_transaction",
+        "single_coinbase",
+        "single_genesis_coinbase",
+        "degenerate_transaction_only",
+    ] {
+        let case_id = format!("chain.merkle_root_from_txs.{id}");
+        let value = cases
+            .iter()
+            .find(|candidate| candidate["id"].as_str() == Some(case_id.as_str()))
+            .unwrap_or_else(|| panic!("{case_id}: case is missing"));
+        assert_eq!(
+            value["expected"]["root"],
+            value["expected"]["leaves"][0]["txid"],
+            "{case_id}: a one-transaction root must be that transaction's own published id"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Group: pow
 // ---------------------------------------------------------------------------
 

@@ -1,0 +1,58 @@
+{
+  "contract": {
+    "byte_order": "digests stay in internal byte order; `display_hex` is a separate printing-only representation and is the reverse of `internal_hex`",
+    "claimed_root_comparison": "none: no case builds a header or compares a root against a claimed one; B-1 and B-14 stay with the Rust `validate_structure`",
+    "digest_width_bytes": 32,
+    "empty_input": "an empty transaction list is supported by the public reference path and yields sha256d over the 17-byte `ZRO/merkle:empty\\0` tag, not sha256d of an empty message and not the all-zero digest",
+    "empty_tree_tag_bytes": 17,
+    "empty_tree_tag_hex": "5a524f2f6d65726b6c653a656d70747900",
+    "empty_tree_tag_hex_note": "a restatement of the crate-private tag, pinned by an assertion in `p33_reference_fixtures_are_reproducible_and_pinned` that the published empty root equals sha256d of exactly these bytes",
+    "internal_node": "sha256d(left_internal_bytes || right_internal_bytes) over exactly 64 bytes, with no node tag, prefix or separator",
+    "internal_node_input_bytes": 64,
+    "leaf_source": "the ordered `Transaction::txid()` of every transaction in the list; the composition adds nothing between the id and the leaf",
+    "odd_level": "the final node is duplicated at every affected level, never promoted unchanged",
+    "single_transaction": "the only transaction id is returned unchanged: no hash is applied to a single leaf",
+    "transaction_count_limit": "none: the composition is defined on any number of transactions. `MAX_BLOCK_TRANSACTIONS` (2000) is block rule B-9, checked in `validate_structure` and deliberately not exercised or implied here",
+    "transaction_order": "positional; list order is leaf order, and nothing sorts, deduplicates, reverses or reinterprets digest bytes",
+    "txid": "sha256d over the canonical re-serialisation of the published fields (C-1, C-2), never over bytes taken as already-encoded input"
+  },
+  "description": "Rust reference vectors for the transaction-level Merkle composition `zerocoin::consensus::block::Block::compute_merkle_root` (ordered `Transaction::txid` leaves fed to `merkle_root`), generated for the C++ kernel's `zk::merkle_root_from_transactions`.",
+  "determinism": [
+    "no wall clock, RNG, wallet, data directory or network is used",
+    "every transaction is a literal: one of the three P0 fixture transactions, the crate's own `genesis_coinbase()`, `coinbase_transaction` at a fixed height paying the published key `1`, or a function of one seed byte",
+    "the signed transaction is the same `signed_payment()` fixture the P0 corpus already publishes, whose DER signature is deterministic",
+    "inputs are ordered transaction lists, so a change in transaction order or content changes the file",
+    "JSON object keys are emitted in sorted order by serde_json"
+  ],
+  "files": [
+    {
+      "cases": 22,
+      "group": "chain.merkle_root_from_txs",
+      "path": "chain/merkle_root_from_txs.json"
+    }
+  ],
+  "generator": "zerocoin/tests/export_baseline_vectors.rs, `p33_*` functions, added by the P3.3B commit that lands immediately after the baseline; no fixture can record the hash of the commit that contains it, and none here claims to have existed before this exporter did",
+  "independent_verifier": "test/harness/zro_vectors.py already provides `tx_from_json`, `tx_serialize`, `tx_txid` and `merkle_root`, which compose into this same rule with no new primitive; `run_vectors.py` registers no verifier for this group and this corpus does not wire it in, so the Rust exporter remains the origin of every value published here",
+  "notes": [
+    "Separate from test/vectors on purpose: the P0 manifest carries one `source_commit` (7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c) for all 117 historical cases, so adding these cases there would either re-state that commit for values it did not generate or rewrite every historical file. Nothing under test/vectors, test/p31-vectors or test/p32-vectors was touched.",
+    "Composition only. The kernel has no `Block` type and this corpus gives it none: no case encodes a header, hashes one, dispatches a proof-of-work engine, compares a root against a claimed root, or validates and accepts a block. Producing a root from transactions is not a block-validation path.",
+    "`chain.merkle_root_from_txs.empty` records the reference's own public behavior for an empty slice — `Block::compute_merkle_root(&[])` returns the tagged empty-tree digest, which `src/chain.rs` and the `block.rs` tests already rely on — rather than an assumed value.",
+    "`odd_tail_duplicated` must agree with `three_transactions` and `three_copies_of_one_transaction` must disagree with `single_transaction`: those equalities are the transaction-level statement of the duplicate-last rule and of the absence of any deduplication.",
+    "`two_swapped` against `two_transactions`, and `order_cba` against `order_abc`, are the ordering pairs; `near_identical_pair` is the content pair, one output-value byte wide.",
+    "List lengths 4, 5, 6, 7, 9 and 17 are chosen for tree shape — even and odd widths at successive levels — and `seventeen_transactions` reduces 17 to 9 to 5 to 3 to 2 to 1, five levels deep. They are not a claim about any permitted block size.",
+    "`coinbase_then_two_spends` and `three_coinbases` are block-shaped lists, not block validation: the coinbase-position, duplicate-coinbase and count rules (B-12, B-13, B-9) are enforced in `validate_structure` and are out of scope for this milestone.",
+    "These 22 cases are new with the `p33_*` exporter. `reference_commits` names the commit whose code is under test, not the commit that introduced these cases, because a fixture cannot truthfully claim to predate its own generator."
+  ],
+  "phase": "P3.3B",
+  "provenance": "every expected root was produced by a direct call to `consensus::block::Block::compute_merkle_root` in the shipping `zerocoin/` Rust code at `source_commit`, and every expected leaf by `Transaction::txid` on the same published transaction. `Block::compute_merkle_root` and `Transaction::txid` both entered `zerocoin/src` at `reference_commits` and have not been edited since, so the roots published here are the roots that commit already produced. Nothing in this corpus is computed by hand, transcribed from documentation, or generated by the C++ kernel.",
+  "reference_commits": {
+    "compute_merkle_root_introduced": "e464695f92f6884e6d25c6947d452d5fb24229a6",
+    "txid_introduced": "e464695f92f6884e6d25c6947d452d5fb24229a6"
+  },
+  "regenerate": "ZRO_VECTOR_WRITE=1 with the same command, then review the diff",
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+  "source_commit": "b71d769be8357bcf10d768d915770125cf7f7c24",
+  "source_commit_rule": "the newest commit that touches a Rust build input (`zerocoin/src`, `zerocoin/Cargo.toml`, `zerocoin/Cargo.lock`, `zerocoin/build.rs`) and therefore the production code that produced every value here; `zerocoin/src` is byte-identical between it and the baseline this corpus is committed on. Unlike the P0 corpus this is not the commit that introduced the exporter, so `generator` names the exporter separately.",
+  "total_cases": 22
+}
