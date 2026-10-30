@@ -1,0 +1,4344 @@
+{
+  "case_count": 30,
+  "cases": [
+    {
+      "expected": {
+        "accepted": true,
+        "claimed_root": {
+          "display_hex": "a67ef7d15890b51827fa53da0672d8b419bb61a5bbc0ab61ade764c16fd72051",
+          "internal_hex": "5120d76fc164e7ad61abc0bba561bb19b4d87206da53fa2718b59058d1f77ea6"
+        },
+        "computed_root": {
+          "display_hex": "a67ef7d15890b51827fa53da0672d8b419bb61a5bbc0ab61ade764c16fd72051",
+          "internal_hex": "5120d76fc164e7ad61abc0bba561bb19b4d87206da53fa2718b59058d1f77ea6"
+        },
+        "computed_root_len": 32,
+        "error_kind": null,
+        "error_payload": null,
+        "leaf_count": 1,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "a67ef7d15890b51827fa53da0672d8b419bb61a5bbc0ab61ade764c16fd72051",
+              "internal_hex": "5120d76fc164e7ad61abc0bba561bb19b4d87206da53fa2718b59058d1f77ea6"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": true
+      },
+      "id": "chain.claimed_merkle_root.single_coinbase_block",
+      "independent_check": "one coinbase, so the claimed root is that transaction's own id and B-14 holds unchanged",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 1,
+          "merkle_root_hex": "5120d76fc164e7ad61abc0bba561bb19b4d87206da53fa2718b59058d1f77ea6",
+          "nonce": 0,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000001,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0101085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0101085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          }
+        ],
+        "tx_count": 1,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 1,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": true,
+        "claimed_root": {
+          "display_hex": "89415a3d161cf54e14af337cea0e4b2a13ddd5d0804340c36463d9f8369c4de9",
+          "internal_hex": "e94d9c36f8d96364c3404380d0d5dd132a4b0eea7c33af144ef51c163d5a4189"
+        },
+        "computed_root": {
+          "display_hex": "89415a3d161cf54e14af337cea0e4b2a13ddd5d0804340c36463d9f8369c4de9",
+          "internal_hex": "e94d9c36f8d96364c3404380d0d5dd132a4b0eea7c33af144ef51c163d5a4189"
+        },
+        "computed_root_len": 32,
+        "error_kind": null,
+        "error_payload": null,
+        "leaf_count": 1,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "89415a3d161cf54e14af337cea0e4b2a13ddd5d0804340c36463d9f8369c4de9",
+              "internal_hex": "e94d9c36f8d96364c3404380d0d5dd132a4b0eea7c33af144ef51c163d5a4189"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": true
+      },
+      "id": "chain.claimed_merkle_root.genesis_block_accepted",
+      "independent_check": "the block production assembles for regtest: `genesis_block` sets the header's root with `Block::compute_merkle_root` and mines the nonce, so this is a genuinely accepted block rather than one this exporter constructed",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 0,
+          "merkle_root_hex": "e94d9c36f8d96364c3404380d0d5dd132a4b0eea7c33af144ef51c163d5a4189",
+          "nonce": 0,
+          "previous_hash_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+          "timestamp": 1735689600,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "003e4e6f207072656d696e652c206e6f206f776e65723a205a65726f436f696e20697320697373756564206f6e6c792062792070726f6f66206f6620776f726b",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff40003e4e6f207072656d696e652c206e6f206f776e65723a205a65726f436f696e20697320697373756564206f6e6c792062792070726f6f66206f6620776f726bffffffff0000000000",
+            "serialized_len": 115,
+            "version": 1
+          }
+        ],
+        "tx_count": 1,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 0,
+          "expected_previous_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": true,
+        "claimed_root": {
+          "display_hex": "ead83beeddf827fded851c7a173efa38910c0794dc26bd42a99e95985c343033",
+          "internal_hex": "3330345c98959ea942bd26dc94070c9138fa3e177a1c85edfd27f8ddee3bd8ea"
+        },
+        "computed_root": {
+          "display_hex": "ead83beeddf827fded851c7a173efa38910c0794dc26bd42a99e95985c343033",
+          "internal_hex": "3330345c98959ea942bd26dc94070c9138fa3e177a1c85edfd27f8ddee3bd8ea"
+        },
+        "computed_root_len": 32,
+        "error_kind": null,
+        "error_payload": null,
+        "leaf_count": 3,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "f34ed811d9c255e61643ffb5db97e4f1aafe1af61c37a0164d5ee3f8cffc4eda",
+              "internal_hex": "da4efccff8e35e4d16a0371cf61afeaaf1e497dbb5ff4316e655c2d911d84ef3"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "81fcbe67eaea8241646540b55678284eda3e249fcd72e42d4d01bdbe7d5681f0",
+              "internal_hex": "f081567dbebd014d2de472cd9f243eda4e287856b54065644182eaea67befc81"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "35bd8c8b65be3b3e69dbc1bf3d037696d692944d8255e18f56734bbbd95bcd63",
+              "internal_hex": "63cd5bd9bb4b73568fe155824d9492d69676033dbfc1db693e3bbe658b8cbd35"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": true
+      },
+      "id": "chain.claimed_merkle_root.coinbase_then_two_spends",
+      "independent_check": "three transactions, an odd count, with the two P0 encoding fixtures after the coinbase",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 3,
+          "merkle_root_hex": "3330345c98959ea942bd26dc94070c9138fa3e177a1c85edfd27f8ddee3bd8ea",
+          "nonce": 0,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000003,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0103085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0103085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010203",
+                "sequence": 4294967295,
+                "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+                "vout": 0
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "010000000111111111111111111111111111111111111111111111111111111111111111110000000003010203ffffffff0100f2052a010000000376a91400000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "",
+                "sequence": 4294967294,
+                "txid_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+                "vout": 1
+              },
+              {
+                "script_sig_hex": "",
+                "sequence": 0,
+                "txid_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+                "vout": 7
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 500000,
+            "outputs": [
+              {
+                "script_pubkey_hex": "",
+                "value": 1
+              },
+              {
+                "script_pubkey_hex": "6a",
+                "value": 2100000000000000
+              }
+            ],
+            "serialized_hex": "010000000222222222222222222222222222222222222222222222222222222222222222220100000000feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700",
+            "serialized_len": 111,
+            "version": 1
+          }
+        ],
+        "tx_count": 3,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 3,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": true,
+        "claimed_root": {
+          "display_hex": "0ed413cd2cba5e8e9799e66ebed3de830578557e9d4b2e301458b2699f2004cb",
+          "internal_hex": "cb04209f69b25814302e4b9d7e55780583ded3be6ee699978e5eba2ccd13d40e"
+        },
+        "computed_root": {
+          "display_hex": "0ed413cd2cba5e8e9799e66ebed3de830578557e9d4b2e301458b2699f2004cb",
+          "internal_hex": "cb04209f69b25814302e4b9d7e55780583ded3be6ee699978e5eba2ccd13d40e"
+        },
+        "computed_root_len": 32,
+        "error_kind": null,
+        "error_payload": null,
+        "leaf_count": 2,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "8b15bb53b886cd915341200c6d87f761a34b6307cc63a29c891ede38e1b70b2a",
+              "internal_hex": "2a0bb7e138de1e899ca263cc07634ba361f7876d0c20415391cd86b853bb158b"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "32b8b28edc0ce7a4e5281fc315adc4ab839918466fa0180662c70d7260fbec7d",
+              "internal_hex": "7decfb60720dc7620618a06f46189983abc4ad15c31f28e5a4e70cdc8eb2b832"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": true
+      },
+      "id": "chain.claimed_merkle_root.coinbase_then_signed_spend",
+      "independent_check": "two transactions, so the root is one untagged node over two ids; the spend carries a real DER signature so its id depends on signature bytes",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 4,
+          "merkle_root_hex": "cb04209f69b25814302e4b9d7e55780583ded3be6ee699978e5eba2ccd13d40e",
+          "nonce": 2,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000004,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0104085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0104085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "48304502210096b22dddb2b93b4eb6a4a649ee126c4493a81855257b03758c5735a052ffee890220199b56aa206063c815ca731c2193c1a66d0da05f8045d7242145dba365dc3a4f01210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                "sequence": 4294967294,
+                "txid_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+                "vout": 1
+              },
+              {
+                "script_sig_hex": "",
+                "sequence": 0,
+                "txid_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+                "vout": 7
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 500000,
+            "outputs": [
+              {
+                "script_pubkey_hex": "",
+                "value": 1
+              },
+              {
+                "script_pubkey_hex": "6a",
+                "value": 2100000000000000
+              }
+            ],
+            "serialized_hex": "01000000022222222222222222222222222222222222222222222222222222222222222222010000006b48304502210096b22dddb2b93b4eb6a4a649ee126c4493a81855257b03758c5735a052ffee890220199b56aa206063c815ca731c2193c1a66d0da05f8045d7242145dba365dc3a4f01210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700",
+            "serialized_len": 218,
+            "version": 1
+          }
+        ],
+        "tx_count": 2,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 4,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": true,
+        "claimed_root": {
+          "display_hex": "68961b55a92d67051e00bebe2db4754f3973305427674ab0981caf6522e8e4a6",
+          "internal_hex": "a6e4e82265af1c98b04a6727543073394f75b42dbebe001e05672da9551b9668"
+        },
+        "computed_root": {
+          "display_hex": "68961b55a92d67051e00bebe2db4754f3973305427674ab0981caf6522e8e4a6",
+          "internal_hex": "a6e4e82265af1c98b04a6727543073394f75b42dbebe001e05672da9551b9668"
+        },
+        "computed_root_len": 32,
+        "error_kind": null,
+        "error_payload": null,
+        "leaf_count": 5,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "b5d4604efdc58d6341d1a060e42acd135f92aa82acee4b37ffd10d722cd7c6bf",
+              "internal_hex": "bfc6d72c720dd1ff374beeac82aa925f13cd2ae460a0d141638dc5fd4e60d4b5"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "388fbfc3c9d352cd1b9ca4caca242929e2719ccaac5b17518c2c0e7c3d9f36a4",
+              "internal_hex": "a4369f3d7c0e2c8c51175bacca9c71e2292924cacaa49c1bcd52d3c9c3bf8f38"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "5af93a6af3efee5b9dd80da85db1836a09afcbda560bd182dac3752edf215127",
+              "internal_hex": "275121df2e75c3da82d10b56dacbaf096a83b15da80dd89d5beeeff36a3af95a"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "c32d9eaa6695d8077bcd3b3c8a151c74838f07414f276bfcc5d87063fd6d248e",
+              "internal_hex": "8e246dfd6370d8c5fc6b274f41078f83741c158a3c3bcd7b07d89566aa9e2dc3"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "ada03c12c5e4a1abba36e975af9e4372a371cbc1e826cf0c17cf9153c1de1ae3",
+              "internal_hex": "e31adec15391cf170ccf26e8c1cb71a372439eaf75e936baaba1e4c5123ca0ad"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": true
+      },
+      "id": "chain.claimed_merkle_root.five_transaction_block",
+      "independent_check": "five transactions: the second level is odd as well, so the duplicate reaches a level above the leaves",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 5,
+          "merkle_root_hex": "a6e4e82265af1c98b04a6727543073394f75b42dbebe001e05672da9551b9668",
+          "nonce": 0,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000005,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0105085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0105085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "2021",
+                "sequence": 4294967295,
+                "txid_hex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+                "vout": 32
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 32,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91420",
+                "value": 33000
+              }
+            ],
+            "serialized_hex": "0100000001202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f20000000022021ffffffff01e8800000000000000476a9142020000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "2122",
+                "sequence": 4294967295,
+                "txid_hex": "2122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40",
+                "vout": 33
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 33,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91421",
+                "value": 34000
+              }
+            ],
+            "serialized_hex": "01000000012122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f4021000000022122ffffffff01d0840000000000000476a9142121000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "2223",
+                "sequence": 4294967295,
+                "txid_hex": "22232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f4041",
+                "vout": 34
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 34,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91422",
+                "value": 35000
+              }
+            ],
+            "serialized_hex": "010000000122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404122000000022223ffffffff01b8880000000000000476a9142222000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "2324",
+                "sequence": 4294967295,
+                "txid_hex": "232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142",
+                "vout": 35
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 35,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91423",
+                "value": 36000
+              }
+            ],
+            "serialized_hex": "0100000001232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40414223000000022324ffffffff01a08c0000000000000476a9142323000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 5,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 5,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": true,
+        "claimed_root": {
+          "display_hex": "b2a1976e3e6a050429c3dde1aa8f4c11972f8e11d59625faa1fd172956d49838",
+          "internal_hex": "3898d4562917fda1fa2596d5118e2f97114c8faae1ddc32904056a3e6e97a1b2"
+        },
+        "computed_root": {
+          "display_hex": "b2a1976e3e6a050429c3dde1aa8f4c11972f8e11d59625faa1fd172956d49838",
+          "internal_hex": "3898d4562917fda1fa2596d5118e2f97114c8faae1ddc32904056a3e6e97a1b2"
+        },
+        "computed_root_len": 32,
+        "error_kind": null,
+        "error_payload": null,
+        "leaf_count": 7,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "6fc2c6a19d9784c9c63793c155c0aae7ed81dcbcea871a8a9fb2c31395438e0b",
+              "internal_hex": "0b8e439513c3b29f8a1a87eabcdc81ede7aac055c19337c6c984979da1c6c26f"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "c080b0f0aa08d9e9ad4f88641b4be07c3dbca5866362f4b1d71491a6bebd95c2",
+              "internal_hex": "c295bdbea69114d7b1f4626386a5bc3d7ce04b1b64884fade9d908aaf0b080c0"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "eb7d000cbc1cc3dc378865822e16039f205a434fa3e19ce9171dc3415ebb5c2d",
+              "internal_hex": "2d5cbb5e41c31d17e99ce1a34f435a209f03162e82658837dcc31cbc0c007deb"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1c663661bdc0a5290d55ccd7347938131302d5f6770704e2f25c1fdafef136ff",
+              "internal_hex": "ff36f1feda1f5cf2e2040777f6d5021313387934d7cc550d29a5c0bd6136661c"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "25038732c368f4795ed045217a0a652b6a6bf71596706b752ce04cd8f1714148",
+              "internal_hex": "484171f1d84ce02c756b709615f76b6a2b650a7a2145d05e79f468c332870325"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "9eed90622ad22bf40f11d7c74dd475aa442948e57d44c7d0f78c6fed2022d671",
+              "internal_hex": "71d62220ed6f8cf7d0c7447de5482944aa75d44dc7d7110ff42bd22a6290ed9e"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "0b4ccb4c6f994498df77284ef67e972fdca3c3abd31788058cc626c0114c6f8c",
+              "internal_hex": "8c6f4c11c026c68c058817d3abc3a3dc2f977ef64e2877df9844996f4ccb4c0b"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": true
+      },
+      "id": "chain.claimed_merkle_root.seven_transaction_block",
+      "independent_check": "seven transactions reduce 7 to 4 to 2 to 1",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 6,
+          "merkle_root_hex": "3898d4562917fda1fa2596d5118e2f97114c8faae1ddc32904056a3e6e97a1b2",
+          "nonce": 0,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000006,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0106085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0106085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3031",
+                "sequence": 4294967295,
+                "txid_hex": "303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f",
+                "vout": 48
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 48,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91430",
+                "value": 49000
+              }
+            ],
+            "serialized_hex": "0100000001303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f30000000023031ffffffff0168bf0000000000000476a9143030000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3132",
+                "sequence": 4294967295,
+                "txid_hex": "3132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f50",
+                "vout": 49
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 49,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91431",
+                "value": 50000
+              }
+            ],
+            "serialized_hex": "01000000013132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f5031000000023132ffffffff0150c30000000000000476a9143131000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3233",
+                "sequence": 4294967295,
+                "txid_hex": "32333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f5051",
+                "vout": 50
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 50,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91432",
+                "value": 51000
+              }
+            ],
+            "serialized_hex": "010000000132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505132000000023233ffffffff0138c70000000000000476a9143232000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3334",
+                "sequence": 4294967295,
+                "txid_hex": "333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152",
+                "vout": 51
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 51,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91433",
+                "value": 52000
+              }
+            ],
+            "serialized_hex": "0100000001333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f50515233000000023334ffffffff0120cb0000000000000476a9143333000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3435",
+                "sequence": 4294967295,
+                "txid_hex": "3435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f50515253",
+                "vout": 52
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 52,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91434",
+                "value": 53000
+              }
+            ],
+            "serialized_hex": "01000000013435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f5051525334000000023435ffffffff0108cf0000000000000476a9143434000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3536",
+                "sequence": 4294967295,
+                "txid_hex": "35363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f5051525354",
+                "vout": 53
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 53,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91435",
+                "value": 54000
+              }
+            ],
+            "serialized_hex": "010000000135363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535435000000023536ffffffff01f0d20000000000000476a9143535000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 7,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 6,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": true,
+        "claimed_root": {
+          "display_hex": "f4c1bd781b7f03703749f921523cba67b9d9fc53b24b9b94423ac9cb2db77070",
+          "internal_hex": "7070b72dcbc93a42949b4bb253fcd9b967ba3c5221f9493770037f1b78bdc1f4"
+        },
+        "computed_root": {
+          "display_hex": "f4c1bd781b7f03703749f921523cba67b9d9fc53b24b9b94423ac9cb2db77070",
+          "internal_hex": "7070b72dcbc93a42949b4bb253fcd9b967ba3c5221f9493770037f1b78bdc1f4"
+        },
+        "computed_root_len": 32,
+        "error_kind": null,
+        "error_payload": null,
+        "leaf_count": 8,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "c6d698642402fd9f470c88a2d2150d88e4b7cf1c75a2d5ed980808fd46a78b07",
+              "internal_hex": "078ba746fd080898edd5a2751ccfb7e4880d15d2a2880c479ffd02246498d6c6"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "617c00f1e358c3047ffa7184d1e0c223ac5b80c99df968a3b9aebb5e101575ba",
+              "internal_hex": "ba7515105ebbaeb9a368f99dc9805bac23c2e0d18471fa7f04c358e3f1007c61"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "7870614cccdbae064ee33245e9ede2a08a829e48519598831b19944b7e05cc4b",
+              "internal_hex": "4bcc057e4b94191b83989551489e828aa0e2ede94532e34e06aedbcc4c617078"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "672f12d34041ba13f322e6392d201baa796cbc681e8c3b5cfbe3711eb778cc3b",
+              "internal_hex": "3bcc78b71e71e3fb5c3b8c1e68bc6c79aa1b202d39e622f313ba4140d3122f67"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "891621b6b976339a4ccc8e54358d382fc3728deb75fef4a3ca0a09f5ed0e2c7f",
+              "internal_hex": "7f2c0eedf5090acaa3f4fe75eb8d72c32f388d35548ecc4c9a3376b9b6211689"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "88bfde64a7a94cc8891313c497d551d26efdf52c711b42769ac4e992f61e1c3f",
+              "internal_hex": "3f1c1ef692e9c49a76421b712cf5fd6ed251d597c4131389c84ca9a764debf88"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "2c9b3e7f0872ab0464216cd1b619b2dcc9a662d535c83cf686b562274c57302a",
+              "internal_hex": "2a30574c2762b586f63cc835d562a6c9dcb219b6d16c216404ab72087f3e9b2c"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "2719c601690778e371c424310c8f20596d312e12c6e876e619521a3ec364a309",
+              "internal_hex": "09a364c33e1a5219e676e8c6122e316d59208f0c3124c471e378076901c61927"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": true
+      },
+      "id": "chain.claimed_merkle_root.eight_transaction_block",
+      "independent_check": "eight transactions reduce 8 to 4 to 2 to 1, the one width in this corpus that is a complete tree with no odd level at all",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 7,
+          "merkle_root_hex": "7070b72dcbc93a42949b4bb253fcd9b967ba3c5221f9493770037f1b78bdc1f4",
+          "nonce": 0,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000007,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0107085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0107085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3839",
+                "sequence": 4294967295,
+                "txid_hex": "38393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f5051525354555657",
+                "vout": 56
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 56,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91438",
+                "value": 57000
+              }
+            ],
+            "serialized_hex": "010000000138393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565738000000023839ffffffff01a8de0000000000000476a9143838000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "393a",
+                "sequence": 4294967295,
+                "txid_hex": "393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758",
+                "vout": 57
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 57,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91439",
+                "value": 58000
+              }
+            ],
+            "serialized_hex": "0100000001393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f5051525354555657583900000002393affffffff0190e20000000000000476a9143939000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3a3b",
+                "sequence": 4294967295,
+                "txid_hex": "3a3b3c3d3e3f404142434445464748494a4b4c4d4e4f50515253545556575859",
+                "vout": 58
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 58,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a9143a",
+                "value": 59000
+              }
+            ],
+            "serialized_hex": "01000000013a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758593a000000023a3bffffffff0178e60000000000000476a9143a3a000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3b3c",
+                "sequence": 4294967295,
+                "txid_hex": "3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a",
+                "vout": 59
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 59,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a9143b",
+                "value": 60000
+              }
+            ],
+            "serialized_hex": "01000000013b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a3b000000023b3cffffffff0160ea0000000000000476a9143b3b000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3c3d",
+                "sequence": 4294967295,
+                "txid_hex": "3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b",
+                "vout": 60
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 60,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a9143c",
+                "value": 61000
+              }
+            ],
+            "serialized_hex": "01000000013c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b3c000000023c3dffffffff0148ee0000000000000476a9143c3c000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3d3e",
+                "sequence": 4294967295,
+                "txid_hex": "3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c",
+                "vout": 61
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 61,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a9143d",
+                "value": 62000
+              }
+            ],
+            "serialized_hex": "01000000013d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c3d000000023d3effffffff0130f20000000000000476a9143d3d000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "3e3f",
+                "sequence": 4294967295,
+                "txid_hex": "3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d",
+                "vout": 62
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 62,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a9143e",
+                "value": 63000
+              }
+            ],
+            "serialized_hex": "01000000013e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d3e000000023e3fffffffff0118f60000000000000476a9143e3e000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 8,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 7,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": true,
+        "claimed_root": {
+          "display_hex": "c28cf609cebb9d707c3785b53c6cd8f02b90b4549b3f5a1262207fe521d4dacb",
+          "internal_hex": "cbdad421e57f2062125a3f9b54b4902bf0d86c3cb585377c709dbbce09f68cc2"
+        },
+        "computed_root": {
+          "display_hex": "c28cf609cebb9d707c3785b53c6cd8f02b90b4549b3f5a1262207fe521d4dacb",
+          "internal_hex": "cbdad421e57f2062125a3f9b54b4902bf0d86c3cb585377c709dbbce09f68cc2"
+        },
+        "computed_root_len": 32,
+        "error_kind": null,
+        "error_payload": null,
+        "leaf_count": 3,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "1a8fea2458ad7215cfa13cd5354e8ebe731fa283f0dd69a68af248dd587ea307",
+              "internal_hex": "07a37e58dd48f28aa669ddf083a21f73be8e4e35d53ca1cf1572ad5824ea8f1a"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "bfaa9062e1a47401ad3f91a999ece5695d2ef7ed3462ce440ed1c3c2490d115e",
+              "internal_hex": "5e110d49c2c3d10e44ce6234edf72e5d69e5ec99a9913fad0174a4e16290aabf"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": true
+      },
+      "id": "chain.claimed_merkle_root.three_transaction_block",
+      "independent_check": "three transactions, so the third leaf is odd and gets a duplicated partner: the base of the duplicate-tail case below, with the same coinbase and the first two of the three spends",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 8,
+          "merkle_root_hex": "cbdad421e57f2062125a3f9b54b4902bf0d86c3cb585377c709dbbce09f68cc2",
+          "nonce": 0,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000008,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0108085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0108085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1112",
+                "sequence": 4294967295,
+                "txid_hex": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+                "vout": 17
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 17,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91411",
+                "value": 18000
+              }
+            ],
+            "serialized_hex": "01000000011112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3011000000021112ffffffff0150460000000000000476a9141111000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 3,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 8,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": true,
+        "claimed_root": {
+          "display_hex": "c28cf609cebb9d707c3785b53c6cd8f02b90b4549b3f5a1262207fe521d4dacb",
+          "internal_hex": "cbdad421e57f2062125a3f9b54b4902bf0d86c3cb585377c709dbbce09f68cc2"
+        },
+        "computed_root": {
+          "display_hex": "c28cf609cebb9d707c3785b53c6cd8f02b90b4549b3f5a1262207fe521d4dacb",
+          "internal_hex": "cbdad421e57f2062125a3f9b54b4902bf0d86c3cb585377c709dbbce09f68cc2"
+        },
+        "computed_root_len": 32,
+        "error_kind": null,
+        "error_payload": null,
+        "leaf_count": 4,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "1a8fea2458ad7215cfa13cd5354e8ebe731fa283f0dd69a68af248dd587ea307",
+              "internal_hex": "07a37e58dd48f28aa669ddf083a21f73be8e4e35d53ca1cf1572ad5824ea8f1a"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "bfaa9062e1a47401ad3f91a999ece5695d2ef7ed3462ce440ed1c3c2490d115e",
+              "internal_hex": "5e110d49c2c3d10e44ce6234edf72e5d69e5ec99a9913fad0174a4e16290aabf"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "bfaa9062e1a47401ad3f91a999ece5695d2ef7ed3462ce440ed1c3c2490d115e",
+              "internal_hex": "5e110d49c2c3d10e44ce6234edf72e5d69e5ec99a9913fad0174a4e16290aabf"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": true
+      },
+      "id": "chain.claimed_merkle_root.odd_tail_duplicate_accepted",
+      "independent_check": "four transactions whose last repeats the third: the reference duplicates rather than deduplicates, so this list shares its root with the three-transaction block above and both are accepted",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 8,
+          "merkle_root_hex": "cbdad421e57f2062125a3f9b54b4902bf0d86c3cb585377c709dbbce09f68cc2",
+          "nonce": 0,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000008,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0108085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0108085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1112",
+                "sequence": 4294967295,
+                "txid_hex": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+                "vout": 17
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 17,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91411",
+                "value": 18000
+              }
+            ],
+            "serialized_hex": "01000000011112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3011000000021112ffffffff0150460000000000000476a9141111000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1112",
+                "sequence": 4294967295,
+                "txid_hex": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+                "vout": 17
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 17,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91411",
+                "value": 18000
+              }
+            ],
+            "serialized_hex": "01000000011112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3011000000021112ffffffff0150460000000000000476a9141111000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 4,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 8,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": true,
+        "claimed_root": {
+          "display_hex": "daf52b0aecc1718d0bcf5a906baf2e284f041132fd553b30e8bf8072f5079f9e",
+          "internal_hex": "9e9f07f57280bfe8303b55fd3211044f282eaf6b905acf0b8d71c1ec0a2bf5da"
+        },
+        "computed_root": {
+          "display_hex": "daf52b0aecc1718d0bcf5a906baf2e284f041132fd553b30e8bf8072f5079f9e",
+          "internal_hex": "9e9f07f57280bfe8303b55fd3211044f282eaf6b905acf0b8d71c1ec0a2bf5da"
+        },
+        "computed_root_len": 32,
+        "error_kind": null,
+        "error_payload": null,
+        "leaf_count": 3,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "1f86f1870aa3d7b0373f132a0296247b9f1ed959cf3cf12d0d79a6efbc3a53fa",
+              "internal_hex": "fa533abcefa6790d2df13ccf59d91e9f7b2496022a133f37b0d7a30a87f1861f"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": true
+      },
+      "id": "chain.claimed_merkle_root.repeated_transaction_block",
+      "independent_check": "the same non-coinbase transaction twice: repeated leaves, never a collapsed one",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 9,
+          "merkle_root_hex": "9e9f07f57280bfe8303b55fd3211044f282eaf6b905acf0b8d71c1ec0a2bf5da",
+          "nonce": 0,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000009,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0109085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0109085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 3,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 9,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": true,
+        "claimed_root": {
+          "display_hex": "6b5598d35f85bdb87c5395530639046a56305b0cf12050aeb1703a8dce8018a6",
+          "internal_hex": "a61880ce8d3a70b1ae5020f10c5b30566a0439065395537cb8bd855fd398556b"
+        },
+        "computed_root": {
+          "display_hex": "6b5598d35f85bdb87c5395530639046a56305b0cf12050aeb1703a8dce8018a6",
+          "internal_hex": "a61880ce8d3a70b1ae5020f10c5b30566a0439065395537cb8bd855fd398556b"
+        },
+        "computed_root_len": 32,
+        "error_kind": null,
+        "error_payload": null,
+        "leaf_count": 2,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "3be48fd152cd457d041c983bae848ad9acafb0fc178a4c1e1e9a3198325c4dd8",
+              "internal_hex": "d84d5c3298319a1e1e4c8a17fcb0afacd98a84ae3b981c047d45cd52d18fe43b"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "4ebd325a4b394cff8c57e8317ccf5a8d0e2bdf1b8526f8aad6c8e43d8240621a",
+              "internal_hex": "1a6240823de4c8d6aaf826851bdf2b0e8d5acf7c31e8578cff4c394b5a32bd4e"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": true
+      },
+      "id": "chain.claimed_merkle_root.degenerate_tail_transaction",
+      "independent_check": "a tail transaction with no inputs and no outputs still has an id and still reaches the root; only position zero is required to be a coinbase",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 10,
+          "merkle_root_hex": "a61880ce8d3a70b1ae5020f10c5b30566a0439065395537cb8bd855fd398556b",
+          "nonce": 0,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000010,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010a085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b010a085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [],
+            "is_coinbase": false,
+            "lock_time": 0,
+            "outputs": [],
+            "serialized_hex": "02000000000000000000",
+            "serialized_len": 10,
+            "version": 2
+          }
+        ],
+        "tx_count": 2,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 10,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": true,
+        "claimed_root": {
+          "display_hex": "355a6a439615499061174e0c01bc828c2930e7c282d7d0d00875a16ee7969357",
+          "internal_hex": "579396e76ea17508d0d0d782c2e730298c82bc010c4e176190491596436a5a35"
+        },
+        "computed_root": {
+          "display_hex": "355a6a439615499061174e0c01bc828c2930e7c282d7d0d00875a16ee7969357",
+          "internal_hex": "579396e76ea17508d0d0d782c2e730298c82bc010c4e176190491596436a5a35"
+        },
+        "computed_root_len": 32,
+        "error_kind": null,
+        "error_payload": null,
+        "leaf_count": 17,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "c919e5b71fb82979ba9e76a293e173f5f3aa4a17e89b5c551db447db91bc8ca1",
+              "internal_hex": "a18cbc91db47b41d555c9be8174aaaf3f573e193a2769eba7929b81fb7e519c9"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "d875799ecc03cd4dbb04656024c919a02e031391137da2443a8c3c452d444c14",
+              "internal_hex": "144c442d453c8c3a44a27d139113032ea019c924606504bb4dcd03cc9e7975d8"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "dce4d85663ad4ec918954568244045cf1371f4a5205c96a57df9f7c40c2e2600",
+              "internal_hex": "00262e0cc4f7f97da5965c20a5f47113cf45402468459518c94ead6356d8e4dc"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "afe3a216f5012b216dde6a4a51cd36542b49b0bc3f9713617a0b9c51ec0868e7",
+              "internal_hex": "e76808ec519c0b7a6113973fbcb0492b5436cd514a6ade6d212b01f516a2e3af"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "b86283c10b224e1517657885b3a12ff74621e21fe059940746d5736d0ef5ee43",
+              "internal_hex": "43eef50e6d73d546079459e01fe22146f72fa1b385786517154e220bc18362b8"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "5ddeded9fa19effcc41befc373675c6e77d49e365beb6d85562a98b9506a8b46",
+              "internal_hex": "468b6a50b9982a56856deb5b369ed4776e5c6773c3ef1bc4fcef19fad9dede5d"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "4ab9d6a189e341b6c366284f5911bb8a3ebfde92d733249c8183a431db4b2f2e",
+              "internal_hex": "2e2f4bdb31a483819c2433d792debf3e8abb11594f2866c3b641e389a1d6b94a"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "8602f2aebca85444b184af969d80f6495af49eefef5db10be220502969480700",
+              "internal_hex": "00074869295020e20bb15defef9ef45a49f6809d96af84b14454a8bcaef20286"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "80ea19b37d397a9c784bf77b19641e2d1109d731c4001c5cb9fd14adedaa3122",
+              "internal_hex": "2231aaedad14fdb95c1c00c431d709112d1e64197bf74b789c7a397db319ea80"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "13017c82c7d9551bd1d3e2926c358c7f36e93500f23df8f8c0ae2c7de9757ade",
+              "internal_hex": "de7a75e97d2caec0f8f83df20035e9367f8c356c92e2d3d11b55d9c7827c0113"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "bb1c2d5679fb58fdbf98ae9b22f047b712fef8e54a5089e7e2bb96cb157fb690",
+              "internal_hex": "90b67f15cb96bbe2e789504ae5f8fe12b747f0229bae98bffd58fb79562d1cbb"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "4fc3608fdaed5f35e1fac2c07b49bff6a9656e8148767b06c9a9dc68c688302c",
+              "internal_hex": "2c3088c668dca9c9067b7648816e65a9f6bf497bc0c2fae1355fedda8f60c34f"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "551e6d3c2630e8f2f3ddd617aee0321276875e171564731dc48f6524a3f4fd8b",
+              "internal_hex": "8bfdf4a324658fc41d736415175e87761232e0ae17d6ddf3f2e830263c6d1e55"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "639b66c2704850e268ef1cecb253eb19282854fbaa350684231fe42247575c9e",
+              "internal_hex": "9e5c574722e41f23840635aafb54282819eb53b2ec1cef68e2504870c2669b63"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1642ee7f7081512587fbbbdecb97c4e153098260f4a4ccff639815b5258817e3",
+              "internal_hex": "e3178825b5159863ffcca4f460820953e1c497cbdebbfb87255181707fee4216"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "8b04ca736ac983da7996a19e907d9a10b4ab962bed74e3d2a0ccc9fcb9415ac1",
+              "internal_hex": "c15a41b9fcc9cca0d2e374ed2b96abb4109a7d909ea19679da83c96a73ca048b"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "5bc9c9f233120433401d7ec71e1d6b93c2d142ace4073e9df5f934befb78868c",
+              "internal_hex": "8c8678fbbe34f9f59d3e07e4ac42d1c2936b1d1ec77e1d4033041233f2c9c95b"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": true
+      },
+      "id": "chain.claimed_merkle_root.seventeen_transaction_block",
+      "independent_check": "seventeen transactions reduce 17 to 9 to 5 to 3 to 2 to 1, five levels deep",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 12,
+          "merkle_root_hex": "579396e76ea17508d0d0d782c2e730298c82bc010c4e176190491596436a5a35",
+          "nonce": 0,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000012,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010c085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b010c085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4041",
+                "sequence": 4294967295,
+                "txid_hex": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+                "vout": 64
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 64,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91440",
+                "value": 65000
+              }
+            ],
+            "serialized_hex": "0100000001404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f40000000024041ffffffff01e8fd0000000000000476a9144040000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4142",
+                "sequence": 4294967295,
+                "txid_hex": "4142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60",
+                "vout": 65
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 65,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91441",
+                "value": 66000
+              }
+            ],
+            "serialized_hex": "01000000014142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f6041000000024142ffffffff01d0010100000000000476a9144141000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4243",
+                "sequence": 4294967295,
+                "txid_hex": "42434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f6061",
+                "vout": 66
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 66,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91442",
+                "value": 67000
+              }
+            ],
+            "serialized_hex": "010000000142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606142000000024243ffffffff01b8050100000000000476a9144242000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4344",
+                "sequence": 4294967295,
+                "txid_hex": "434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162",
+                "vout": 67
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 67,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91443",
+                "value": 68000
+              }
+            ],
+            "serialized_hex": "0100000001434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616243000000024344ffffffff01a0090100000000000476a9144343000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4445",
+                "sequence": 4294967295,
+                "txid_hex": "4445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616263",
+                "vout": 68
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 68,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91444",
+                "value": 69000
+              }
+            ],
+            "serialized_hex": "01000000014445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f6061626344000000024445ffffffff01880d0100000000000476a9144444000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4546",
+                "sequence": 4294967295,
+                "txid_hex": "45464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f6061626364",
+                "vout": 69
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 69,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91445",
+                "value": 70000
+              }
+            ],
+            "serialized_hex": "010000000145464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636445000000024546ffffffff0170110100000000000476a9144545000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4647",
+                "sequence": 4294967295,
+                "txid_hex": "464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465",
+                "vout": 70
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 70,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91446",
+                "value": 71000
+              }
+            ],
+            "serialized_hex": "0100000001464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616263646546000000024647ffffffff0158150100000000000476a9144646000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4748",
+                "sequence": 4294967295,
+                "txid_hex": "4748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616263646566",
+                "vout": 71
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 71,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91447",
+                "value": 72000
+              }
+            ],
+            "serialized_hex": "01000000014748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f6061626364656647000000024748ffffffff0140190100000000000476a9144747000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4849",
+                "sequence": 4294967295,
+                "txid_hex": "48494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f6061626364656667",
+                "vout": 72
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 72,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91448",
+                "value": 73000
+              }
+            ],
+            "serialized_hex": "010000000148494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666748000000024849ffffffff01281d0100000000000476a9144848000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "494a",
+                "sequence": 4294967295,
+                "txid_hex": "494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768",
+                "vout": 73
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 73,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91449",
+                "value": 74000
+              }
+            ],
+            "serialized_hex": "0100000001494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f6061626364656667684900000002494affffffff0110210100000000000476a9144949000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4a4b",
+                "sequence": 4294967295,
+                "txid_hex": "4a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60616263646566676869",
+                "vout": 74
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 74,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a9144a",
+                "value": 75000
+              }
+            ],
+            "serialized_hex": "01000000014a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768694a000000024a4bffffffff01f8240100000000000476a9144a4a000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4b4c",
+                "sequence": 4294967295,
+                "txid_hex": "4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a",
+                "vout": 75
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 75,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a9144b",
+                "value": 76000
+              }
+            ],
+            "serialized_hex": "01000000014b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a4b000000024b4cffffffff01e0280100000000000476a9144b4b000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4c4d",
+                "sequence": 4294967295,
+                "txid_hex": "4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b",
+                "vout": 76
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 76,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a9144c",
+                "value": 77000
+              }
+            ],
+            "serialized_hex": "01000000014c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b4c000000024c4dffffffff01c82c0100000000000476a9144c4c000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4d4e",
+                "sequence": 4294967295,
+                "txid_hex": "4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c",
+                "vout": 77
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 77,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a9144d",
+                "value": 78000
+              }
+            ],
+            "serialized_hex": "01000000014d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c4d000000024d4effffffff01b0300100000000000476a9144d4d000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4e4f",
+                "sequence": 4294967295,
+                "txid_hex": "4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d",
+                "vout": 78
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 78,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a9144e",
+                "value": 79000
+              }
+            ],
+            "serialized_hex": "01000000014e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d4e000000024e4fffffffff0198340100000000000476a9144e4e000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "4f50",
+                "sequence": 4294967295,
+                "txid_hex": "4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e",
+                "vout": 79
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 79,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a9144f",
+                "value": 80000
+              }
+            ],
+            "serialized_hex": "01000000014f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e4f000000024f50ffffffff0180380100000000000476a9144f4f000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 17,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 12,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
+          "display_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+          "internal_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "computed_root": {
+          "display_hex": "a6ed296ca6d4bbaeecf92e7f1ff9954cf156bdad157c1590ba74997f2ab69aa3",
+          "internal_hex": "a39ab62a7f9974ba90157c15adbd56f14c95f91f7f2ef9ecaebbd4a66c29eda6"
+        },
+        "computed_root_len": 32,
+        "error_kind": "RootMismatch",
+        "error_payload": null,
+        "leaf_count": 3,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "f1a7c156a5a5d55c7f946b1d8a0eba1b05e8a385c762654a8dde311d68d6c9ba",
+              "internal_hex": "bac9d6681d31de8d4a6562c785a3e8051bba0e8a1d6b947f5cd5a5a556c1a7f1"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "bfaa9062e1a47401ad3f91a999ece5695d2ef7ed3462ce440ed1c3c2490d115e",
+              "internal_hex": "5e110d49c2c3d10e44ce6234edf72e5d69e5ec99a9913fad0174a4e16290aabf"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": false
+      },
+      "id": "chain.claimed_merkle_root.zero_claim",
+      "independent_check": "a header claiming the all-zero digest for a block of three transactions: the only published claim that is not itself a computed root, and the case that proves the comparison is a real equality rather than a null check",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 20,
+          "merkle_root_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nonce": 0,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000020,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0114085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0114085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1112",
+                "sequence": 4294967295,
+                "txid_hex": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+                "vout": 17
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 17,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91411",
+                "value": 18000
+              }
+            ],
+            "serialized_hex": "01000000011112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3011000000021112ffffffff0150460000000000000476a9141111000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 3,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 20,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
+          "display_hex": "aa8135c77c16f746dbb0b054dc867837076ed2562211b153186609bb4212f77f",
+          "internal_hex": "7ff71242bb09661853b1112256d26e07377886dc54b0b0db46f7167cc73581aa"
+        },
+        "computed_root": {
+          "display_hex": "ab8135c77c16f746dbb0b054dc867837076ed2562211b153186609bb4212f77f",
+          "internal_hex": "7ff71242bb09661853b1112256d26e07377886dc54b0b0db46f7167cc73581ab"
+        },
+        "computed_root_len": 32,
+        "error_kind": "RootMismatch",
+        "error_payload": null,
+        "leaf_count": 4,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "f1a7c156a5a5d55c7f946b1d8a0eba1b05e8a385c762654a8dde311d68d6c9ba",
+              "internal_hex": "bac9d6681d31de8d4a6562c785a3e8051bba0e8a1d6b947f5cd5a5a556c1a7f1"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "bfaa9062e1a47401ad3f91a999ece5695d2ef7ed3462ce440ed1c3c2490d115e",
+              "internal_hex": "5e110d49c2c3d10e44ce6234edf72e5d69e5ec99a9913fad0174a4e16290aabf"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "e5393cef33d2bebef6e02c9a048de97f19f9b7fc49ab2c5ed1231d59b7923ffa",
+              "internal_hex": "fa3f92b7591d23d15e2cab49fcb7f9197fe98d049a2ce0f6bebed233ef3c39e5"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": false
+      },
+      "id": "chain.claimed_merkle_root.one_bit_low_byte",
+      "independent_check": "the correct root of this exact list with the final bit of the final internal byte flipped: one byte differs, everything else is identical",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 20,
+          "merkle_root_hex": "7ff71242bb09661853b1112256d26e07377886dc54b0b0db46f7167cc73581aa",
+          "nonce": 1,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000020,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0114085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0114085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1112",
+                "sequence": 4294967295,
+                "txid_hex": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+                "vout": 17
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 17,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91411",
+                "value": 18000
+              }
+            ],
+            "serialized_hex": "01000000011112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3011000000021112ffffffff0150460000000000000476a9141111000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1213",
+                "sequence": 4294967295,
+                "txid_hex": "12131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031",
+                "vout": 18
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 18,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91412",
+                "value": 19000
+              }
+            ],
+            "serialized_hex": "010000000112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303112000000021213ffffffff01384a0000000000000476a9141212000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 4,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 20,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
+          "display_hex": "ab8135c77c16f746dbb0b054dc867837076ed2562211b153186609bb4212f7ff",
+          "internal_hex": "fff71242bb09661853b1112256d26e07377886dc54b0b0db46f7167cc73581ab"
+        },
+        "computed_root": {
+          "display_hex": "ab8135c77c16f746dbb0b054dc867837076ed2562211b153186609bb4212f77f",
+          "internal_hex": "7ff71242bb09661853b1112256d26e07377886dc54b0b0db46f7167cc73581ab"
+        },
+        "computed_root_len": 32,
+        "error_kind": "RootMismatch",
+        "error_payload": null,
+        "leaf_count": 4,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "f1a7c156a5a5d55c7f946b1d8a0eba1b05e8a385c762654a8dde311d68d6c9ba",
+              "internal_hex": "bac9d6681d31de8d4a6562c785a3e8051bba0e8a1d6b947f5cd5a5a556c1a7f1"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "bfaa9062e1a47401ad3f91a999ece5695d2ef7ed3462ce440ed1c3c2490d115e",
+              "internal_hex": "5e110d49c2c3d10e44ce6234edf72e5d69e5ec99a9913fad0174a4e16290aabf"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "e5393cef33d2bebef6e02c9a048de97f19f9b7fc49ab2c5ed1231d59b7923ffa",
+              "internal_hex": "fa3f92b7591d23d15e2cab49fcb7f9197fe98d049a2ce0f6bebed233ef3c39e5"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": false
+      },
+      "id": "chain.claimed_merkle_root.one_bit_high_byte",
+      "independent_check": "the same digest with one bit flipped in the first internal byte instead, so a port that compares only a prefix or a suffix of the digest cannot pass both bit cases",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 20,
+          "merkle_root_hex": "fff71242bb09661853b1112256d26e07377886dc54b0b0db46f7167cc73581ab",
+          "nonce": 0,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000020,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0114085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0114085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1112",
+                "sequence": 4294967295,
+                "txid_hex": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+                "vout": 17
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 17,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91411",
+                "value": 18000
+              }
+            ],
+            "serialized_hex": "01000000011112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3011000000021112ffffffff0150460000000000000476a9141111000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1213",
+                "sequence": 4294967295,
+                "txid_hex": "12131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031",
+                "vout": 18
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 18,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91412",
+                "value": 19000
+              }
+            ],
+            "serialized_hex": "010000000112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303112000000021213ffffffff01384a0000000000000476a9141212000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 4,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 20,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
+          "display_hex": "7ff71242bb09661853b1112256d26e07377886dc54b0b0db46f7167cc73581ab",
+          "internal_hex": "ab8135c77c16f746dbb0b054dc867837076ed2562211b153186609bb4212f77f"
+        },
+        "computed_root": {
+          "display_hex": "ab8135c77c16f746dbb0b054dc867837076ed2562211b153186609bb4212f77f",
+          "internal_hex": "7ff71242bb09661853b1112256d26e07377886dc54b0b0db46f7167cc73581ab"
+        },
+        "computed_root_len": 32,
+        "error_kind": "RootMismatch",
+        "error_payload": null,
+        "leaf_count": 4,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "f1a7c156a5a5d55c7f946b1d8a0eba1b05e8a385c762654a8dde311d68d6c9ba",
+              "internal_hex": "bac9d6681d31de8d4a6562c785a3e8051bba0e8a1d6b947f5cd5a5a556c1a7f1"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "bfaa9062e1a47401ad3f91a999ece5695d2ef7ed3462ce440ed1c3c2490d115e",
+              "internal_hex": "5e110d49c2c3d10e44ce6234edf72e5d69e5ec99a9913fad0174a4e16290aabf"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "e5393cef33d2bebef6e02c9a048de97f19f9b7fc49ab2c5ed1231d59b7923ffa",
+              "internal_hex": "fa3f92b7591d23d15e2cab49fcb7f9197fe98d049a2ce0f6bebed233ef3c39e5"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": false
+      },
+      "id": "chain.claimed_merkle_root.display_order_claim",
+      "independent_check": "the correct root's bytes in display order: the value a port that re-encodes a digest before comparing it would be holding, and the case that keeps byte order visible",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 20,
+          "merkle_root_hex": "ab8135c77c16f746dbb0b054dc867837076ed2562211b153186609bb4212f77f",
+          "nonce": 1,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000020,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0114085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0114085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1112",
+                "sequence": 4294967295,
+                "txid_hex": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+                "vout": 17
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 17,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91411",
+                "value": 18000
+              }
+            ],
+            "serialized_hex": "01000000011112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3011000000021112ffffffff0150460000000000000476a9141111000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1213",
+                "sequence": 4294967295,
+                "txid_hex": "12131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031",
+                "vout": 18
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 18,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91412",
+                "value": 19000
+              }
+            ],
+            "serialized_hex": "010000000112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303112000000021213ffffffff01384a0000000000000476a9141212000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 4,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 20,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
+          "display_hex": "a6ed296ca6d4bbaeecf92e7f1ff9954cf156bdad157c1590ba74997f2ab69aa3",
+          "internal_hex": "a39ab62a7f9974ba90157c15adbd56f14c95f91f7f2ef9ecaebbd4a66c29eda6"
+        },
+        "computed_root": {
+          "display_hex": "ab8135c77c16f746dbb0b054dc867837076ed2562211b153186609bb4212f77f",
+          "internal_hex": "7ff71242bb09661853b1112256d26e07377886dc54b0b0db46f7167cc73581ab"
+        },
+        "computed_root_len": 32,
+        "error_kind": "RootMismatch",
+        "error_payload": null,
+        "leaf_count": 4,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "f1a7c156a5a5d55c7f946b1d8a0eba1b05e8a385c762654a8dde311d68d6c9ba",
+              "internal_hex": "bac9d6681d31de8d4a6562c785a3e8051bba0e8a1d6b947f5cd5a5a556c1a7f1"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "bfaa9062e1a47401ad3f91a999ece5695d2ef7ed3462ce440ed1c3c2490d115e",
+              "internal_hex": "5e110d49c2c3d10e44ce6234edf72e5d69e5ec99a9913fad0174a4e16290aabf"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "e5393cef33d2bebef6e02c9a048de97f19f9b7fc49ab2c5ed1231d59b7923ffa",
+              "internal_hex": "fa3f92b7591d23d15e2cab49fcb7f9197fe98d049a2ce0f6bebed233ef3c39e5"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": false
+      },
+      "id": "chain.claimed_merkle_root.stale_after_extra_transaction",
+      "independent_check": "the root of the first three transactions of this very block, claimed after a fourth was appended: a stale claim from a shorter version of the same list",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 20,
+          "merkle_root_hex": "a39ab62a7f9974ba90157c15adbd56f14c95f91f7f2ef9ecaebbd4a66c29eda6",
+          "nonce": 6,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000020,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0114085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0114085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1112",
+                "sequence": 4294967295,
+                "txid_hex": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+                "vout": 17
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 17,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91411",
+                "value": 18000
+              }
+            ],
+            "serialized_hex": "01000000011112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3011000000021112ffffffff0150460000000000000476a9141111000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1213",
+                "sequence": 4294967295,
+                "txid_hex": "12131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031",
+                "vout": 18
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 18,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91412",
+                "value": 19000
+              }
+            ],
+            "serialized_hex": "010000000112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303112000000021213ffffffff01384a0000000000000476a9141212000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 4,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 20,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
+          "display_hex": "ab8135c77c16f746dbb0b054dc867837076ed2562211b153186609bb4212f77f",
+          "internal_hex": "7ff71242bb09661853b1112256d26e07377886dc54b0b0db46f7167cc73581ab"
+        },
+        "computed_root": {
+          "display_hex": "a6ed296ca6d4bbaeecf92e7f1ff9954cf156bdad157c1590ba74997f2ab69aa3",
+          "internal_hex": "a39ab62a7f9974ba90157c15adbd56f14c95f91f7f2ef9ecaebbd4a66c29eda6"
+        },
+        "computed_root_len": 32,
+        "error_kind": "RootMismatch",
+        "error_payload": null,
+        "leaf_count": 3,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "f1a7c156a5a5d55c7f946b1d8a0eba1b05e8a385c762654a8dde311d68d6c9ba",
+              "internal_hex": "bac9d6681d31de8d4a6562c785a3e8051bba0e8a1d6b947f5cd5a5a556c1a7f1"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "bfaa9062e1a47401ad3f91a999ece5695d2ef7ed3462ce440ed1c3c2490d115e",
+              "internal_hex": "5e110d49c2c3d10e44ce6234edf72e5d69e5ec99a9913fad0174a4e16290aabf"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": false
+      },
+      "id": "chain.claimed_merkle_root.stale_after_dropped_tail",
+      "independent_check": "the inverse pair: the root of four transactions claimed by the three-transaction block that is its own prefix",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 20,
+          "merkle_root_hex": "7ff71242bb09661853b1112256d26e07377886dc54b0b0db46f7167cc73581ab",
+          "nonce": 2,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000020,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0114085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0114085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1112",
+                "sequence": 4294967295,
+                "txid_hex": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+                "vout": 17
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 17,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91411",
+                "value": 18000
+              }
+            ],
+            "serialized_hex": "01000000011112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3011000000021112ffffffff0150460000000000000476a9141111000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 3,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 20,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
+          "display_hex": "a6ed296ca6d4bbaeecf92e7f1ff9954cf156bdad157c1590ba74997f2ab69aa3",
+          "internal_hex": "a39ab62a7f9974ba90157c15adbd56f14c95f91f7f2ef9ecaebbd4a66c29eda6"
+        },
+        "computed_root": {
+          "display_hex": "6aded6bfcb6c00c29c26928903937ab3e430f06f21bc8e07cd10cac95d8f8d9a",
+          "internal_hex": "9a8d8f5dc9ca10cd078ebc216ff030e4b37a93038992269cc2006ccbbfd6de6a"
+        },
+        "computed_root_len": 32,
+        "error_kind": "RootMismatch",
+        "error_payload": null,
+        "leaf_count": 3,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "f1a7c156a5a5d55c7f946b1d8a0eba1b05e8a385c762654a8dde311d68d6c9ba",
+              "internal_hex": "bac9d6681d31de8d4a6562c785a3e8051bba0e8a1d6b947f5cd5a5a556c1a7f1"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "bfaa9062e1a47401ad3f91a999ece5695d2ef7ed3462ce440ed1c3c2490d115e",
+              "internal_hex": "5e110d49c2c3d10e44ce6234edf72e5d69e5ec99a9913fad0174a4e16290aabf"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": false
+      },
+      "id": "chain.claimed_merkle_root.stale_after_swap",
+      "independent_check": "the same coinbase and the same two spends in the opposite order, claimed under the original order: the tree is positional, so the claim is stale",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 20,
+          "merkle_root_hex": "a39ab62a7f9974ba90157c15adbd56f14c95f91f7f2ef9ecaebbd4a66c29eda6",
+          "nonce": 6,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000020,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0114085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0114085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1112",
+                "sequence": 4294967295,
+                "txid_hex": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+                "vout": 17
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 17,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91411",
+                "value": 18000
+              }
+            ],
+            "serialized_hex": "01000000011112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3011000000021112ffffffff0150460000000000000476a9141111000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 3,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 20,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
+          "display_hex": "4c7638ed6a05080d0e88b3abf3eb56c293461f6ade86d5dc75d6b3b89b0d10a8",
+          "internal_hex": "a8100d9bb8b3d675dcd586de6a1f4693c256ebf3abb3880e0d08056aed38764c"
+        },
+        "computed_root": {
+          "display_hex": "082f17ae9f27f9e5dd349f147d5a38d78e75e8415184ee0574897f0b7d3c6200",
+          "internal_hex": "00623c7d0b7f897405ee845141e8758ed7385a7d149f34dde5f9279fae172f08"
+        },
+        "computed_root_len": 32,
+        "error_kind": "RootMismatch",
+        "error_payload": null,
+        "leaf_count": 2,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "755a3815fe7a2320b6a34ff4fb3773b5f1e83cb53705be1d49d72688fdefe332",
+              "internal_hex": "32e3effd8826d7491dbe0537b53ce8f1b57337fbf44fa3b620237afe15385a75"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "024a7e7f1609e1724a4e4c221f35ee2480749a8872e5325de07226da19827061",
+              "internal_hex": "61708219da2672e05d32e572889a748024ee351f224c4e4a72e109167f7e4a02"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": false
+      },
+      "id": "chain.claimed_merkle_root.stale_after_content_mutation",
+      "independent_check": "the coinbase of `chain.claimed_merkle_root.stale_after_...` cases above plus the P0 sample transaction with one output-value byte increased: the transaction-level mutation `consensus_rules.rs` performs, with the header rebuilt to claim the old root",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 21,
+          "merkle_root_hex": "a8100d9bb8b3d675dcd586de6a1f4693c256ebf3abb3880e0d08056aed38764c",
+          "nonce": 1,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000021,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0115085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0115085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010203",
+                "sequence": 4294967295,
+                "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+                "vout": 0
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914",
+                "value": 5000000001
+              }
+            ],
+            "serialized_hex": "010000000111111111111111111111111111111111111111111111111111111111111111110000000003010203ffffffff0101f2052a010000000376a91400000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 2,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 21,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
+          "display_hex": "a56af2f2a20f627d0cdfd1ea9f5c22ae3a2f6b52df3484baed33de5b6e5facad",
+          "internal_hex": "adac5f6e5bde33edba8434df526b2f3aae225c9fead1df0c7d620fa2f2f26aa5"
+        },
+        "computed_root": {
+          "display_hex": "077b72cd59aada2dd460a32ee2fb50f89e9ff2bc2206238c2f40bccca351a755",
+          "internal_hex": "55a751a3ccbc402f8c230622bcf29f9ef850fbe22ea360d42ddaaa59cd727b07"
+        },
+        "computed_root_len": 32,
+        "error_kind": "RootMismatch",
+        "error_payload": null,
+        "leaf_count": 2,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "f1a7c156a5a5d55c7f946b1d8a0eba1b05e8a385c762654a8dde311d68d6c9ba",
+              "internal_hex": "bac9d6681d31de8d4a6562c785a3e8051bba0e8a1d6b947f5cd5a5a556c1a7f1"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": false
+      },
+      "id": "chain.claimed_merkle_root.repeated_claim_vs_single_transaction",
+      "independent_check": "the root of two identical spends claimed by a block holding only one of them: no duplication, so no match",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 20,
+          "merkle_root_hex": "adac5f6e5bde33edba8434df526b2f3aae225c9fead1df0c7d620fa2f2f26aa5",
+          "nonce": 0,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000020,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0114085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0114085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 2,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 20,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
+          "display_hex": "077b72cd59aada2dd460a32ee2fb50f89e9ff2bc2206238c2f40bccca351a755",
+          "internal_hex": "55a751a3ccbc402f8c230622bcf29f9ef850fbe22ea360d42ddaaa59cd727b07"
+        },
+        "computed_root": {
+          "display_hex": "a56af2f2a20f627d0cdfd1ea9f5c22ae3a2f6b52df3484baed33de5b6e5facad",
+          "internal_hex": "adac5f6e5bde33edba8434df526b2f3aae225c9fead1df0c7d620fa2f2f26aa5"
+        },
+        "computed_root_len": 32,
+        "error_kind": "RootMismatch",
+        "error_payload": null,
+        "leaf_count": 3,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "f1a7c156a5a5d55c7f946b1d8a0eba1b05e8a385c762654a8dde311d68d6c9ba",
+              "internal_hex": "bac9d6681d31de8d4a6562c785a3e8051bba0e8a1d6b947f5cd5a5a556c1a7f1"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": false
+      },
+      "id": "chain.claimed_merkle_root.single_claim_vs_repeated_transactions",
+      "independent_check": "the inverse pair: the root of one spend claimed by a block that repeats it, so a port that deduplicates leaves would call this a match and be wrong",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 20,
+          "merkle_root_hex": "55a751a3ccbc402f8c230622bcf29f9ef850fbe22ea360d42ddaaa59cd727b07",
+          "nonce": 3,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000020,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0114085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0114085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 3,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 20,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
+          "display_hex": "23a601a2ebec43e83f53a1916cce5b9bff83650d8b06572289ba12bee588e031",
+          "internal_hex": "31e088e5be12ba892257068b0d6583ff9b5bce6c91a1533fe843eceba201a623"
+        },
+        "computed_root": {
+          "display_hex": "259ae4457846a9f81ec3344e7cd495fb3178c400b6a1e549c9c5eff4a90c060a",
+          "internal_hex": "0a060ca9f4efc5c949e5a1b600c47831fb95d47c4e34c31ef8a9467845e49a25"
+        },
+        "computed_root_len": 32,
+        "error_kind": "RootMismatch",
+        "error_payload": null,
+        "leaf_count": 2,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "07737e430c000ae61c7b3be981953388fa55cf27328e8cbd1985da5370449ef2",
+              "internal_hex": "f29e447053da8519bd8c8e3227cf55fa88339581e93b7b1ce60a000c437e7307"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "32b8b28edc0ce7a4e5281fc315adc4ab839918466fa0180662c70d7260fbec7d",
+              "internal_hex": "7decfb60720dc7620618a06f46189983abc4ad15c31f28e5a4e70cdc8eb2b832"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": false
+      },
+      "id": "chain.claimed_merkle_root.same_count_different_content",
+      "independent_check": "two transactions in both lists and the same coinbase, but the second is a signed spend rather than the unsigned payment: equal length tells the comparison nothing",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 22,
+          "merkle_root_hex": "31e088e5be12ba892257068b0d6583ff9b5bce6c91a1533fe843eceba201a623",
+          "nonce": 0,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000022,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0116085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0116085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "48304502210096b22dddb2b93b4eb6a4a649ee126c4493a81855257b03758c5735a052ffee890220199b56aa206063c815ca731c2193c1a66d0da05f8045d7242145dba365dc3a4f01210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                "sequence": 4294967294,
+                "txid_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+                "vout": 1
+              },
+              {
+                "script_sig_hex": "",
+                "sequence": 0,
+                "txid_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+                "vout": 7
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 500000,
+            "outputs": [
+              {
+                "script_pubkey_hex": "",
+                "value": 1
+              },
+              {
+                "script_pubkey_hex": "6a",
+                "value": 2100000000000000
+              }
+            ],
+            "serialized_hex": "01000000022222222222222222222222222222222222222222222222222222222222222222010000006b48304502210096b22dddb2b93b4eb6a4a649ee126c4493a81855257b03758c5735a052ffee890220199b56aa206063c815ca731c2193c1a66d0da05f8045d7242145dba365dc3a4f01210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798feffffff3333333333333333333333333333333333333333333333333333333333333333070000000000000000020100000000000000000040075af0750700016a20a10700",
+            "serialized_len": 218,
+            "version": 1
+          }
+        ],
+        "tx_count": 2,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 22,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
+          "display_hex": "a21783681096e44e54b9d6bde9d12fce553938408cf11f86df5a646ab28687ea",
+          "internal_hex": "ea8786b26a645adf861ff18c40383955ce2fd1e9bdd6b9544ee49610688317a2"
+        },
+        "computed_root": {
+          "display_hex": "a6ed296ca6d4bbaeecf92e7f1ff9954cf156bdad157c1590ba74997f2ab69aa3",
+          "internal_hex": "a39ab62a7f9974ba90157c15adbd56f14c95f91f7f2ef9ecaebbd4a66c29eda6"
+        },
+        "computed_root_len": 32,
+        "error_kind": "RootMismatch",
+        "error_payload": null,
+        "leaf_count": 3,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "f1a7c156a5a5d55c7f946b1d8a0eba1b05e8a385c762654a8dde311d68d6c9ba",
+              "internal_hex": "bac9d6681d31de8d4a6562c785a3e8051bba0e8a1d6b947f5cd5a5a556c1a7f1"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "bfaa9062e1a47401ad3f91a999ece5695d2ef7ed3462ce440ed1c3c2490d115e",
+              "internal_hex": "5e110d49c2c3d10e44ce6234edf72e5d69e5ec99a9913fad0174a4e16290aabf"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": false
+      },
+      "id": "chain.claimed_merkle_root.root_from_another_block",
+      "independent_check": "a root computed from an entirely different transaction list, at a height no case here uses for its own header: a copied claim",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 20,
+          "merkle_root_hex": "ea8786b26a645adf861ff18c40383955ce2fd1e9bdd6b9544ee49610688317a2",
+          "nonce": 1,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000020,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0114085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0114085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1112",
+                "sequence": 4294967295,
+                "txid_hex": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+                "vout": 17
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 17,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91411",
+                "value": 18000
+              }
+            ],
+            "serialized_hex": "01000000011112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3011000000021112ffffffff0150460000000000000476a9141111000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 3,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 20,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
+          "display_hex": "ebbcf2fd9a0d55c5bb840db45530046692a16cd2d6588b932ce23d954ffadfde",
+          "internal_hex": "dedffa4f953de22c938b58d6d26ca19266043055b40d84bbc5550d9afdf2bceb"
+        },
+        "computed_root": {
+          "display_hex": "a6ed296ca6d4bbaeecf92e7f1ff9954cf156bdad157c1590ba74997f2ab69aa3",
+          "internal_hex": "a39ab62a7f9974ba90157c15adbd56f14c95f91f7f2ef9ecaebbd4a66c29eda6"
+        },
+        "computed_root_len": 32,
+        "error_kind": "RootMismatch",
+        "error_payload": null,
+        "leaf_count": 3,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "f1a7c156a5a5d55c7f946b1d8a0eba1b05e8a385c762654a8dde311d68d6c9ba",
+              "internal_hex": "bac9d6681d31de8d4a6562c785a3e8051bba0e8a1d6b947f5cd5a5a556c1a7f1"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "bfaa9062e1a47401ad3f91a999ece5695d2ef7ed3462ce440ed1c3c2490d115e",
+              "internal_hex": "5e110d49c2c3d10e44ce6234edf72e5d69e5ec99a9913fad0174a4e16290aabf"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": false
+      },
+      "id": "chain.claimed_merkle_root.empty_tree_claim_by_nonempty_block",
+      "independent_check": "the tagged empty-list digest claimed by a block of three transactions, so the two halves of B-14 are both reference values and the case is a genuine mismatch",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 20,
+          "merkle_root_hex": "dedffa4f953de22c938b58d6d26ca19266043055b40d84bbc5550d9afdf2bceb",
+          "nonce": 2,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000020,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0114085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0114085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1112",
+                "sequence": 4294967295,
+                "txid_hex": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+                "vout": 17
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 17,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91411",
+                "value": 18000
+              }
+            ],
+            "serialized_hex": "01000000011112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3011000000021112ffffffff0150460000000000000476a9141111000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 3,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 20,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
+          "display_hex": "89415a3d161cf54e14af337cea0e4b2a13ddd5d0804340c36463d9f8369c4de9",
+          "internal_hex": "e94d9c36f8d96364c3404380d0d5dd132a4b0eea7c33af144ef51c163d5a4189"
+        },
+        "computed_root": {
+          "display_hex": "e1653c969b1d0a58080047bcc35d1bdf28cc4a89e4ce4d954ed126ba399e95bc",
+          "internal_hex": "bc959e39ba26d14e954dcee4894acc28df1b5dc3bc470008580a1d9b963c65e1"
+        },
+        "computed_root_len": 32,
+        "error_kind": "RootMismatch",
+        "error_payload": null,
+        "leaf_count": 2,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "f748b41957dbb695083bb9d37b678b165ecf2e7ac3cbf3c2fdf08d3724f3e3d6",
+              "internal_hex": "d6e3f324378df0fdc2f3cbc37a2ecf5e168b677bd3b93b0895b6db5719b448f7"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "81fcbe67eaea8241646540b55678284eda3e249fcd72e42d4d01bdbe7d5681f0",
+              "internal_hex": "f081567dbebd014d2de472cd9f243eda4e287856b54065644182eaea67befc81"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "roots_match": false
+      },
+      "id": "chain.claimed_merkle_root.genesis_root_claim_by_later_block",
+      "independent_check": "the root the production genesis block claims, claimed instead by a block whose own transactions are a different coinbase and the P0 sample",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 23,
+          "merkle_root_hex": "e94d9c36f8d96364c3404380d0d5dd132a4b0eea7c33af144ef51c163d5a4189",
+          "nonce": 1,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000023,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0117085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0117085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "010203",
+                "sequence": 4294967295,
+                "txid_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+                "vout": 0
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "010000000111111111111111111111111111111111111111111111111111111111111111110000000003010203ffffffff0100f2052a010000000376a91400000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 2,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 23,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
+          "display_hex": "a6ed296ca6d4bbaeecf92e7f1ff9954cf156bdad157c1590ba74997f2ab69aa3",
+          "internal_hex": "a39ab62a7f9974ba90157c15adbd56f14c95f91f7f2ef9ecaebbd4a66c29eda6"
+        },
+        "computed_root": {
+          "display_hex": "ab8135c77c16f746dbb0b054dc867837076ed2562211b153186609bb4212f77f",
+          "internal_hex": "7ff71242bb09661853b1112256d26e07377886dc54b0b0db46f7167cc73581ab"
+        },
+        "computed_root_len": 32,
+        "error_kind": "RootMismatch",
+        "error_payload": null,
+        "leaf_count": 4,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "f1a7c156a5a5d55c7f946b1d8a0eba1b05e8a385c762654a8dde311d68d6c9ba",
+              "internal_hex": "bac9d6681d31de8d4a6562c785a3e8051bba0e8a1d6b947f5cd5a5a556c1a7f1"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "bfaa9062e1a47401ad3f91a999ece5695d2ef7ed3462ce440ed1c3c2490d115e",
+              "internal_hex": "5e110d49c2c3d10e44ce6234edf72e5d69e5ec99a9913fad0174a4e16290aabf"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "e5393cef33d2bebef6e02c9a048de97f19f9b7fc49ab2c5ed1231d59b7923ffa",
+              "internal_hex": "fa3f92b7591d23d15e2cab49fcb7f9197fe98d049a2ce0f6bebed233ef3c39e5"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": false,
+        "roots_match": false
+      },
+      "id": "chain.claimed_merkle_root.stale_root_with_failing_proof_of_work",
+      "independent_check": "a stale claim and a nonce searched to miss the header's own target: B-14 and B-15 both apply, and the reference reports RootMismatch, which is the precedence the existing consensus_rules comment only assumes",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 25,
+          "merkle_root_hex": "a39ab62a7f9974ba90157c15adbd56f14c95f91f7f2ef9ecaebbd4a66c29eda6",
+          "nonce": 0,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000025,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0114085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0114085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1112",
+                "sequence": 4294967295,
+                "txid_hex": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+                "vout": 17
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 17,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91411",
+                "value": 18000
+              }
+            ],
+            "serialized_hex": "01000000011112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3011000000021112ffffffff0150460000000000000476a9141111000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1213",
+                "sequence": 4294967295,
+                "txid_hex": "12131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031",
+                "vout": 18
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 18,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91412",
+                "value": 19000
+              }
+            ],
+            "serialized_hex": "010000000112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303112000000021213ffffffff01384a0000000000000476a9141212000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 4,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 25,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "ordering"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
+          "display_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+          "internal_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "computed_root": {
+          "display_hex": "a6ed296ca6d4bbaeecf92e7f1ff9954cf156bdad157c1590ba74997f2ab69aa3",
+          "internal_hex": "a39ab62a7f9974ba90157c15adbd56f14c95f91f7f2ef9ecaebbd4a66c29eda6"
+        },
+        "computed_root_len": 32,
+        "error_kind": "RootMismatch",
+        "error_payload": null,
+        "leaf_count": 3,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "f1a7c156a5a5d55c7f946b1d8a0eba1b05e8a385c762654a8dde311d68d6c9ba",
+              "internal_hex": "bac9d6681d31de8d4a6562c785a3e8051bba0e8a1d6b947f5cd5a5a556c1a7f1"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "1f6a5e26aeb4ad2bac7bd78253a402739fb1104b11858139fc1188808a182c5c",
+              "internal_hex": "5c2c188a808811fc398185114b10b19f7302a45382d77bac2badb4ae265e6a1f"
+            }
+          },
+          {
+            "txid": {
+              "display_hex": "bfaa9062e1a47401ad3f91a999ece5695d2ef7ed3462ce440ed1c3c2490d115e",
+              "internal_hex": "5e110d49c2c3d10e44ce6234edf72e5d69e5ec99a9913fad0174a4e16290aabf"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": false,
+        "roots_match": false
+      },
+      "id": "chain.claimed_merkle_root.zero_claim_with_failing_proof_of_work",
+      "independent_check": "the same with the all-zero claim, so the ordering holds for two different ways the roots can disagree",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 26,
+          "merkle_root_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+          "nonce": 3,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000026,
+          "version": 1
+        },
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0114085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0114085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1011",
+                "sequence": 4294967295,
+                "txid_hex": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "vout": 16
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 16,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91410",
+                "value": 17000
+              }
+            ],
+            "serialized_hex": "0100000001101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f10000000021011ffffffff0168420000000000000476a9141010000000",
+            "serialized_len": 66,
+            "version": 1
+          },
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "1112",
+                "sequence": 4294967295,
+                "txid_hex": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+                "vout": 17
+              }
+            ],
+            "is_coinbase": false,
+            "lock_time": 17,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a91411",
+                "value": 18000
+              }
+            ],
+            "serialized_hex": "01000000011112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3011000000021112ffffffff0150460000000000000476a9141111000000",
+            "serialized_len": 66,
+            "version": 1
+          }
+        ],
+        "tx_count": 3,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 26,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "ordering"
+    },
+    {
+      "expected": {
+        "accepted": true,
+        "claimed_root": {
+          "display_hex": "ebbcf2fd9a0d55c5bb840db45530046692a16cd2d6588b932ce23d954ffadfde",
+          "internal_hex": "dedffa4f953de22c938b58d6d26ca19266043055b40d84bbc5550d9afdf2bceb"
+        },
+        "computed_root": {
+          "display_hex": "ebbcf2fd9a0d55c5bb840db45530046692a16cd2d6588b932ce23d954ffadfde",
+          "internal_hex": "dedffa4f953de22c938b58d6d26ca19266043055b40d84bbc5550d9afdf2bceb"
+        },
+        "computed_root_len": 32,
+        "error_kind": null,
+        "error_payload": null,
+        "guard_before_comparison": {
+          "accepted": false,
+          "error_kind": "NoTransactions",
+          "error_payload": null,
+          "note": "the verdict `Block::validate_structure` actually returns for this input; it belongs to B-8, which runs before B-14, so no claimed-root comparison verb in C++ or Python may be expected to reproduce it"
+        },
+        "leaf_count": 0,
+        "leaves": [],
+        "proof_of_work_meets_target": true,
+        "roots_match": true
+      },
+      "id": "chain.claimed_merkle_root.empty_list_matching_claim",
+      "independent_check": "the comparison layer alone, on the input only it can take: an empty list against the tagged digest it computes. Production returns B-8 NoTransactions for this block, published beside the verdict as `guard_before_comparison`",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 50,
+          "merkle_root_hex": "dedffa4f953de22c938b58d6d26ca19266043055b40d84bbc5550d9afdf2bceb",
+          "nonce": 4,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000050,
+          "version": 1
+        },
+        "transactions": [],
+        "tx_count": 0,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 50,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "boundary"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
+          "display_hex": "a67ef7d15890b51827fa53da0672d8b419bb61a5bbc0ab61ade764c16fd72051",
+          "internal_hex": "5120d76fc164e7ad61abc0bba561bb19b4d87206da53fa2718b59058d1f77ea6"
+        },
+        "computed_root": {
+          "display_hex": "ebbcf2fd9a0d55c5bb840db45530046692a16cd2d6588b932ce23d954ffadfde",
+          "internal_hex": "dedffa4f953de22c938b58d6d26ca19266043055b40d84bbc5550d9afdf2bceb"
+        },
+        "computed_root_len": 32,
+        "error_kind": "RootMismatch",
+        "error_payload": null,
+        "guard_before_comparison": {
+          "accepted": false,
+          "error_kind": "NoTransactions",
+          "error_payload": null,
+          "note": "the verdict `Block::validate_structure` actually returns for this input; it belongs to B-8, which runs before B-14, so no claimed-root comparison verb in C++ or Python may be expected to reproduce it"
+        },
+        "leaf_count": 0,
+        "leaves": [],
+        "proof_of_work_meets_target": true,
+        "roots_match": false
+      },
+      "id": "chain.claimed_merkle_root.empty_list_mismatching_claim",
+      "independent_check": "an empty list against the root of a one-transaction block: the comparison layer's own rejection, with the same B-8 guard published beside it",
+      "input": {
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 51,
+          "merkle_root_hex": "5120d76fc164e7ad61abc0bba561bb19b4d87206da53fa2718b59058d1f77ea6",
+          "nonce": 0,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000051,
+          "version": 1
+        },
+        "transactions": [],
+        "tx_count": 0,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 51,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 0,
+          "now": 18446744073709551615
+        }
+      },
+      "intent": "boundary"
+    }
+  ],
+  "generator": "zerocoin/tests/export_baseline_vectors.rs, `p41_*` functions, added by the P4.1A commit that lands immediately after the baseline; a fixture cannot truthfully record the hash of the commit that contains it, so `source_commit` names the code and this field names the exporter separately",
+  "group": "chain.claimed_merkle_root",
+  "intent": "rule",
+  "note": "The claimed-root comparison (B-14): the root a block's transactions compute against the root its header claims, with the verdict `Block::validate_structure` itself returned. Each case publishes the header, the exact serialized transactions, the validator context, both digests in internal and display form, the leaf ids, and whether the header's proof of work meets its own target.",
+  "provenance": "every verdict was produced by a direct call to the shipping `zerocoin/` Rust function `consensus::block::Block::validate_structure` at `source_commit`, which is where rule B-14 lives; every computed root by `Block::compute_merkle_root` on that call's own transaction list, every leaf id by `Transaction::txid`, and every header nonce by `consensus::pow::mine`. No claim, root or verdict here is taken from another implementation, computed by hand, or re-derived by this exporter",
+  "reference_commits": {
+    "claimed_root_comparison_introduced": "e464695f92f6884e6d25c6947d452d5fb24229a6",
+    "compute_merkle_root_introduced": "e464695f92f6884e6d25c6947d452d5fb24229a6",
+    "validate_structure_introduced": "e464695f92f6884e6d25c6947d452d5fb24229a6"
+  },
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+  "source_commit": "b71d769be8357bcf10d768d915770125cf7f7c24"
+}

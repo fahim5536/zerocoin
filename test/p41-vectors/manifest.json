@@ -1,0 +1,56 @@
+{
+  "contract": {
+    "byte_order": "the two digests compare in internal byte order. `display_hex` is a printing-only reversal of `internal_hex` and is never what the comparison sees; `chain.claimed_merkle_root.display_order_claim` is the case that rejects a port which re-encodes before comparing",
+    "coinbase_position": "B-10 and B-11 are not part of the comparison. Every case puts the coinbase at position zero and nowhere else so that the comparison is reached; `is_coinbase` is published per transaction as the evidence, and the `degenerate_tail_transaction` case shows a tail transaction with no inputs and no outputs is legal at the comparison",
+    "comparison_site": "rule B-14 in `Block::validate_structure` (`src/consensus/block.rs`): compute the root from the block's own transactions and compare it with the header's `merkle_root`. A port implements this equality and the `RootMismatch` outcome, nothing else",
+    "digest_width_bytes": 32,
+    "empty_input": "excluded from the validator verdict, not from the corpus. B-8 `NoTransactions` rejects an empty transaction list before B-14, so `validate_structure` has no comparison verdict to publish for it. The two `boundary` cases instead publish the extracted comparison layer's own verdict on the empty slice — which the reference does support, returning the tagged empty-tree digest the P3.3B corpus documents — beside the B-8 guard production actually returned. The exporter asserts that guard's name, so the exclusion is a fact about `source_commit` rather than a claim in this file.",
+    "guard_order": "B-1 through B-13 run before B-14 and B-15 runs after it. Every `rule` and `ordering` case is either `Ok` or `RootMismatch` — the exporter panics on any other variant — which is what proves the earlier guards passed rather than asserting it in prose. The `ordering` cases carry a nonce that misses the header's own target, so B-14 is shown to be reached before B-15 instead of assumed.",
+    "header_preimage_len_bytes": 107,
+    "invariant": "accepted == (roots_match && proof_of_work_meets_target) for every case. `p41_reference_fixtures_are_reproducible_and_pinned` checks it from the published fields alone, so a reader can use it as a consistency test of its own",
+    "proof_of_work": "`proof_of_work_meets_target` is `BlockHeader::meets_own_target` for the published header, at the trivial difficulty floor `0x207fffff`. It is published, not assumed: the accepted cases have it true, the two ordering cases have it false and are still `RootMismatch`",
+    "scope": "the comparison only. This corpus gives the kernel no `Block` type, no chain, no `connect_block`, no acceptance path and no UTXO effect. It publishes the two digests, the verdict between them, and the validator context needed to reach that verdict honestly",
+    "transaction_count_limit": "none: the comparison is defined on any list length. `MAX_BLOCK_TRANSACTIONS` (2000) is B-9, checked in `validate_structure` before B-14, and is deliberately not exercised or implied here",
+    "verdict": "the validator's own `Result`. `Ok(())` publishes `accepted` true with `error_kind` null; `Err(BlockError::RootMismatch)` publishes `accepted` false with `error_kind` `RootMismatch` and `error_payload` null, because that variant carries no data"
+  },
+  "description": "Rust reference vectors for the claimed-Merkle-root comparison in `zerocoin::consensus::block::Block::validate_structure` (rule B-14, the `RootMismatch` verdict), generated for the C++ kernel's `zk::compare_claimed_merkle_root`.",
+  "determinism": [
+    "no wall clock, RNG, wallet, data directory or network is used: `median_time_past` is the literal 0 and `now`, which B-13 reads from a node clock in production, is the literal u64::MAX, where `now + 7200` saturates",
+    "every header nonce comes from `consensus::pow::mine` searching upward from zero, or from the same deterministic failing-nonce search `consensus_rules.rs` uses, so a nonce is a function of the header alone and never of a thread count or a clock",
+    "every transaction is a literal: the crate's own `genesis_coinbase()` inside `genesis_block`, `coinbase_transaction` at a fixed height paying the published key 1, one of the three P0 fixture transactions, or a function of one seed byte",
+    "every claimed root is either a root the reference computed for some list or one bit, or one byte reversal, away from the root it computed for this list; the only published claim that is not a computed digest at all is the all-zero digest, and `chain.claimed_merkle_root.zero_claim` is named for exactly that",
+    "JSON object keys are emitted in sorted order by serde_json"
+  ],
+  "files": [
+    {
+      "cases": 30,
+      "group": "chain.claimed_merkle_root",
+      "path": "chain/claimed_merkle_root.json"
+    }
+  ],
+  "generator": "zerocoin/tests/export_baseline_vectors.rs, `p41_*` functions, added by the P4.1A commit that lands immediately after the baseline; no fixture can record the hash of the commit that contains it, and none here claims to have existed before this exporter did",
+  "independent_verifier": "test/harness/zro_vectors.py already provides `tx_from_json`, `tx_serialize`, `tx_txid` and `merkle_root`, which compose the root a case claims against; the comparison itself is one byte-for-byte equality over two published digests, so it needs no new primitive. `run_vectors.py` registers no verifier for this group and this corpus does not wire it in, so the Rust exporter remains the origin of every value published here",
+  "notes": [
+    "Separate from test/vectors on purpose: the P0 manifest carries one `source_commit` (7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c) for all 117 historical cases, so adding these cases there would either re-state that commit for values it did not generate or rewrite every historical file. Nothing under test/vectors, test/p31-vectors, test/p32-vectors or test/p33-vectors was touched.",
+    "30 cases: 26 `rule`, 2 `ordering`, 2 `boundary`. By verdict, 13 accepted and 17 rejected, and every one of the 17 rejections is the `RootMismatch` variant — no other block error appears in this file.",
+    "Transaction lists are independent blocks, not a chain, so heights repeat. The controlled pairs deliberately share one coinbase so that the order of the list, its length, or the content of one transaction is the only difference between the two published roots.",
+    "`three_transaction_block` and `odd_tail_duplicate_accepted` must publish the same computed root while being different transaction lists: that identity is the block-level statement of the duplicate-odd-tail rule and it fails a port that deduplicates or promotes the final leaf. `repeated_claim_vs_single_transaction` and `single_claim_vs_repeated_transactions` are its two directions, both rejected.",
+    "`stale_after_extra_transaction` against `stale_after_dropped_tail`, and `stale_after_swap`, are the length-and-order pair; `stale_after_content_mutation` and `same_count_different_content` are the content pair, one output-value byte and one whole signature apart. `one_bit_low_byte` and `one_bit_high_byte` are one bit apart at opposite ends of the digest.",
+    "Recorded, not fixed: `zerocoin/tests/consensus_rules.rs::merkle_mismatch_is_reported_before_proof_of_work` states in its comment that mutating a transaction invalidates both the Merkle root and the proof of work, because the root is in the preimage. That is not true of the transactions a node receives — a header commits to the root it claims, so changing the block's transactions leaves the header, its preimage and its nonce untouched. The test's assertion passes because B-14 is reached, not because both rules fire, and the precedence it cites is therefore untested. The two `ordering` cases here carry a stale claim *and* a failing nonce, which is the same experiment with the second condition actually present. `docs/consensus/CONSENSUS_RULES.md` states the same assumption in its B-14 boundary note.",
+    "The header's `version` is published and never validated (F-2), so no case here depends on it; `BLOCK_VERSION` is written by `header_at` and read by nothing in the path under test.",
+    "These 30 cases are new with the `p41_*` exporter. `reference_commits` names the commit whose code is under test, not the commit that introduced these cases, because a fixture cannot truthfully claim to predate its own generator."
+  ],
+  "phase": "P4.1A",
+  "provenance": "every verdict was produced by a direct call to `consensus::block::Block::validate_structure` in the shipping `zerocoin/` Rust code at `source_commit`; every computed root by `Block::compute_merkle_root`; every leaf id by `Transaction::txid`; every nonce by `consensus::pow::mine`. `git log -S` names `reference_commits.claimed_root_comparison_introduced` for the comparison, the `RootMismatch` variant and `validate_structure` alike, and none of the three has been edited since, so the verdicts published here are the verdicts that commit already produced. Nothing here is computed by the C++ kernel, transcribed from documentation, or typed by hand.",
+  "reference_commits": {
+    "claimed_root_comparison_introduced": "e464695f92f6884e6d25c6947d452d5fb24229a6",
+    "compute_merkle_root_introduced": "e464695f92f6884e6d25c6947d452d5fb24229a6",
+    "validate_structure_introduced": "e464695f92f6884e6d25c6947d452d5fb24229a6"
+  },
+  "regenerate": "ZRO_VECTOR_WRITE=1 with the same command, then review the diff",
+  "schema": "zro-baseline-vectors/1",
+  "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+  "source_commit": "b71d769be8357bcf10d768d915770125cf7f7c24",
+  "source_commit_rule": "the newest commit that touches a Rust build input (`zerocoin/src`, `zerocoin/Cargo.toml`, `zerocoin/Cargo.lock`, `zerocoin/build.rs`) and therefore the production code that produced every value here; `zerocoin/src` is byte-identical between it and the baseline this corpus is committed on. Unlike the P0 corpus this is not the commit that introduced the exporter, so `generator` names the exporter separately.",
+  "total_cases": 30
+}

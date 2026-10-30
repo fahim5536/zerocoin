@@ -7,3 +7,5 @@ test/vectors/** text eol=lf
 test/p31-vectors/** text eol=lf
 test/p32-vectors/** text eol=lf
 test/p33-vectors/** text eol=lf
+# The P4.1A claimed-root corpus is the same protocol with its own corpus root.
+test/p41-vectors/** text eol=lf

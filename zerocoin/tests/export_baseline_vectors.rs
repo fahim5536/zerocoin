@@ -41,7 +41,7 @@ use zerocoin::consensus::immutability::{
     GENESIS_HASH_REGTEST, GENESIS_MERKLE_ROOT, GENESIS_PREIMAGE_DIGEST_MAINNET,
     STATE_ROOT_LAYOUT_PROBE,
 };
-use zerocoin::consensus::pow::{PowEngine, ScratchPadEngine, TrivialEngine};
+use zerocoin::consensus::pow::{mine, PowEngine, ScratchPadEngine, TrivialEngine};
 use zerocoin::consensus::reward::{
     block_reward, block_subsidy, coinbase_height, coinbase_transaction, maturity_height,
     split_reward, total_supply_ceiling, validate_coinbase, RewardError, COINBASE_MATURITY,
@@ -2707,6 +2707,1630 @@ fn p33_reference_fixtures_are_reproducible_and_pinned() {
             "{case_id}: a one-transaction root must be that transaction's own published id"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// Group: chain.claimed_merkle_root (P4.1A)
+//
+// The comparison between the two halves P3.3B already made available separately: the
+// root a block's transactions actually compute, against the root its header claims. In
+// `src/consensus/block.rs` that is rule B-14 — `let root =
+// Self::compute_merkle_root(&self.transactions); if h.merkle_root != root { return
+// Err(BlockError::RootMismatch); }` — three lines sitting between the timestamp guards
+// (B-12, B-13) and the proof-of-work check (B-15).
+//
+// Every verdict in this corpus is the shipping validator's own return value: `p41_case`
+// calls `Block::validate_structure` and panics on any outcome but `Ok` and
+// `RootMismatch`. Because B-1 .. B-13 all run *before* the comparison, an outcome of
+// `Ok` or `RootMismatch` proves that none of them rejected — the chain id, height,
+// previous hash, engine, bits, transaction count, coinbase position and timestamps are
+// satisfied by construction, and the panic is what proves it rather than a sentence
+// claiming it.
+//
+// B-15 runs *after* the comparison, so a rejection alone would not show that the
+// header's hash was any good. Two things close that gap: every header here is mined with
+// the reference's own `consensus::pow::mine` at the trivial difficulty floor, and
+// `p41_case` publishes `BlockHeader::meets_own_target` alongside an invariant assertion
+// — accepted if and only if the two roots match *and* the proof of work meets the
+// target. The two `intent: "ordering"` cases take that further: each carries a
+// deliberately failing nonce *and* a stale claimed root, and the reference still returns
+// `RootMismatch`. That is the evidence that B-14 precedes B-15.
+//
+// The evidence matters, because mutating a transaction does not invalidate a block's
+// proof of work at all: a header commits to the root it *claims*, not to the root its
+// transactions happen to produce, so a transaction change leaves the preimage and the
+// nonce untouched. The existing `consensus_rules.rs` test
+// `merkle_mismatch_is_reported_before_proof_of_work` states in its comment that a
+// mutated transaction invalidates both, and its assertion passes only because B-14 is
+// reached first; the precedence it claims to demonstrate is never actually put to the
+// test. This milestone records that instead of editing that test, and the two ordering
+// cases below are the version of it that does prove something.
+//
+// Its own corpus root (`test/p41-vectors`) for the same reason the P3.1A, P3.2B and
+// P3.3B groups have one: the P0 manifest stamps a single `source_commit` on all 117
+// historical cases, so adding cases there would either re-state a commit that did not
+// produce them or rewrite every historical file.
+// ---------------------------------------------------------------------------
+
+/// The commit whose `zerocoin/` production code produced every value in this corpus: the
+/// newest commit that touches a Rust build input. `zerocoin/src` is byte-identical here
+/// and at the P4.1 baseline, so no value depends on a later test-only or
+/// documentation-only commit.
+const P41_SOURCE_COMMIT: &str = "b71d769be8357bcf10d768d915770125cf7f7c24";
+
+/// Where the claimed-root comparison, the `BlockError::RootMismatch` variant and
+/// `Block::validate_structure` itself all entered `zerocoin/src` (`src/consensus/block.rs
+///`): `git log -S` names this one commit for each of the three, and the comparison lines
+/// have not been edited since, so the verdicts published here are the verdicts that
+/// commit already produced.
+const P41_REFERENCE_COMMIT: &str = "e464695f92f6884e6d25c6947d452d5fb24229a6";
+
+/// The difficulty every case advertises: the trivial engine's frozen floor, the same one
+/// `header_at` already uses. A 2^255 target is met by roughly half of all nonces, so
+/// mining an honest proof of work costs nothing here and the corpus can still claim one.
+const P41_BITS: u32 = 0x207f_ffff;
+
+/// The width of every digest in this corpus. One root is exactly one sha256d wide, so a
+/// bit flip, a reversal or a re-encoding can be described as a fact about 32 bytes instead
+/// of a hope about a string.
+const P41_DIGEST_LEN: usize = 32;
+
+/// The context a case hands `validate_structure` beside the block. Both time fields are
+/// literals, never a clock: zero sits below every timestamp `header_at` and `genesis_block`
+/// produce, and `u64::MAX` saturates B-13's `now + 7200` so no timestamp can exceed it. The
+/// two timestamp guards therefore pass for the whole corpus by construction, which is what
+/// keeps a wall clock out of a consensus fixture even though B-13 reads one in production.
+struct P41Context {
+    expected_chain: u32,
+    expected_height: u64,
+    expected_previous: Hash256,
+    expected_bits: u32,
+    median_time_past: u64,
+    now: u64,
+}
+
+impl P41Context {
+    /// Names the header's own chain, height, previous hash and bits, so the four guards
+    /// that read them cannot fire. This is not a way to make an illegal block legal:
+    /// `p41_case` panics if *any* guard other than the comparison rejects, which is how a
+    /// reader knows the construction actually held.
+    fn from_header(header: &BlockHeader) -> Self {
+        P41Context {
+            expected_chain: header.chain,
+            expected_height: header.height,
+            expected_previous: header.previous_hash,
+            expected_bits: header.difficulty_bits,
+            median_time_past: 0,
+            now: u64::MAX,
+        }
+    }
+
+    fn json(&self) -> Value {
+        json!({
+            "expected_chain": self.expected_chain,
+            "expected_height": self.expected_height,
+            "expected_previous_hex": hx(&self.expected_previous.0),
+            "expected_bits": self.expected_bits,
+            "median_time_past": self.median_time_past,
+            "now": self.now,
+            "engine": "sha256d-trivial",
+        })
+    }
+}
+
+/// A header at `height` claiming `claimed` as its Merkle root, with a nonce searched from
+/// zero by the reference's own `pow::mine`. Mining here is a fixture convenience, never a
+/// consensus claim: `validate_structure` only asks whether the header's hash meets the
+/// header's own target, and this is how a case obtains a hash that does.
+fn p41_mined_header(height: u64, claimed: Hash256) -> BlockHeader {
+    let mut header = header_at(height, 0);
+    header.merkle_root = claimed;
+    let engine = TrivialEngine::new();
+    let target = compact_to_target(P41_BITS);
+    let (nonce, _hash) = mine(&engine, &header.preimage(), &target, 0)
+        .expect("the trivial difficulty floor is always solvable from nonce zero");
+    header.nonce = nonce;
+    header
+}
+
+/// The same, with a nonce searched to *miss* the target — deterministically, the way
+/// `consensus_rules.rs` already does it, because a 2^255 target fails on roughly half of
+/// all nonces. Only the two `intent: "ordering"` cases use this, and they are the corpus's
+/// proof that the comparison is reached before the proof-of-work check.
+fn p41_failing_nonce_header(height: u64, claimed: Hash256) -> BlockHeader {
+    let mut header = header_at(height, 0);
+    header.merkle_root = claimed;
+    let engine = TrivialEngine::new();
+    let failing = (0u64..512)
+        .find(|nonce| {
+            header.nonce = *nonce;
+            !header.meets_own_target(&engine)
+        })
+        .expect("a 2^255 target yields a failing nonce within 512 tries");
+    header.nonce = failing;
+    header
+}
+
+/// The same digest with one bit of its internal bytes flipped, so a port that compares
+/// digests byte for byte must still reject it.
+fn p41_flip_bit(digest: &Hash256, index: usize, bit: u8) -> Hash256 {
+    assert!(index < P41_DIGEST_LEN, "digest index out of range");
+    assert!(bit < 8, "digest bit index out of range");
+    let mut bytes = digest.0;
+    bytes[index] ^= 1u8 << bit;
+    Hash256(bytes)
+}
+
+/// The digest's internal bytes in display order: exactly what a port that re-encodes a
+/// hash before comparing it would be holding, and a value the reference itself produced.
+fn p41_display_order(digest: &Hash256) -> Hash256 {
+    let mut bytes = digest.0;
+    bytes.reverse();
+    Hash256(bytes)
+}
+
+/// One published transaction: the P0 field-by-field form, plus the exact bytes the leaf
+/// id commits to and whether the reference considers it a coinbase. The bytes belong in
+/// the input because they are what a node receives; the derived id stays in the expected.
+fn p41_tx_input(tx: &Transaction) -> Value {
+    let mut value = p33_tx_json(tx);
+    let bytes = tx.serialize();
+    value["serialized_hex"] = json!(hx(&bytes));
+    value["serialized_len"] = json!(bytes.len());
+    value["is_coinbase"] = json!(tx.is_coinbase());
+    value
+}
+
+/// The two digests the comparison is between, whether they are byte-identical, and the
+/// verdict the caller decided to publish.
+fn p41_expected(
+    computed: &Hash256,
+    claimed: &Hash256,
+    transactions: &[Transaction],
+    accepted: bool,
+    error_kind: Option<&'static str>,
+) -> Value {
+    json!({
+        "accepted": accepted,
+        "error_kind": error_kind,
+        "error_payload": Value::Null,
+        "roots_match": computed.0 == claimed.0,
+        "computed_root": hash256_json(computed),
+        "claimed_root": hash256_json(claimed),
+        "computed_root_len": computed.0.len(),
+        "leaves": transactions
+            .iter()
+            .map(|tx| json!({"txid": hash256_json(&tx.txid())}))
+            .collect::<Vec<Value>>(),
+        "leaf_count": transactions.len(),
+    })
+}
+
+fn p41_input(header: &BlockHeader, transactions: &[Transaction], context: &P41Context) -> Value {
+    json!({
+        "header": header_input(header),
+        "tx_count": transactions.len(),
+        "transactions": transactions
+            .iter()
+            .map(p41_tx_input)
+            .collect::<Vec<Value>>(),
+        "validation_context": context.json(),
+    })
+}
+
+/// The one emitter every case in this group goes through. `header` decides the claimed
+/// root and the nonce; `transactions` decide the computed root. An outcome other than
+/// `Ok` or `RootMismatch` means the fixture failed to satisfy a guard that runs before
+/// the comparison, which would make the published verdict a statement about a different
+/// rule — so the exporter stops instead of publishing it.
+fn p41_emit(
+    id: &str,
+    intent: &str,
+    header: &BlockHeader,
+    transactions: &[Transaction],
+    independent_check: &str,
+) -> Value {
+    let engine = TrivialEngine::new();
+    let block = Block {
+        header: header.clone(),
+        transactions: transactions.to_vec(),
+    };
+    let context = P41Context::from_header(header);
+    let computed = Block::compute_merkle_root(transactions);
+    let claimed = header.merkle_root;
+    let roots_match = computed.0 == claimed.0;
+    let proof_of_work = header.meets_own_target(&engine);
+
+    let outcome = block.validate_structure(
+        &engine,
+        context.expected_chain,
+        context.expected_height,
+        &context.expected_previous,
+        context.expected_bits,
+        context.median_time_past,
+        context.now,
+    );
+    let accepted = match &outcome {
+        Ok(()) => true,
+        Err(BlockError::RootMismatch) => false,
+        Err(error) => panic!(
+            "{id}: validate_structure returned `{}`, which is not the claimed-root comparison",
+            block_error_kind(error)
+        ),
+    };
+
+    // The invariant that makes a rejection mean one thing: with every earlier guard
+    // proven to have passed (the panic above) and the proof of work published as an
+    // explicit field, the validator can only accept when both roots match *and* the
+    // header's hash meets its target.
+    assert_eq!(
+        accepted,
+        roots_match && proof_of_work,
+        "{id}: the validator's verdict no longer equals roots_match && meets_own_target"
+    );
+
+    let mut expected = p41_expected(
+        &computed,
+        &claimed,
+        transactions,
+        accepted,
+        if accepted {
+            None
+        } else {
+            Some("RootMismatch")
+        },
+    );
+    expected["proof_of_work_meets_target"] = json!(proof_of_work);
+    case(
+        id,
+        intent,
+        p41_input(header, transactions, &context),
+        expected,
+        independent_check,
+    )
+}
+
+/// A case whose header claims the root its own transactions compute. The validator must
+/// accept it, and the accept is the reference's answer, not this exporter's guess.
+fn p41_accepted_case(
+    id: &str,
+    height: u64,
+    transactions: &[Transaction],
+    independent_check: &str,
+) -> Value {
+    let claimed = Block::compute_merkle_root(transactions);
+    p41_emit(
+        id,
+        "rule",
+        &p41_mined_header(height, claimed),
+        transactions,
+        independent_check,
+    )
+}
+
+/// A case whose header claims `claimed`, whatever that turns out to be: the root of a
+/// different list, one flipped bit, the bytes in display order, the all-zero digest. Every
+/// value here still comes from a call into the reference, so a mismatch is something the
+/// port has to detect rather than a digest this file invented.
+fn p41_claim_case(
+    id: &str,
+    height: u64,
+    claimed: Hash256,
+    transactions: &[Transaction],
+    independent_check: &str,
+) -> Value {
+    p41_emit(
+        id,
+        "rule",
+        &p41_mined_header(height, claimed),
+        transactions,
+        independent_check,
+    )
+}
+
+/// The ordering cases: a stale claimed root *and* a nonce that misses the target, so the
+/// reference has two rules it could report and reports B-14. These are the cases the
+/// existing `consensus_rules.rs` precedence test never actually exercised.
+fn p41_ordering_case(
+    id: &str,
+    height: u64,
+    claimed: Hash256,
+    transactions: &[Transaction],
+    independent_check: &str,
+) -> Value {
+    p41_emit(
+        id,
+        "ordering",
+        &p41_failing_nonce_header(height, claimed),
+        transactions,
+        independent_check,
+    )
+}
+
+/// The two cases an empty transaction list produces, and the only two that do not go
+/// through `p41_emit`. Production rejects an empty list with B-8 `NoTransactions` *before*
+/// the comparison, so there is no validator verdict to publish for the comparison itself;
+/// what the extracted comparison layer does accept is the empty slice, because
+/// `Block::compute_merkle_root(&[])` returns the tagged empty-tree digest the P3.3B corpus
+/// already publishes. These cases therefore state the comparison layer's verdict and record
+/// the guard production really returned, so the exclusion is a published fact pinned by an
+/// assertion below rather than a sentence in the manifest.
+fn p41_boundary_case(
+    id: &str,
+    height: u64,
+    claimed: Hash256,
+    independent_check: &str,
+) -> Value {
+    let engine = TrivialEngine::new();
+    let header = p41_mined_header(height, claimed);
+    let context = P41Context::from_header(&header);
+    let computed = Block::compute_merkle_root(&[]);
+
+    let guard = Block {
+        header: header.clone(),
+        transactions: Vec::new(),
+    }
+    .validate_structure(
+        &engine,
+        context.expected_chain,
+        context.expected_height,
+        &context.expected_previous,
+        context.expected_bits,
+        context.median_time_past,
+        context.now,
+    )
+    .expect_err("an empty transaction list must be rejected before the comparison is reached");
+    assert_eq!(
+        block_error_kind(&guard),
+        "NoTransactions",
+        "{id}: production no longer rejects an empty list with B-8, so the exclusion \n\
+         documented in this corpus is stale and the case above must be rethought"
+    );
+
+    let roots_match = computed.0 == claimed.0;
+    let mut expected = p41_expected(
+        &computed,
+        &claimed,
+        &[],
+        roots_match,
+        if roots_match {
+            None
+        } else {
+            Some("RootMismatch")
+        },
+    );
+    expected["proof_of_work_meets_target"] = json!(header.meets_own_target(&engine));
+    expected["guard_before_comparison"] = json!({
+        "accepted": false,
+        "error_kind": block_error_kind(&guard),
+        "error_payload": block_error_payload(&guard),
+        "note": "the verdict `Block::validate_structure` actually returns for this input; it \
+                 belongs to B-8, which runs before B-14, so no claimed-root comparison verb in \
+                 C++ or Python may be expected to reproduce it",
+    });
+    case(
+        id,
+        "boundary",
+        p41_input(&header, &[], &context),
+        expected,
+        independent_check,
+    )
+}
+
+/// The corpus. Cases are independent blocks in independent validator contexts, so heights
+/// repeat: nothing here chains one case to the next, and a family of cases deliberately
+/// shares one coinbase so that the pair under test differs in exactly one thing — the
+/// order of the list, its length, or the content of one transaction.
+fn claimed_merkle_root_cases() -> Vec<Value> {
+    let degenerate = Transaction {
+        version: 2,
+        inputs: Vec::new(),
+        outputs: Vec::new(),
+        lock_time: 0,
+    };
+    let (sample, payment, signed, bumped) = (
+        sample_tx(),
+        payment_tx(),
+        signed_payment().0,
+        p33_bumped_sample(),
+    );
+    let (a, b, c) = (p33_tx(0x10), p33_tx(0x11), p33_tx(0x12));
+    let genesis = genesis_block(&ChainParams::regtest(), &TrivialEngine::new());
+
+    // The family every controlled pair below draws from: one coinbase, three distinct
+    // spends, permuted and extended. Sharing the coinbase is what makes a swap or an
+    // appended transaction the *only* difference between two published roots.
+    let cb = p33_coinbase(20);
+    let fam_a = vec![cb.clone(), a.clone()];
+    let fam_ab = vec![cb.clone(), a.clone(), b.clone()];
+    let fam_ba = vec![cb.clone(), b.clone(), a.clone()];
+    let fam_aa = vec![cb.clone(), a.clone(), a.clone()];
+    let fam_abc = vec![cb.clone(), a.clone(), b.clone(), c.clone()];
+    let other_block = vec![p33_coinbase(60), p33_tx(0xC0), p33_tx(0xC1)];
+
+    let mut seven = vec![p33_coinbase(6)];
+    seven.extend(p33_txs(6, 0x30));
+    let mut eight = vec![p33_coinbase(7)];
+    eight.extend(p33_txs(7, 0x38));
+    let mut seventeen = vec![p33_coinbase(12)];
+    seventeen.extend(p33_txs(16, 0x40));
+
+    let single = vec![p33_coinbase(1)];
+    // The duplicated-tail pair, built from one coinbase at the height both cases use, so the
+    // repeated final transaction is the only difference between the two published lists. An odd
+    // leaf count duplicates its last leaf into a pair, so three leaves and those same three with
+    // the last one repeated reduce to the same root — and four is the count a deduplicating port
+    // would silently collapse.
+    let three = vec![p33_coinbase(8), a.clone(), b.clone()];
+    let odd_tails = vec![p33_coinbase(8), a.clone(), b.clone(), b.clone()];
+    let spend_pair = vec![p33_coinbase(21), sample.clone()];
+    let mutate_pair = vec![p33_coinbase(21), bumped.clone()];
+    let pay_pair = vec![p33_coinbase(22), payment.clone()];
+    let sign_pair = vec![p33_coinbase(22), signed.clone()];
+
+    // Roots the reference itself computed, reused as *claims*. Only the all-zero digest
+    // below is a value no function produced, and that is the case being made by it.
+    let root = |txs: &[Transaction]| Block::compute_merkle_root(txs);
+    let empty_root = root(&[]);
+    let fam_ab_root = root(&fam_ab);
+    let fam_abc_root = root(&fam_abc);
+    let fam_a_root = root(&fam_a);
+    let fam_aa_root = root(&fam_aa);
+    let spend_pair_root = root(&spend_pair);
+    let pay_pair_root = root(&pay_pair);
+    let other_block_root = root(&other_block);
+    let single_root = root(&single);
+    let genesis_root = root(&genesis.transactions);
+
+    vec![
+        // ---- accepted: the header claims the root its own transactions compute ----
+        p41_accepted_case(
+            "chain.claimed_merkle_root.single_coinbase_block",
+            1,
+            &single,
+            "one coinbase, so the claimed root is that transaction's own id and B-14 holds unchanged",
+        ),
+        p41_emit(
+            "chain.claimed_merkle_root.genesis_block_accepted",
+            "rule",
+            &genesis.header,
+            &genesis.transactions,
+            "the block production assembles for regtest: `genesis_block` sets the header's root \
+             with `Block::compute_merkle_root` and mines the nonce, so this is a genuinely \
+             accepted block rather than one this exporter constructed",
+        ),
+        p41_accepted_case(
+            "chain.claimed_merkle_root.coinbase_then_two_spends",
+            3,
+            &[p33_coinbase(3), sample.clone(), payment.clone()],
+            "three transactions, an odd count, with the two P0 encoding fixtures after the coinbase",
+        ),
+        p41_accepted_case(
+            "chain.claimed_merkle_root.coinbase_then_signed_spend",
+            4,
+            &[p33_coinbase(4), signed.clone()],
+            "two transactions, so the root is one untagged node over two ids; the spend carries a \
+             real DER signature so its id depends on signature bytes",
+        ),
+        p41_accepted_case(
+            "chain.claimed_merkle_root.five_transaction_block",
+            5,
+            &[
+                p33_coinbase(5),
+                p33_tx(0x20),
+                p33_tx(0x21),
+                p33_tx(0x22),
+                p33_tx(0x23),
+            ],
+            "five transactions: the second level is odd as well, so the duplicate reaches a level \
+             above the leaves",
+        ),
+        p41_accepted_case(
+            "chain.claimed_merkle_root.seven_transaction_block",
+            6,
+            &seven,
+            "seven transactions reduce 7 to 4 to 2 to 1",
+        ),
+        p41_accepted_case(
+            "chain.claimed_merkle_root.eight_transaction_block",
+            7,
+            &eight,
+            "eight transactions reduce 8 to 4 to 2 to 1, the one width in this corpus that is a \
+             complete tree with no odd level at all",
+        ),
+        p41_accepted_case(
+            "chain.claimed_merkle_root.three_transaction_block",
+            8,
+            &three,
+            "three transactions, so the third leaf is odd and gets a duplicated partner: the base \
+             of the duplicate-tail case below, with the same coinbase and the first two of the \
+             three spends",
+        ),
+        p41_accepted_case(
+            "chain.claimed_merkle_root.odd_tail_duplicate_accepted",
+            8,
+            &odd_tails,
+            "four transactions whose last repeats the third: the reference duplicates rather than \
+             deduplicates, so this list shares its root with the three-transaction block above and \
+             both are accepted",
+        ),
+        p41_accepted_case(
+            "chain.claimed_merkle_root.repeated_transaction_block",
+            9,
+            &[p33_coinbase(9), a.clone(), a.clone()],
+            "the same non-coinbase transaction twice: repeated leaves, never a collapsed one",
+        ),
+        p41_accepted_case(
+            "chain.claimed_merkle_root.degenerate_tail_transaction",
+            10,
+            &[p33_coinbase(10), degenerate.clone()],
+            "a tail transaction with no inputs and no outputs still has an id and still reaches \
+             the root; only position zero is required to be a coinbase",
+        ),
+        p41_accepted_case(
+            "chain.claimed_merkle_root.seventeen_transaction_block",
+            12,
+            &seventeen,
+            "seventeen transactions reduce 17 to 9 to 5 to 3 to 2 to 1, five levels deep",
+        ),
+        // ---- rejected: the header claims something other than its own root ----
+        p41_claim_case(
+            "chain.claimed_merkle_root.zero_claim",
+            20,
+            Hash256::ZERO,
+            &fam_ab,
+            "a header claiming the all-zero digest for a block of three transactions: the only \
+             published claim that is not itself a computed root, and the case that proves the \
+             comparison is a real equality rather than a null check",
+        ),
+        p41_claim_case(
+            "chain.claimed_merkle_root.one_bit_low_byte",
+            20,
+            p41_flip_bit(&fam_abc_root, 31, 0),
+            &fam_abc,
+            "the correct root of this exact list with the final bit of the final internal byte \
+             flipped: one byte differs, everything else is identical",
+        ),
+        p41_claim_case(
+            "chain.claimed_merkle_root.one_bit_high_byte",
+            20,
+            p41_flip_bit(&fam_abc_root, 0, 7),
+            &fam_abc,
+            "the same digest with one bit flipped in the first internal byte instead, so a port \
+             that compares only a prefix or a suffix of the digest cannot pass both bit cases",
+        ),
+        p41_claim_case(
+            "chain.claimed_merkle_root.display_order_claim",
+            20,
+            p41_display_order(&fam_abc_root),
+            &fam_abc,
+            "the correct root's bytes in display order: the value a port that re-encodes a digest \
+             before comparing it would be holding, and the case that keeps byte order visible",
+        ),
+        p41_claim_case(
+            "chain.claimed_merkle_root.stale_after_extra_transaction",
+            20,
+            fam_ab_root,
+            &fam_abc,
+            "the root of the first three transactions of this very block, claimed after a fourth \
+             was appended: a stale claim from a shorter version of the same list",
+        ),
+        p41_claim_case(
+            "chain.claimed_merkle_root.stale_after_dropped_tail",
+            20,
+            fam_abc_root,
+            &fam_ab,
+            "the inverse pair: the root of four transactions claimed by the three-transaction \
+             block that is its own prefix",
+        ),
+        p41_claim_case(
+            "chain.claimed_merkle_root.stale_after_swap",
+            20,
+            fam_ab_root,
+            &fam_ba,
+            "the same coinbase and the same two spends in the opposite order, claimed under the \
+             original order: the tree is positional, so the claim is stale",
+        ),
+        p41_claim_case(
+            "chain.claimed_merkle_root.stale_after_content_mutation",
+            21,
+            spend_pair_root,
+            &mutate_pair,
+            "the coinbase of `chain.claimed_merkle_root.stale_after_...` cases above plus the P0 \
+             sample transaction with one output-value byte increased: the transaction-level \
+             mutation `consensus_rules.rs` performs, with the header rebuilt to claim the old root",
+        ),
+        p41_claim_case(
+            "chain.claimed_merkle_root.repeated_claim_vs_single_transaction",
+            20,
+            fam_aa_root,
+            &fam_a,
+            "the root of two identical spends claimed by a block holding only one of them: no \
+             duplication, so no match",
+        ),
+        p41_claim_case(
+            "chain.claimed_merkle_root.single_claim_vs_repeated_transactions",
+            20,
+            fam_a_root,
+            &fam_aa,
+            "the inverse pair: the root of one spend claimed by a block that repeats it, so a port \
+             that deduplicates leaves would call this a match and be wrong",
+        ),
+        p41_claim_case(
+            "chain.claimed_merkle_root.same_count_different_content",
+            22,
+            pay_pair_root,
+            &sign_pair,
+            "two transactions in both lists and the same coinbase, but the second is a signed \
+             spend rather than the unsigned payment: equal length tells the comparison nothing",
+        ),
+        p41_claim_case(
+            "chain.claimed_merkle_root.root_from_another_block",
+            20,
+            other_block_root,
+            &fam_ab,
+            "a root computed from an entirely different transaction list, at a height no case here \
+             uses for its own header: a copied claim",
+        ),
+        p41_claim_case(
+            "chain.claimed_merkle_root.empty_tree_claim_by_nonempty_block",
+            20,
+            empty_root,
+            &fam_ab,
+            "the tagged empty-list digest claimed by a block of three transactions, so the two \
+             halves of B-14 are both reference values and the case is a genuine mismatch",
+        ),
+        p41_claim_case(
+            "chain.claimed_merkle_root.genesis_root_claim_by_later_block",
+            23,
+            genesis_root,
+            &[p33_coinbase(23), sample.clone()],
+            "the root the production genesis block claims, claimed instead by a block whose own \
+             transactions are a different coinbase and the P0 sample",
+        ),
+        // ---- ordering: the comparison fires even when the proof of work would also fail ----
+        p41_ordering_case(
+            "chain.claimed_merkle_root.stale_root_with_failing_proof_of_work",
+            25,
+            fam_ab_root,
+            &fam_abc,
+            "a stale claim and a nonce searched to miss the header's own target: B-14 and B-15 \
+             both apply, and the reference reports RootMismatch, which is the precedence the \
+             existing consensus_rules comment only assumes",
+        ),
+        p41_ordering_case(
+            "chain.claimed_merkle_root.zero_claim_with_failing_proof_of_work",
+            26,
+            Hash256::ZERO,
+            &fam_ab,
+            "the same with the all-zero claim, so the ordering holds for two different ways the \
+             roots can disagree",
+        ),
+        // ---- boundary: the empty list, which production rejects before the comparison ----
+        p41_boundary_case(
+            "chain.claimed_merkle_root.empty_list_matching_claim",
+            50,
+            empty_root,
+            "the comparison layer alone, on the input only it can take: an empty list against the \
+             tagged digest it computes. Production returns B-8 NoTransactions for this block, \
+             published beside the verdict as `guard_before_comparison`",
+        ),
+        p41_boundary_case(
+            "chain.claimed_merkle_root.empty_list_mismatching_claim",
+            51,
+            single_root,
+            "an empty list against the root of a one-transaction block: the comparison layer's \
+             own rejection, with the same B-8 guard published beside it",
+        ),
+    ]
+}
+
+/// The P4.1A envelope: the P0 envelope plus the reference commits, so one file answers
+/// "which code produced this verdict" without consulting the manifest.
+fn p41_envelope(group: &str, intent: &str, note: &str, cases: Vec<Value>) -> String {
+    let doc = json!({
+        "schema": "zro-baseline-vectors/1",
+        "group": group,
+        "intent": intent,
+        "note": note,
+        "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+        "source_commit": P41_SOURCE_COMMIT,
+        "provenance": "every verdict was produced by a direct call to the shipping `zerocoin/` \
+Rust function `consensus::block::Block::validate_structure` at `source_commit`, which is \
+where rule B-14 lives; every computed root by `Block::compute_merkle_root` on that call's \
+own transaction list, every leaf id by `Transaction::txid`, and every header nonce by \
+`consensus::pow::mine`. No claim, root or verdict here is taken from another implementation, \
+computed by hand, or re-derived by this exporter",
+        "reference_commits": {
+            "claimed_root_comparison_introduced": P41_REFERENCE_COMMIT,
+            "validate_structure_introduced": P41_REFERENCE_COMMIT,
+            "compute_merkle_root_introduced": P41_REFERENCE_COMMIT,
+        },
+        "generator": "zerocoin/tests/export_baseline_vectors.rs, `p41_*` functions, added by the \
+P4.1A commit that lands immediately after the baseline; a fixture cannot truthfully record the \
+hash of the commit that contains it, so `source_commit` names the code and this field names \
+the exporter separately",
+        "case_count": cases.len(),
+        "cases": cases,
+    });
+    let mut text = serde_json::to_string_pretty(&doc).expect("reference document serialises");
+    text.push('\n');
+    text
+}
+
+/// The P4.1A corpus, mirroring `p33_corpus()` above: same `add!` shape, same manifest, same
+/// write-versus-compare protocol, different root.
+fn p41_corpus() -> Vec<(String, String)> {
+    let mut files: Vec<(String, String)> = Vec::new();
+    let mut counts: Vec<Value> = Vec::new();
+
+    macro_rules! add {
+        ($path:expr, $group:expr, $intent:expr, $note:expr, $cases:expr) => {{
+            let cases: Vec<Value> = $cases;
+            counts.push(json!({"path": $path, "group": $group, "cases": cases.len()}));
+            files.push(($path.to_string(), p41_envelope($group, $intent, $note, cases)));
+        }};
+    }
+
+    add!(
+        "chain/claimed_merkle_root.json",
+        "chain.claimed_merkle_root",
+        "rule",
+        "The claimed-root comparison (B-14): the root a block's transactions compute against the \
+root its header claims, with the verdict `Block::validate_structure` itself returned. Each case \
+publishes the header, the exact serialized transactions, the validator context, both digests in \
+internal and display form, the leaf ids, and whether the header's proof of work meets its own \
+target.",
+        claimed_merkle_root_cases()
+    );
+
+    let manifest = json!({
+        "schema": "zro-baseline-vectors/1",
+        "phase": "P4.1A",
+        "description": "Rust reference vectors for the claimed-Merkle-root comparison in \
+`zerocoin::consensus::block::Block::validate_structure` (rule B-14, the `RootMismatch` verdict), \
+generated for the C++ kernel's `zk::compare_claimed_merkle_root`.",
+        "provenance": "every verdict was produced by a direct call to \
+`consensus::block::Block::validate_structure` in the shipping `zerocoin/` Rust code at \
+`source_commit`; every computed root by `Block::compute_merkle_root`; every leaf id by \
+`Transaction::txid`; every nonce by `consensus::pow::mine`. `git log -S` names \
+`reference_commits.claimed_root_comparison_introduced` for the comparison, the `RootMismatch` \
+variant and `validate_structure` alike, and none of the three has been edited since, so the \
+verdicts published here are the verdicts that commit already produced. Nothing here is computed \
+by the C++ kernel, transcribed from documentation, or typed by hand.",
+        "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+        "source_commit": P41_SOURCE_COMMIT,
+        "source_commit_rule": "the newest commit that touches a Rust build input (`zerocoin/src`, \
+`zerocoin/Cargo.toml`, `zerocoin/Cargo.lock`, `zerocoin/build.rs`) and therefore the production \
+code that produced every value here; `zerocoin/src` is byte-identical between it and the baseline \
+this corpus is committed on. Unlike the P0 corpus this is not the commit that introduced the \
+exporter, so `generator` names the exporter separately.",
+        "generator": "zerocoin/tests/export_baseline_vectors.rs, `p41_*` functions, added by the \
+P4.1A commit that lands immediately after the baseline; no fixture can record the hash of the \
+commit that contains it, and none here claims to have existed before this exporter did",
+        "reference_commits": {
+            "claimed_root_comparison_introduced": P41_REFERENCE_COMMIT,
+            "validate_structure_introduced": P41_REFERENCE_COMMIT,
+            "compute_merkle_root_introduced": P41_REFERENCE_COMMIT,
+        },
+        "regenerate": "ZRO_VECTOR_WRITE=1 with the same command, then review the diff",
+        "independent_verifier": "test/harness/zro_vectors.py already provides `tx_from_json`, \
+`tx_serialize`, `tx_txid` and `merkle_root`, which compose the root a case claims against; the \
+comparison itself is one byte-for-byte equality over two published digests, so it needs no new \
+primitive. `run_vectors.py` registers no verifier for this group and this corpus does not wire it \
+in, so the Rust exporter remains the origin of every value published here",
+        "determinism": [
+            "no wall clock, RNG, wallet, data directory or network is used: `median_time_past` is \
+the literal 0 and `now`, which B-13 reads from a node clock in production, is the literal \
+u64::MAX, where `now + 7200` saturates",
+            "every header nonce comes from `consensus::pow::mine` searching upward from zero, or \
+from the same deterministic failing-nonce search `consensus_rules.rs` uses, so a nonce is a \
+function of the header alone and never of a thread count or a clock",
+            "every transaction is a literal: the crate's own `genesis_coinbase()` inside \
+`genesis_block`, `coinbase_transaction` at a fixed height paying the published key 1, one of the \
+three P0 fixture transactions, or a function of one seed byte",
+            "every claimed root is either a root the reference computed for some list or one \
+bit, or one byte reversal, away from the root it computed for this list; the only published claim \
+that is not a computed digest at all is the all-zero digest, and `chain.claimed_merkle_root.zero_claim` \
+is named for exactly that",
+            "JSON object keys are emitted in sorted order by serde_json",
+        ],
+        "contract": {
+            "comparison_site": "rule B-14 in `Block::validate_structure` \
+(`src/consensus/block.rs`): compute the root from the block's own transactions and compare it \
+with the header's `merkle_root`. A port implements this equality and the `RootMismatch` outcome, \
+nothing else",
+            "verdict": "the validator's own `Result`. `Ok(())` publishes `accepted` true with \
+`error_kind` null; `Err(BlockError::RootMismatch)` publishes `accepted` false with `error_kind` \
+`RootMismatch` and `error_payload` null, because that variant carries no data",
+            "guard_order": "B-1 through B-13 run before B-14 and B-15 runs after it. Every \
+`rule` and `ordering` case is either `Ok` or `RootMismatch` — the exporter panics on any other \
+variant — which is what proves the earlier guards passed rather than asserting it in prose. The \
+`ordering` cases carry a nonce that misses the header's own target, so B-14 is shown to be \
+reached before B-15 instead of assumed.",
+            "invariant": "accepted == (roots_match && proof_of_work_meets_target) for every case. \
+`p41_reference_fixtures_are_reproducible_and_pinned` checks it from the published fields alone, \
+so a reader can use it as a consistency test of its own",
+            "byte_order": "the two digests compare in internal byte order. `display_hex` is a \
+printing-only reversal of `internal_hex` and is never what the comparison sees; \
+`chain.claimed_merkle_root.display_order_claim` is the case that rejects a port which re-encodes \
+before comparing",
+            "empty_input": "excluded from the validator verdict, not from the corpus. B-8 \
+`NoTransactions` rejects an empty transaction list before B-14, so `validate_structure` has no \
+comparison verdict to publish for it. The two `boundary` cases instead publish the extracted \
+comparison layer's own verdict on the empty slice — which the reference does support, returning \
+the tagged empty-tree digest the P3.3B corpus documents — beside the B-8 guard production \
+actually returned. The exporter asserts that guard's name, so the exclusion is a fact about \
+`source_commit` rather than a claim in this file.",
+            "transaction_count_limit": "none: the comparison is defined on any list length. \
+`MAX_BLOCK_TRANSACTIONS` (2000) is B-9, checked in `validate_structure` before B-14, and is \
+deliberately not exercised or implied here",
+            "coinbase_position": "B-10 and B-11 are not part of the comparison. Every case puts \
+the coinbase at position zero and nowhere else so that the comparison is reached; \
+`is_coinbase` is published per transaction as the evidence, and the `degenerate_tail_transaction` \
+case shows a tail transaction with no inputs and no outputs is legal at the comparison",
+            "proof_of_work": "`proof_of_work_meets_target` is \
+`BlockHeader::meets_own_target` for the published header, at the trivial difficulty floor \
+`0x207fffff`. It is published, not assumed: the accepted cases have it true, the two ordering \
+cases have it false and are still `RootMismatch`",
+            "scope": "the comparison only. This corpus gives the kernel no `Block` type, no chain, \
+no `connect_block`, no acceptance path and no UTXO effect. It publishes the two digests, the \
+verdict between them, and the validator context needed to reach that verdict honestly",
+            "digest_width_bytes": P41_DIGEST_LEN,
+            "header_preimage_len_bytes": P31_PREIMAGE_LEN,
+        },
+        "files": counts,
+        "total_cases": counts
+            .iter()
+            .map(|entry| entry["cases"].as_u64().unwrap_or(0))
+            .sum::<u64>(),
+        "notes": [
+            "Separate from test/vectors on purpose: the P0 manifest carries one `source_commit` \
+(7cb9017c21e01df30b70b63c8ef3aa8dcbd35b6c) for all 117 historical cases, so adding these cases \
+there would either re-state that commit for values it did not generate or rewrite every \
+historical file. Nothing under test/vectors, test/p31-vectors, test/p32-vectors or \
+test/p33-vectors was touched.",
+            "30 cases: 26 `rule`, 2 `ordering`, 2 `boundary`. By verdict, 13 accepted and 17 \
+rejected, and every one of the 17 rejections is the `RootMismatch` variant — no other block error \
+appears in this file.",
+            "Transaction lists are independent blocks, not a chain, so heights repeat. The \
+controlled pairs deliberately share one coinbase so that the order of the list, its length, or \
+the content of one transaction is the only difference between the two published roots.",
+            "`three_transaction_block` and `odd_tail_duplicate_accepted` must publish the same \
+computed root while being different transaction lists: that identity is the block-level statement \
+of the duplicate-odd-tail rule and it fails a port that deduplicates or promotes the final leaf. \
+`repeated_claim_vs_single_transaction` and `single_claim_vs_repeated_transactions` are its two \
+directions, both rejected.",
+            "`stale_after_extra_transaction` against `stale_after_dropped_tail`, and \
+`stale_after_swap`, are the length-and-order pair; `stale_after_content_mutation` and \
+`same_count_different_content` are the content pair, one output-value byte and one whole \
+signature apart. `one_bit_low_byte` and `one_bit_high_byte` are one bit apart at opposite ends of \
+the digest.",
+            "Recorded, not fixed: `zerocoin/tests/consensus_rules.rs::\
+merkle_mismatch_is_reported_before_proof_of_work` states in its comment that mutating a \
+transaction invalidates both the Merkle root and the proof of work, because the root is in the \
+preimage. That is not true of the transactions a node receives — a header commits to the root it \
+claims, so changing the block's transactions leaves the header, its preimage and its nonce \
+untouched. The test's assertion passes because B-14 is reached, not because both rules fire, and \
+the precedence it cites is therefore untested. The two `ordering` cases here carry a stale claim \
+*and* a failing nonce, which is the same experiment with the second condition actually present. \
+`docs/consensus/CONSENSUS_RULES.md` states the same assumption in its B-14 boundary note.",
+            "The header's `version` is published and never validated (F-2), so no case here \
+depends on it; `BLOCK_VERSION` is written by `header_at` and read by nothing in the path under \
+test.",
+            "These 30 cases are new with the `p41_*` exporter. `reference_commits` names the \
+commit whose code is under test, not the commit that introduced these cases, because a fixture \
+cannot truthfully claim to predate its own generator.",
+        ],
+    });
+    let mut text = serde_json::to_string_pretty(&manifest).expect("reference manifest serialises");
+    text.push('\n');
+    files.push(("manifest.json".to_string(), text));
+
+    files.sort_by(|left, right| left.0.cmp(&right.0));
+    files
+}
+
+fn p41_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("test")
+        .join("p41-vectors")
+}
+
+#[test]
+fn p41_vectors_match_the_committed_reference_corpus() {
+    let write = std::env::var("ZRO_VECTOR_WRITE")
+        .map(|value| value == "1")
+        .unwrap_or(false);
+    let root = p41_root();
+    let mut drift: Vec<String> = Vec::new();
+    let mut written = 0usize;
+
+    for (relative, text) in p41_corpus() {
+        let path = root.join(&relative);
+        if write {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).expect("reference directory is creatable");
+            }
+            fs::write(&path, text.as_bytes()).expect("reference vector is writable");
+            written += 1;
+        } else {
+            let committed = fs::read_to_string(&path).unwrap_or_else(|error| {
+                panic!(
+                    "missing reference vector {}: {error}\nrun with ZRO_VECTOR_WRITE=1 to regenerate",
+                    path.display()
+                )
+            });
+            if committed != text {
+                drift.push(relative);
+            }
+        }
+    }
+
+    if write {
+        println!("wrote {written} reference vector files under {}", root.display());
+    } else {
+        assert!(
+            drift.is_empty(),
+            "these reference vectors differ from the committed corpus: {drift:?}\n\
+             run with ZRO_VECTOR_WRITE=1 to regenerate, then review the diff"
+        );
+    }
+}
+
+/// The P4.1A half of the determinism gate, and the corpus's own consistency test. Every
+/// assertion below reads only what the cases publish — the emitters are not consulted — and
+/// rebuilds each case's header, transactions and validator context from those published fields
+/// to confirm that the reference still returns the verdict written beside them. The invariant
+/// the manifest contract promises, `accepted == roots_match && proof_of_work_meets_target`, is
+/// recomputed here from published fields alone, so a reader outside this file can use it as a
+/// check of its own — which is exactly what `p41_conformance.py` will do with the committed
+/// JSON instead of with these in-memory values.
+#[test]
+fn p41_reference_fixtures_are_reproducible_and_pinned() {
+    let first = p41_corpus();
+    let second = p41_corpus();
+    assert_eq!(first, second, "two generations must be byte-identical");
+    assert_eq!(first.len(), 2, "one group plus the manifest");
+
+    let cases = claimed_merkle_root_cases();
+    assert_eq!(
+        cases.len(),
+        30,
+        "the pinned case count; p41_conformance.py pins the same number"
+    );
+
+    let prefix = "chain.claimed_merkle_root.";
+    let engine = TrivialEngine::new();
+    let raw_digest = |text: &str| -> Hash256 {
+        Hash256::from_slice(&hex::decode(text).expect("published hex decodes"))
+            .expect("a published digest is one sha256d wide")
+    };
+    let internal = |value: &Value| -> String {
+        value["internal_hex"]
+            .as_str()
+            .expect("a published digest carries internal_hex")
+            .to_string()
+    };
+    let digest = |value: &Value| -> Hash256 { raw_digest(&internal(value)) };
+    let header_from = |value: &Value| -> BlockHeader {
+        BlockHeader {
+            version: value["version"].as_u64().expect("header version") as u32,
+            chain: value["chain"].as_u64().expect("header chain") as u32,
+            height: value["height"].as_u64().expect("header height"),
+            previous_hash: raw_digest(
+                value["previous_hash_hex"]
+                    .as_str()
+                    .expect("previous_hash_hex"),
+            ),
+            merkle_root: raw_digest(
+                value["merkle_root_hex"]
+                    .as_str()
+                    .expect("merkle_root_hex"),
+            ),
+            timestamp: value["timestamp"].as_u64().expect("header timestamp"),
+            difficulty_bits: value["difficulty_bits"].as_u64().expect("difficulty_bits") as u32,
+            engine_id: value["engine_id"].as_u64().expect("engine_id") as u8,
+            nonce: value["nonce"].as_u64().expect("header nonce"),
+        }
+    };
+    let case_by_id = |name: &str| -> Value {
+        let id = format!("{prefix}{name}");
+        cases
+            .iter()
+            .find(|candidate| candidate["id"].as_str() == Some(id.as_str()))
+            .cloned()
+            .unwrap_or_else(|| panic!("{id}: case is missing"))
+    };
+    let bit_diff = |left: &Value, right: &Value| -> u32 {
+        let left = hex::decode(internal(left)).expect("left internal_hex decodes");
+        let right = hex::decode(internal(right)).expect("right internal_hex decodes");
+        let mut differing = 0u32;
+        for (l, r) in left.iter().zip(right.iter()) {
+            differing += (l ^ r).count_ones();
+        }
+        differing
+    };
+
+    // The published mix must be the mix the manifest note claims, or the manifest describes a
+    // corpus that no longer exists.
+    let (mut rule, mut ordering, mut boundary) = (0usize, 0usize, 0usize);
+    let (mut accepted_count, mut rejected_count) = (0usize, 0usize);
+    for value in &cases {
+        match value["intent"].as_str().expect("intent") {
+            "rule" => rule += 1,
+            "ordering" => ordering += 1,
+            "boundary" => boundary += 1,
+            other => panic!(
+                "{}: intent `{other}` is not one of rule, ordering, boundary",
+                value["id"]
+            ),
+        }
+        if value["expected"]["accepted"].as_bool().expect("accepted") {
+            accepted_count += 1
+        } else {
+            rejected_count += 1
+        }
+    }
+    assert_eq!(
+        (rule, ordering, boundary),
+        (26, 2, 2),
+        "the published intent mix is no longer what the manifest note claims"
+    );
+    assert_eq!(
+        (accepted_count, rejected_count),
+        (13, 17),
+        "the published verdict mix is no longer what the manifest note claims"
+    );
+
+    // The digest width is a fact about the reference, not about this file: a root that stopped
+    // being one sha256d wide would make every bit and byte claim below meaningless.
+    assert_eq!(P41_DIGEST_LEN, 32, "a sha256d digest is 32 bytes");
+
+    for value in &cases {
+        let id = value["id"].as_str().expect("case id").to_string();
+        assert!(
+            id.strip_prefix(prefix).is_some(),
+            "{id}: case id outside the group namespace"
+        );
+        let intent = value["intent"].as_str().expect("intent").to_string();
+        let input = &value["input"];
+        let expected = &value["expected"];
+
+        // ---- the two digests: width, and the printing-only relation between the two forms ----
+        for key in ["computed_root", "claimed_root"] {
+            let published = &expected[key];
+            assert_eq!(
+                published.as_object().expect("digest object").len(),
+                2,
+                "{id}: {key} publishes more than the two byte orders"
+            );
+            let both = ["internal_hex", "display_hex"];
+            for field in both {
+                assert_eq!(
+                    published[field].as_str().expect(field).len(),
+                    P41_DIGEST_LEN * 2,
+                    "{id}: {key}.{field} is not one digest of hex"
+                );
+            }
+            let mut reversed =
+                hex::decode(internal(published)).expect("internal_hex decodes");
+            reversed.reverse();
+            assert_eq!(
+                published["display_hex"].as_str().expect("display_hex"),
+                hex::encode(&reversed),
+                "{id}: {key}.display_hex is not the internal bytes reversed"
+            );
+        }
+        assert_eq!(
+            expected["computed_root_len"].as_u64(),
+            Some(P41_DIGEST_LEN as u64),
+            "{id}: computed_root_len must be the digest width"
+        );
+        assert_eq!(
+            input["header"]["merkle_root_hex"].as_str().expect("header merkle_root_hex"),
+            internal(&expected["claimed_root"]),
+            "{id}: the header field and the claimed root disagree in internal order"
+        );
+
+        // ---- the validator context: the frozen literals that keep a clock out of B-12/B-13 ----
+        let context = &input["validation_context"];
+        assert_eq!(
+            context["expected_chain"].as_u64(),
+            input["header"]["chain"].as_u64(),
+            "{id}: the context must name the chain the header names, or an earlier guard fires"
+        );
+        assert_eq!(
+            context["expected_height"].as_u64(),
+            input["header"]["height"].as_u64(),
+            "{id}: the context must expect the height the header carries"
+        );
+        assert_eq!(
+            context["expected_previous_hex"].as_str().expect("expected_previous_hex"),
+            input["header"]["previous_hash_hex"]
+                .as_str()
+                .expect("header previous_hash_hex"),
+            "{id}: B-5 needs the context to repeat the header's own previous hash"
+        );
+        assert_eq!(
+            context["median_time_past"].as_u64(),
+            Some(0),
+            "{id}: the frozen median time past"
+        );
+        assert_eq!(
+            context["now"].as_u64(),
+            Some(u64::MAX),
+            "{id}: the frozen `now`, where `now + 7200` saturates"
+        );
+        assert_eq!(
+            context["engine"].as_str(),
+            Some("sha256d-trivial"),
+            "{id}: the corpus is mined with the trivial engine and must say so"
+        );
+        assert_eq!(
+            input["header"]["difficulty_bits"].as_u64(),
+            Some(P41_BITS as u64),
+            "{id}: every case advertises the frozen trivial difficulty floor"
+        );
+        assert_eq!(
+            context["expected_bits"].as_u64(),
+            Some(P41_BITS as u64),
+            "{id}: B-7 needs the context to expect the bits the header advertises"
+        );
+        assert_eq!(
+            input["header"]["engine_id"].as_u64(),
+            Some(0),
+            "{id}: ENGINE_ID_TRIVIAL is zero"
+        );
+
+        // ---- transactions and leaves: the published bytes are what the ids commit to ----
+        let declared = input["tx_count"].as_u64().expect("tx_count");
+        let published_txs = input["transactions"].as_array().expect("transactions array");
+        let leaves = expected["leaves"].as_array().expect("leaves array");
+        assert_eq!(
+            published_txs.len() as u64,
+            declared,
+            "{id}: the published tx_count is wrong"
+        );
+        assert_eq!(
+            expected["leaf_count"].as_u64(),
+            Some(declared),
+            "{id}: the leaf count is not the transaction count"
+        );
+        assert_eq!(
+            leaves.len() as u64,
+            declared,
+            "{id}: the leaf list is not one id per transaction"
+        );
+        assert_eq!(
+            (declared == 0) as usize,
+            (intent == "boundary") as usize,
+            "{id}: only the two boundary cases may carry an empty transaction list"
+        );
+
+        let mut rebuilt: Vec<Transaction> = Vec::new();
+        for (index, leaf) in leaves.iter().enumerate() {
+            assert_eq!(
+                leaf.as_object().expect("leaf object").len(),
+                1,
+                "{id}: leaf {index} publishes more than its txid"
+            );
+            let entry = &published_txs[index];
+            let bytes = hex::decode(
+                entry["serialized_hex"]
+                    .as_str()
+                    .expect("serialized_hex"),
+            )
+            .expect("serialized_hex decodes");
+            assert_eq!(
+                entry["serialized_len"].as_u64(),
+                Some(bytes.len() as u64),
+                "{id}: transaction {index} publishes a length that disagrees with its own bytes"
+            );
+
+            let digest_of_bytes = sha256d(&bytes);
+            assert_eq!(
+                hash256_json(&digest_of_bytes),
+                leaf["txid"].clone(),
+                "{id}: leaf {index} is not sha256d of the bytes this file publishes"
+            );
+
+            let tx = Transaction::deserialize(&bytes)
+                .unwrap_or_else(|error| panic!("{id}: transaction {index} does not decode: {error:?}"));
+            assert_eq!(
+                tx.serialize(),
+                bytes,
+                "{id}: transaction {index} does not re-serialize to the bytes this file publishes"
+            );
+            assert_eq!(
+                tx.txid(),
+                digest_of_bytes,
+                "{id}: transaction {index} does not have the id published for its bytes"
+            );
+            // Only position zero is a coinbase anywhere in this corpus — the evidence that the
+            // cases reach the comparison instead of tripping B-10 or B-11 on the way.
+            assert_eq!(
+                entry["is_coinbase"].as_bool(),
+                Some(index == 0),
+                "{id}: transaction {index} disagrees about coinbase status"
+            );
+            assert_eq!(
+                tx.is_coinbase(),
+                index == 0,
+                "{id}: the published coinbase flag is not what the reference returns"
+            );
+
+            let mut restated = entry.clone();
+            let object = restated.as_object_mut().expect("transaction object");
+            for key in ["serialized_hex", "serialized_len", "is_coinbase"] {
+                assert!(
+                    object.remove(key).is_some(),
+                    "{id}: transaction {index} does not publish {key}"
+                );
+            }
+            assert_eq!(
+                restated,
+                p33_tx_json(&tx),
+                "{id}: transaction {index} disagrees with the P0 field-by-field form for the same bytes"
+            );
+            rebuilt.push(tx);
+        }
+
+        // ---- reproduce the reference verdict from the published input alone ----
+        let header = header_from(&input["header"]);
+        assert_eq!(
+            header.preimage().len(),
+            P31_PREIMAGE_LEN,
+            "{id}: the header preimage is no longer the frozen length"
+        );
+        let proof_of_work = header.meets_own_target(&engine);
+        assert_eq!(
+            expected["proof_of_work_meets_target"].as_bool(),
+            Some(proof_of_work),
+            "{id}: proof_of_work_meets_target does not reproduce from the published header"
+        );
+
+        let computed = Block::compute_merkle_root(&rebuilt);
+        assert_eq!(
+            computed,
+            digest(&expected["computed_root"]),
+            "{id}: the published computed root does not reproduce from this case's own published transactions"
+        );
+        assert_eq!(
+            header.merkle_root,
+            digest(&expected["claimed_root"]),
+            "{id}: the published claimed root is not the header's merkle_root"
+        );
+        assert_eq!(
+            expected["roots_match"].as_bool(),
+            Some(computed == header.merkle_root),
+            "{id}: roots_match does not agree with the two digests published beside it"
+        );
+        assert_eq!(
+            expected["accepted"].as_bool(),
+            Some(computed == header.merkle_root && proof_of_work),
+            "{id}: accepted is not roots_match && proof_of_work_meets_target, the invariant the corpus contract promises"
+        );
+        if expected["accepted"].as_bool().expect("accepted") {
+            assert_eq!(
+                expected["claimed_root"], expected["computed_root"],
+                "{id}: an accepted case must claim the root it computes"
+            );
+        } else {
+            assert_ne!(
+                expected["claimed_root"], expected["computed_root"],
+                "{id}: a rejected case must claim something other than the root it computes"
+            );
+        }
+
+        let outcome = Block {
+            header,
+            transactions: rebuilt,
+        }
+        .validate_structure(
+            &engine,
+            context["expected_chain"].as_u64().expect("expected_chain") as u32,
+            context["expected_height"].as_u64().expect("expected_height"),
+            &raw_digest(
+                context["expected_previous_hex"]
+                    .as_str()
+                    .expect("expected_previous_hex"),
+            ),
+            context["expected_bits"].as_u64().expect("expected_bits") as u32,
+            context["median_time_past"].as_u64().expect("median_time_past"),
+            context["now"].as_u64().expect("now"),
+        );
+
+        if intent == "boundary" {
+            // The published verdict belongs to the extracted comparison layer; production stops
+            // at B-8 first, and that guard is published beside it as a fact, not a footnote.
+            let Err(guard) = outcome else {
+                panic!("{id}: production no longer rejects an empty list before the comparison")
+            };
+            let published_guard = &expected["guard_before_comparison"];
+            assert_eq!(
+                block_error_kind(&guard),
+                published_guard["error_kind"].as_str().expect("guard error_kind"),
+                "{id}: the published guard is not the error production returned"
+            );
+            assert_eq!(
+                block_error_payload(&guard),
+                published_guard["error_payload"].clone(),
+                "{id}: the published guard payload is not the reference's"
+            );
+            assert_eq!(
+                published_guard["accepted"].as_bool(),
+                Some(false),
+                "{id}: B-8 rejects, so the published guard cannot claim an accept"
+            );
+            assert_eq!(
+                block_error_kind(&guard),
+                "NoTransactions",
+                "{id}: B-8 is no longer the guard that precedes the comparison"
+            );
+        } else {
+            match outcome {
+                Ok(()) => {
+                    assert_eq!(
+                        expected["accepted"].as_bool(),
+                        Some(true),
+                        "{id}: the reference accepted but the file says rejected"
+                    );
+                    assert!(
+                        expected["error_kind"].is_null(),
+                        "{id}: an accepted case must publish a null error_kind"
+                    );
+                    assert!(
+                        expected["error_payload"].is_null(),
+                        "{id}: an accepted case must publish a null error_payload"
+                    );
+                    assert!(
+                        expected["guard_before_comparison"].is_null(),
+                        "{id}: only a boundary case publishes a guard"
+                    );
+                }
+                Err(error) => {
+                    assert_eq!(
+                        expected["accepted"].as_bool(),
+                        Some(false),
+                        "{id}: the reference rejected but the file says accepted"
+                    );
+                    assert_eq!(
+                        expected["error_kind"].as_str(),
+                        Some(block_error_kind(&error)),
+                        "{id}: the published error kind is not the reference's variant"
+                    );
+                    assert_eq!(
+                        block_error_kind(&error),
+                        "RootMismatch",
+                        "{id}: a case about a rule other than the comparison is in this corpus"
+                    );
+                    assert!(
+                        expected["error_payload"].is_null(),
+                        "{id}: RootMismatch carries no payload"
+                    );
+                }
+            }
+        }
+    }
+
+    // ---- the duplicate-odd-tail pair: the accepted identity a deduplicating port fails ----
+    let base = case_by_id("three_transaction_block");
+    let odd_tail = case_by_id("odd_tail_duplicate_accepted");
+    assert_eq!(
+        base["input"]["tx_count"].as_u64(),
+        Some(3),
+        "three_transaction_block must be three wide"
+    );
+    assert_eq!(
+        odd_tail["input"]["tx_count"].as_u64(),
+        Some(4),
+        "odd_tail_duplicate_accepted must be four wide"
+    );
+    assert_eq!(
+        base["expected"]["computed_root"], odd_tail["expected"]["computed_root"],
+        "duplicating the odd final leaf must not change the root, so the three- and \
+         four-transaction blocks must publish the same one"
+    );
+    assert_eq!(
+        base["expected"]["claimed_root"], odd_tail["expected"]["claimed_root"],
+        "both halves of the duplicate-tail pair are accepted, so each claims that shared root"
+    );
+    assert_eq!(
+        odd_tail["input"]["transactions"][3], odd_tail["input"]["transactions"][2],
+        "the fourth transaction must be a repeat of the third"
+    );
+    let base_txs = base["input"]["transactions"]
+        .as_array()
+        .expect("three-transaction list");
+    let odd_txs = odd_tail["input"]["transactions"]
+        .as_array()
+        .expect("four-transaction list");
+    assert_eq!(
+        &base_txs[..],
+        &odd_txs[..3],
+        "the three-transaction list must be the four-transaction list without its duplicated tail"
+    );
+
+    // ---- the stale-claim pair: the same two roots published in opposite directions ----
+    let grew = case_by_id("stale_after_extra_transaction");
+    let shrank = case_by_id("stale_after_dropped_tail");
+    assert_eq!(
+        grew["expected"]["claimed_root"], shrank["expected"]["computed_root"],
+        "the three-transaction root claimed by the four-transaction block must be that \
+         shorter block's own computed root"
+    );
+    assert_eq!(
+        shrank["expected"]["claimed_root"], grew["expected"]["computed_root"],
+        "the four-transaction root claimed by the three-transaction block must be that \
+         longer block's own computed root"
+    );
+    let grew_txs = grew["input"]["transactions"]
+        .as_array()
+        .expect("appended list");
+    let shrank_txs = shrank["input"]["transactions"]
+        .as_array()
+        .expect("prefix list");
+    assert_eq!(
+        &grew_txs[..3],
+        &shrank_txs[..],
+        "the longer list must be the shorter one with one transaction appended"
+    );
+
+    // Position is the only difference the swap pair is allowed to have.
+    let swapped = case_by_id("stale_after_swap");
+    assert_eq!(
+        swapped["expected"]["claimed_root"], grew["expected"]["claimed_root"],
+        "stale_after_swap claims the same three-transaction root"
+    );
+    assert_ne!(
+        swapped["expected"]["computed_root"], grew["expected"]["computed_root"],
+        "yet its own list is the permuted one, so the two computed roots must differ"
+    );
+    assert_eq!(
+        swapped["input"]["transactions"][0], grew["input"]["transactions"][0],
+        "the swap keeps the coinbase in place"
+    );
+    assert_eq!(
+        swapped["input"]["transactions"][1], grew["input"]["transactions"][2],
+        "the swap exchanges the two spends"
+    );
+
+    // ---- the one-bit and byte-order claims ----
+    for (name, index) in [("one_bit_low_byte", 31usize), ("one_bit_high_byte", 0usize)] {
+        let value = case_by_id(name);
+        assert_eq!(
+            bit_diff(&value["expected"]["claimed_root"], &value["expected"]["computed_root"]),
+            1,
+            "{prefix}{name}: the claim must be exactly one bit away from the computed root"
+        );
+        let mut expected_bytes =
+            hex::decode(internal(&value["expected"]["computed_root"])).expect("decodes");
+        expected_bytes[index] ^= 1u8 << if index == 31 { 0 } else { 7 };
+        assert_eq!(
+            internal(&value["expected"]["claimed_root"]),
+            hex::encode(&expected_bytes),
+            "{prefix}{name}: the flipped bit is not the one this case is named for"
+        );
+    }
+    assert_eq!(
+        bit_diff(
+            &case_by_id("one_bit_low_byte")["expected"]["claimed_root"],
+            &case_by_id("one_bit_high_byte")["expected"]["claimed_root"],
+        ),
+        2,
+        "the two bit claims differ from each other in the two opposite ends of the digest"
+    );
+    let display_case = case_by_id("display_order_claim");
+    let mut reversed =
+        hex::decode(internal(&display_case["expected"]["computed_root"])).expect("decodes");
+    reversed.reverse();
+    assert_eq!(
+        internal(&display_case["expected"]["claimed_root"]),
+        hex::encode(&reversed),
+        "display_order_claim must claim exactly its own computed root in display order"
+    );
+    assert_eq!(
+        internal(&case_by_id("zero_claim")["expected"]["claimed_root"]),
+        "0".repeat(P41_DIGEST_LEN * 2),
+        "zero_claim is the one claim in the corpus that no function computed"
+    );
+
+    // ---- the deduplication trap, both directions, both rejected ----
+    assert_ne!(
+        case_by_id("repeated_claim_vs_single_transaction")["expected"]["claimed_root"],
+        case_by_id("single_claim_vs_repeated_transactions")["expected"]["claimed_root"],
+        "the two directions of the deduplication trap claim two different roots"
+    );
+    assert_eq!(
+        case_by_id("single_claim_vs_repeated_transactions")["input"]["transactions"][1],
+        case_by_id("single_claim_vs_repeated_transactions")["input"]["transactions"][2],
+        "the repeated block must really repeat its spend"
+    );
+
+    // ---- the empty digest, tied to the frozen P3.3B tag ----
+    let empty_digest = hash256_json(&sha256d(P33_EMPTY_MERKLE_TAG));
+    assert_eq!(
+        case_by_id("empty_list_matching_claim")["expected"]["computed_root"],
+        empty_digest,
+        "the boundary case's empty-list root is no longer the tagged digest the P3.3B corpus publishes"
+    );
+    assert_eq!(
+        case_by_id("empty_tree_claim_by_nonempty_block")["expected"]["claimed_root"],
+        empty_digest,
+        "the non-empty block claiming the empty digest must be claiming that same digest"
+    );
+    assert_eq!(
+        case_by_id("empty_list_matching_claim")["expected"]["roots_match"].as_bool(),
+        Some(true),
+        "an empty list against its own digest matches at the comparison layer"
+    );
+    assert_eq!(
+        case_by_id("empty_list_mismatching_claim")["expected"]["roots_match"].as_bool(),
+        Some(false),
+        "an empty list against a one-transaction root does not"
+    );
+
+    // ---- the ordering pair: the same two digests, one with a failing proof of work ----
+    for (rule_name, ordering_name) in [
+        ("stale_after_extra_transaction", "stale_root_with_failing_proof_of_work"),
+        ("zero_claim", "zero_claim_with_failing_proof_of_work"),
+    ] {
+        let honest = case_by_id(rule_name);
+        let failing = case_by_id(ordering_name);
+        assert_eq!(
+            honest["expected"]["computed_root"], failing["expected"]["computed_root"],
+            "the {ordering_name} case must reuse {rule_name}'s transaction list"
+        );
+        assert_eq!(
+            honest["expected"]["claimed_root"], failing["expected"]["claimed_root"],
+            "the {ordering_name} case must reuse {rule_name}'s stale claim"
+        );
+        assert_eq!(
+            honest["expected"]["error_kind"], failing["expected"]["error_kind"],
+            "{ordering_name}: the comparison must report the same variant either way"
+        );
+        assert_eq!(
+            failing["expected"]["error_kind"].as_str(),
+            Some("RootMismatch"),
+            "{ordering_name}: B-14 is what must be reported while B-15 would also fail"
+        );
+        assert_eq!(
+            honest["expected"]["proof_of_work_meets_target"].as_bool(),
+            Some(true),
+            "{rule_name}: the mined header must meet its own target"
+        );
+        assert_eq!(
+            failing["expected"]["proof_of_work_meets_target"].as_bool(),
+            Some(false),
+            "{ordering_name}: the ordering evidence depends on the nonce really missing the target"
+        );
+    }
+
+    // ---- the production genesis block ----
+    let genesis = genesis_block(&ChainParams::regtest(), &TrivialEngine::new());
+    let accepted_genesis = case_by_id("genesis_block_accepted");
+    assert_eq!(
+        header_input(&genesis.header),
+        accepted_genesis["input"]["header"].clone(),
+        "the genesis case is no longer the header production assembles for regtest"
+    );
+    assert_eq!(
+        genesis.transactions.len() as u64,
+        accepted_genesis["input"]["tx_count"].as_u64().expect("tx_count"),
+        "the genesis case is no longer the transaction list production assembles"
+    );
+    assert_eq!(
+        hash256_json(&Block::compute_merkle_root(&genesis.transactions)),
+        accepted_genesis["expected"]["computed_root"].clone(),
+        "the genesis case's root is not the root of the production block"
+    );
+    assert_eq!(
+        accepted_genesis["expected"]["claimed_root"],
+        case_by_id("genesis_root_claim_by_later_block")["expected"]["claimed_root"],
+        "the later block must claim exactly the root the genesis block claims"
+    );
 }
 
 // ---------------------------------------------------------------------------
