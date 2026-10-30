@@ -158,6 +158,32 @@ changes no code, no vector and no consensus rule.
 > claimed-root comparison and the `RootMismatch` taxonomy are not covered: they are, for this
 > one rule.
 
+> **P4.2A addendum (2026-10-30; fixtures only, no derived implementation).** Ownership has not
+> moved, no phase moved, and **no C++ component is registered by this milestone**. What is added
+> is an oracle: the `p42_*` exporter inside
+> `zerocoin/tests/export_baseline_vectors.rs` now generates
+> `test/p42-vectors/chain/block_structure.json` (34 cases) for the owner row
+> `src/consensus/block.rs`, covering rules B-3 … B-15 and their relative order. The exporter is
+> the sole origin of every expected verdict in that file: it constructs each block from a declared
+> construction intent, calls the shipping Rust `Block::validate_structure` **directly** with the
+> seven published context arguments, and panics if the returned variant, its payload fields or the
+> violated-rule set differ from that declaration. Design-contract predictions are therefore
+> inputs to the export, never fields of the corpus, and no expected value is computed by Python,
+> transcribed from documentation or typed by hand. `test/harness/zro_vectors.py` re-derives
+> published serializations, transaction ids, leaf order, Merkle roots, coinbase flags, PoW status,
+> rejection payloads and validation contexts — byte re-derivation only, never a verdict. Two
+> relative orders are recorded as **not** owned by any fixture: (B-8, B-9) is non-representable
+> because `transactions.is_empty()` and `transactions.len() > 2000` are mutually exclusive, so no
+> input distinguishes them and no `.pair_08_09` case exists; (B-13, B-14) is representable but
+> unfrozen. Both live in the manifest as `deferred_pairs`, and neither is claimed to be proven.
+> `kernel/src/block.cpp` gains nothing: still no header decoder, no `Block` type, no
+> `validate_structure`, no B-15 rule, no acceptance path; there is no
+> `kernel/tools/p42_conformance.py` and no `kernel_p42_conformance` ctest entry, and
+> `run_vectors.py` reports the group as 34 SKIP with exit 1 because it registers no verifier for
+> the namespace. **The differential against C++ is P4.2B; nothing here is a parity claim.** The
+> P0 corpus, the P3.1/P3.2/P3.3 fixtures, the P4.1 corpus and the 121-case differential fixture
+> were not touched, and F-1 remains **deferred**.
+
 
 Related: `THREE_LANGUAGE_ARCHITECTURE.md` (what each language may do),
 `INTERFACE_CONTRACTS.md` (the interfaces owners expose),
@@ -205,7 +231,7 @@ file the phase produced or will produce; "—" means no C++ module exists yet.
 | Script interpreter | `src/ledger/script.rs` | `kernel/src/script.cpp` | P2 | Done |
 | Sighash preimage and digest | `src/ledger/sighash.rs` | `kernel/src/sighash.cpp` | P2 | Done |
 | ECDSA verification, SEC1, DER | `src/crypto/secp256k1.rs` (`k256 0.13.4`) | `kernel/src/secp256k1_verifier.cpp` (vendored libsecp256k1 0.8.0, PRIVATE link) | P2 / G2c | Done in P2.10 — verification only, signing stays Rust/test-only; `CRYPTO_BACKEND_SELECTION_AUDIT.md` §20 |
-| Block header and Merkle root | `src/consensus/block.rs` | `kernel/src/header.cpp`, `kernel/src/merkle.cpp`, `kernel/src/block.cpp` | P3 / P4.1 | Header slice done in P3.1B: the 107-byte preimage (C-3) and `validate_header_identity`. Leaf-level Merkle root (C-5) done in P3.2B: `zk::merkle_root` over 32-byte leaves. Transaction-level Merkle root (C-5) done in P3.3B: `zk::merkle_root_from_transactions`, the composition of the P1 `txid()` with the P3.2B leaf rule. Claimed-root comparison (B-1/B-14) done in P4.1B: `zk::compare_claimed_merkle_root`, the comparison of that computed root against a header's committed `merkle_root`, with the `RootMismatch` outcome. A header decoder, any `Block` type, `validate_structure` and any block acceptance path are not started |
+| Block header and Merkle root | `src/consensus/block.rs` | `kernel/src/header.cpp`, `kernel/src/merkle.cpp`, `kernel/src/block.cpp` | P3 / P4.1 | Header slice done in P3.1B: the 107-byte preimage (C-3) and `validate_header_identity`. Leaf-level Merkle root (C-5) done in P3.2B: `zk::merkle_root` over 32-byte leaves. Transaction-level Merkle root (C-5) done in P3.3B: `zk::merkle_root_from_transactions`, the composition of the P1 `txid()` with the P3.2B leaf rule. Claimed-root comparison (B-1/B-14) done in P4.1B: `zk::compare_claimed_merkle_root`, the comparison of that computed root against a header's committed `merkle_root`, with the `RootMismatch` outcome. A header decoder, any `Block` type, `validate_structure` and any block acceptance path are not started; since P4.2A the twelve unported rules have a committed Rust oracle (`test/p42-vectors/`) to be diffed against, while C++ still has nothing to diff |
 | Difficulty retarget | `src/consensus/difficulty.rs` | `kernel/src/difficulty.cpp` | P3 | Done in P3.0; reproduces F-6 and F-11, diverges deliberately on F-7 |
 | Proof of work | `src/consensus/pow.rs` | `kernel/src/pow.cpp` | P3 / P4.0 | Done in P4.0 for C-4: both engines over the 107-byte preimage, the inclusive big-endian target comparison (C-24, F-11), and `engine_for_id` refusing any id other than 0 or 1. Mining is not in the production API — the single-threaded search from zero lives in the conformance runner (C-25) |
 | Subsidy, maturity, coinbase split | `src/consensus/reward.rs` | — | P3 | Not started |
@@ -259,6 +285,8 @@ consensus code.
 | P3.3 transaction-to-Merkle conformance mapping | `kernel/tools/p33_conformance.py` | Owns the P3.3 corpus slice, the repeated-transaction input mapping, the per-leaf serialization/txid gates, the independent Python re-derivation of every id and root, the `leaf_txids_hex` mapping check and the corruption self-check | 22 cases (0–17 transactions, coinbases, order and duplicate shapes) |
 | P4 proof-of-work conformance mapping | `kernel/tools/p4_conformance.py` | Owns the PoW slice of the P0 root (which `g1_conformance.py` does not load), the engine-name and id mapping, the four `pow_*` verbs and the corruption self-check | 11 cases (`test/vectors/pow/engines.json`), 0 deferred |
 | P4.1 claimed-root conformance mapping | `kernel/tools/p41_conformance.py` | Owns the P4.1A corpus slice, the header-plus-repeated-transaction input mapping, the independent Python re-derivation of every leaf, root and digest comparison, the `roots_match` verdict cross-check and the corruption self-check | 30 cases (12 correct claims, 14 wrong, 2 failing-PoW, 2 empty-list boundary) + 1 deferred key (`guard_before_comparison`, B-8) |
+| P4.2 block-structure expected verdicts (oracle) | `zerocoin/tests/export_baseline_vectors.rs` (`p42_*` exporter) | Every expected value in `test/p42-vectors/**` is the `Result` the shipping Rust `Block::validate_structure` returned when the exporter called it directly; the exporter panics when the returned variant, its payload or the violated-rule set differs from the fixture's declared construction intent, so no verdict is transcribed from a design document, computed by Python or written by hand | 34 cases (14 isolation, 8 boundary, 11 adjacent-pair, 1 dominance); 5 accepted, 29 rejected; 2 deferred relative orders; deterministic regeneration; **no C++ wrapper exists** |
+| P4.2 corpus structural gate | `test/harness/run_vectors.py` | Dispatches by case-id namespace and registers no verifier for `chain.block_structure`, so it validates schema, manifest, ids and provenance only — it cannot disagree with a verdict because it never computes one | 34 SKIP, 0 FAIL, exit 1 by design; P0 gate unchanged |
 | Conformance runner protocol | `kernel/conformance/main.cpp` | Owns the 30 verbs and `SUMMARY` output | Stable |
 | Build and gate | `kernel/CMakeLists.txt`, `scripts/gate-g1.ps1`, `scripts/gate-p2-6.ps1`, `scripts/gate-p2-10-provenance.ps1` | Exit code is the verdict (doc `03` §1 rule 5) | Green |
 | Rust dependency set | `Cargo.toml`, `Cargo.lock` | `k256 0.13.4` is the curve implementation actually shipped | Locked |

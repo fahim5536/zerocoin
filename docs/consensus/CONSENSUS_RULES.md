@@ -59,8 +59,8 @@ Fixed protocol constants (not per-network):
 | Network magic (transport) | `b"ZRO\0"` | `src/lib.rs:44` |
 
 Rule **N-1** — A block's `chain` field MUST equal the network's `chain_id`
-(`src/consensus/block.rs:147`). A block's `engine_id` MUST equal the running engine's id
-(`src/consensus/block.rs:162`).
+(`src/consensus/block.rs:143`, inside `validate_header_identity`). A block's `engine_id` MUST
+equal the running engine's id (`src/consensus/block.rs:179`).
 
 Rule **N-2** — `Chain::open` MUST reject a persisted chain whose tip history does not start
 at the pinned genesis (`ChainError::GenesisMismatch`, `src/chain.rs:161`). `Chain::open` also
@@ -265,43 +265,58 @@ input index returns `None` (`src/ledger/sighash.rs:45`) and therefore `false`. P
 Rule **B-2** — On any error in steps 1–5, **no state changes**: the UTXO candidate is
 dropped, the block vector is untouched, and nothing is persisted.
 
-`validate_structure` (`src/consensus/block.rs:135`) evaluates these conditions in exactly
+`validate_structure` (`src/consensus/block.rs:163`) evaluates these conditions in exactly
 this order; the first failure is the error returned:
 
 | # | Condition | Error | Source |
 |---|---|---|---|
-| B-3 | `header.chain != expected_chain` | `WrongChain` | `block.rs:147` |
-| B-4 | `header.height != expected_height` (= `chain.next_height()`) | `BadHeight` | `block.rs:153` |
-| B-5 | `header.previous_hash != tip_hash` | `BadPreviousHash` | `block.rs:159` |
-| B-6 | `header.engine_id != engine.id()` | `WrongEngine` | `block.rs:162` |
-| B-7 | `header.difficulty_bits != expected_bits` (schedule) | `BadDifficulty` | `block.rs:168` |
-| B-8 | `transactions.is_empty()` | `NoTransactions` | `block.rs:174` |
-| B-9 | `transactions.len() > 2000` | `TooManyTransactions(len)` | `block.rs:177` |
-| B-10 | `!transactions[0].is_coinbase()` | `FirstNotCoinbase` | `block.rs:181` |
-| B-11 | any of `transactions[1..]` is a coinbase | `DuplicateCoinbase` | `block.rs:184` |
-| B-12 | `header.timestamp <= median_time_past` | `TimestampTooOld` | `block.rs:187` |
-| B-13 | `header.timestamp > now + 7200` | `TimestampTooFarFuture` | `block.rs:193` |
-| B-14 | `header.merkle_root != compute_merkle_root(txs)` | `RootMismatch` | `block.rs:218` |
-| B-15 | header hash does not meet its own compact target | `InsufficientProofOfWork` | `block.rs:205` |
+| B-3 | `header.chain != expected_chain` | `WrongChain` | `block.rs:143` (`validate_header_identity`, `block.rs:138`, called at `block.rs:175`) |
+| B-4 | `header.height != expected_height` (= `chain.next_height()`) | `BadHeight` | `block.rs:149` (same helper, same call site) |
+| B-5 | `header.previous_hash != tip_hash` | `BadPreviousHash` | `block.rs:176` |
+| B-6 | `header.engine_id != engine.id()` | `WrongEngine` | `block.rs:179` |
+| B-7 | `header.difficulty_bits != expected_bits` (schedule) | `BadDifficulty` | `block.rs:185` |
+| B-8 | `transactions.is_empty()` | `NoTransactions` | `block.rs:191` |
+| B-9 | `transactions.len() > 2000` | `TooManyTransactions(len)` | `block.rs:194` |
+| B-10 | `!transactions[0].is_coinbase()` | `FirstNotCoinbase` | `block.rs:198` |
+| B-11 | any of `transactions[1..]` is a coinbase | `DuplicateCoinbase` | `block.rs:201` |
+| B-12 | `header.timestamp <= median_time_past` | `TimestampTooOld` | `block.rs:204` |
+| B-13 | `header.timestamp > now + 7200` (`saturating_add`) | `TimestampTooFarFuture` | `block.rs:210` |
+| B-14 | `header.merkle_root != compute_merkle_root(txs)` | `RootMismatch` | `block.rs:218`, root computed at `block.rs:217` |
+| B-15 | header hash does not meet its own compact target | `InsufficientProofOfWork` | `block.rs:222` |
 
-Line-reference provenance: the Merkle rows of §2.4 and this table (B-1, B-14) were rechecked
-on 2026-10-24 against `zerocoin/src/consensus/block.rs` and corrected to the current
-statements. The **other** rows of this table were not rechecked in that pass and their
-citations are not guaranteed current; the visible pattern is a single uniform shift down the
-`validate_structure` body, consistent with `validate_header_identity` having been extracted
-into its own function above it. Correcting those rows is a separate documentation change and
-is deliberately **not** part of the P3.2B milestone, which touched no validation order and no
-rule text.
+Line-reference provenance: the Merkle rows of §2.4 and the B-1/B-14 rows were rechecked on
+2026-10-24 against `zerocoin/src/consensus/block.rs`. **Every remaining row of this table, plus
+the `validate_structure` and N-1 citations above, was rechecked line by line on 2026-10-30 for
+P4.2A**, because the milestone had to quote the order it was about to pin with fixtures; the
+discrepancies were the uniform shift the earlier note predicted, caused by
+`validate_header_identity` having been extracted above `validate_structure` (B-3/B-4 live in the
+helper and are reached through the call at `block.rs:175`, which is why they still run first).
+The recheck changed citations and no rule text, no ordering and no verdict: the sequence B-3 …
+B-15 is exactly as previously documented. `block.rs` is byte-identical between the corpus
+`source_commit b71d769` and the commit this correction was written against, so the citations and
+the fixtures describe the same code.
 
 Boundary notes, observed and tested:
 
 - B-9 is `> 2000`: exactly 2000 transactions is structurally allowed; 2001 is
   `TooManyTransactions`. A 2000-entry list whose entries are all coinbases fails B-11
-  instead, because `[1..]` still contains a coinbase.
+  instead, because `[1..]` still contains a coinbase. Both sides of that boundary are now
+  executed fixtures rather than arithmetic: `chain.block_structure.bnd_09_count_at_limit_accept`
+  carries a real 2000-transaction list that the reference **accepts**, and
+  `chain.block_structure.iso_09_too_many_transactions` carries 2001 and returns
+  `TooManyTransactions` with the length read back out of the variant
+  (**P4.2A**, `test/p42-vectors/chain/block_structure.json`).
 - B-12 is `<=`: a timestamp **equal** to the median is rejected. The minimum admissible
-  timestamp is `median_time_past + 1` (`src/chain.rs:377` uses exactly that when mining).
+  timestamp is `median_time_past + 1` (`src/chain.rs:377` uses exactly that when mining). Both
+  edges are fixtures: `.bnd_12_equal_median_reject` (`TimestampTooOld`, `median == found`) and
+  `.bnd_12_one_above_median_accept`.
 - B-13 is `>`: `timestamp == now + 7200` is accepted, `now + 7201` is rejected. The
-  addition saturates at `u64::MAX` (`saturating_add`).
+  addition saturates at `u64::MAX` (`saturating_add`). The saturating corner is now executed
+  rather than argued: `.bnd_13_near_max_edge_reject` (`now = u64::MAX - 7201`,
+  `timestamp = u64::MAX` → `TimestampTooFarFuture`), `.bnd_13_near_max_last_exact_accept`
+  (`now = u64::MAX - 7200`, the limit is exactly `u64::MAX`, accepted) and
+  `.bnd_13_near_max_saturating_accept` (`now = u64::MAX` with a realistic timestamp, accepted —
+  the case a wrapping `now + 7200` would fail).
 - B-14 runs before B-15, so a tampered transaction or root reports `RootMismatch` even if
   the nonce would also fail. **Recorded, not re-proved here (P4.1A).** The claim is true of the
   code — `block.rs:218` precedes `block.rs:222` — but the Rust test normally cited for it,
@@ -317,7 +332,25 @@ Boundary notes, observed and tested:
   `test/p41-vectors/chain/claimed_merkle_root.json` carry a stale claim *and* a nonce that
   misses the header's own target, with `proof_of_work_meets_target` published as `false` and
   the verdict still `RootMismatch`. That corpus is the evidence; this note is a correction of
-  the assumption, and the test itself is deliberately left unedited.
+  the assumption, and the test itself is deliberately left unedited. **P4.2A strengthens it from
+  the comparison layer to the validator layer:** those same two blocks are replayed byte for byte
+  as `chain.block_structure.pair_14_15_root_mismatch_and_failing_pow` and
+  `.pair_14_15_zero_root_claim_and_failing_pow`, where the published verdict is the `Result` that
+  `validate_structure` itself returned — `RootMismatch` with the PoW predicate separately published
+  as `false`. The precedence is now a property of the shipped order, not of a helper comparison.
+- **The relative order of B-8 and B-9 is observationally vacuous, and is not claimed to be
+  proven (P4.2A).** `transactions.is_empty()` and `transactions.len() > MAX_BLOCK_TRANSACTIONS`
+  cannot both hold for any input, so no fixture can distinguish the two orders; there is
+  deliberately **no** `.pair_08_09` case, and the corpus records the pair as deferred. What *is*
+  pinned is that neither row can be masked by the other: `.iso_08_no_transactions` reaches B-8
+  without any read of `transactions[0]`, `.iso_09_too_many_transactions` returns the length out
+  of the variant, and `.pair_09_10_over_limit_and_first_not_coinbase` shows B-9 dominating B-10 on
+  a 2001-entry list that contains no coinbase at all.
+- **B-13 versus B-14 is representable and is not yet covered (P4.2A).** A far-future timestamp
+  together with a stale root fails both rows, so a case could be built; the corrected design
+  contract did not freeze one and this milestone did not invent one. Nothing in the corpus asserts
+  that B-13 precedes B-14, in either direction. It is recorded as the second deferred pair in
+  `test/p42-vectors/manifest.json`.
 - **No rule validates `header.version`.** `BLOCK_VERSION` is written when headers are built
   (`src/chain.rs:380`, `src/genesis.rs:70`) and is never read by validation. See F-2.
 - **No block byte-size or weight rule exists.** The only block-level limits are 2000
@@ -328,6 +361,30 @@ Boundary notes, observed and tested:
 OBSERVED — `validate_structure` is a public method; calling it directly does not run
 `difficulty::validate_bits`, the UTXO replay, or the coinbase reward check. Consensus
 acceptance is only `Chain::connect_block`.
+
+**P4.2A (2026-10-30, fixtures only).** The order in the table above is no longer only a reading of
+the source. `test/p42-vectors/chain/block_structure.json` publishes **34** cases in group
+`chain.block_structure` whose every expected outcome is the `Result` that the shipping Rust
+`Block::validate_structure` returned for that exact block, called directly with the seven published
+context arguments — not through `Chain::connect_block`, which would add the bits check, the UTXO
+replay and the reward check on top. The emitter (`p42_*` in
+`zerocoin/tests/export_baseline_vectors.rs`) constructs each fixture from a declared construction
+intent, calls the reference, and **panics** if the returned variant or its payload differs from that
+declaration, so a fixture whose expectation Rust does not share cannot be committed; no predicted
+verdict is ever written into a published file. Coverage is every rule B-3 … B-15 both as the
+reported guard and as a violated guard, and 10 of the 11 representable adjacent pairs
+(3,4) … (14,15) plus the two gaps above. Group D is a single dominance witness —
+`.chaos_all_later_guards_broken`, one block violating the **ten** jointly-satisfiable later
+conditions, which `WrongChain` still reports first; the earlier "every rule from B-4 to B-15"
+framing was retracted because B-8 excludes B-10 and B-11 by construction, so no such block exists.
+Two properties of the corpus are easy to lose in a port and are published per case: `roots_match`
+as an independent field, and the full violated-rule set beside the single reported rule, so a
+fixture can be replayed without re-deriving the order. Five cases replay committed P4.1 blocks
+byte for byte (header, serialized transactions and validation context), and the exporter re-checks
+that a reused block still solves, so the two corpora cannot drift apart silently. **This milestone
+implements nothing in C++**: there is still no `Block` type and no `validate_structure` in the
+kernel, nothing here has been diffed against a C++ block validator, and no parity is claimed — the
+fixtures are the oracle P4.2B will diff against.
 
 ---
 
@@ -970,7 +1027,7 @@ Unverified by this milestone (open questions, not claims):
 | B-3 … B-15 matrix, check order | `structural_rejections_follow_the_documented_order` |
 | B-9 / B-11 boundary (2000 vs 2001) | `transaction_count_boundary_is_two_thousand` |
 | B-12 / B-13 boundaries | `timestamp_boundaries_are_strictly_above_median_and_at_most_two_hours_ahead` |
-| B-14 before B-15 | `merkle_mismatch_is_reported_before_proof_of_work` — **vacuous for this precedence**, per §3; the real evidence is the two `ordering` cases in `test/p41-vectors/chain/claimed_merkle_root.json` |
+| B-14 before B-15 | `merkle_mismatch_is_reported_before_proof_of_work` — **vacuous for this precedence**, per §3; the evidence is the two `ordering` cases in `test/p41-vectors/chain/claimed_merkle_root.json`, re-asserted at the validator level by `chain.block_structure.pair_14_15_*` in `test/p42-vectors/chain/block_structure.json` |
 | F-2 (version ignored) | `block_version_is_not_validated` |
 | R-1 / R-2 constants and subsidy table | `reward_constants_match_the_p0_vectors` |
 | R-3 … R-10, R-12 check order | `coinbase_checks_run_in_the_documented_order` |
@@ -988,6 +1045,8 @@ Unverified by this milestone (open questions, not claims):
 | DET-11 first-nonce mining | `mining_is_deterministic_for_a_fixed_header` |
 | P0 corpus | `python test/harness/run_vectors.py` (117 cases) |
 | P0 emitter | `cargo test --test export_baseline_vectors` |
+| P4.1A claimed-root oracle | `test/p41-vectors/chain/claimed_merkle_root.json` (30 cases), pinned by `p41_reference_fixtures_are_reproducible_and_pinned` |
+| P4.2A B-3 … B-15 oracle: isolation, boundaries, adjacent pairs, dominance | `test/p42-vectors/chain/block_structure.json` (34 cases), generated and re-validated by `p42_vectors_match_the_committed_reference_corpus` and `p42_reference_fixtures_are_reproducible_and_pinned`; the structural gate is `python test/harness/run_vectors.py --vectors test/p42-vectors` |
 
 The tests live in `zerocoin/tests/consensus_rules.rs` and reuse, rather than invent, the
 values in `test/vectors/` and the pinned constants in `src/consensus/immutability.rs`.

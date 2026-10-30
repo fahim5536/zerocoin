@@ -532,6 +532,54 @@ before the runner is invoked; a disagreement is a mapping failure (exit 2) again
 never a root mismatch blamed on the kernel. The corpus also records, rather than edits, one
 stale claim in `docs/consensus/CONSENSUS_RULES.md` §3: see the B-14 boundary note there.
 
+`test/p42-vectors/**` is the sixth corpus root and holds one group, `chain.block_structure` (34
+cases: 14 isolation, 8 boundary, 11 adjacent-pair precedence, 1 dominance witness; by verdict 5
+accepted and 29 rejected). Its `source_commit` is the same `b71d769` as the P4.1 root, and
+`zerocoin/src/consensus/block.rs` is byte-identical to it at this baseline, so the two corpora
+describe one validator; `reference_commits` again names `e464695f` for the introduction of
+`validate_structure`, the `BlockError` variants, the 2000 limit and the coinbase rule. Every
+expected outcome is the `Result` the shipping Rust `Block::validate_structure` returned for that
+exact block, called **directly** with the seven published context arguments — deliberately not
+through `Chain::connect_block`, because the accepted 2000-transaction case spends UTXOs that do not
+exist and would fail reward and replay checks that B-3 … B-15 never mentions. The exporter
+(`p42_*` in `zerocoin/tests/export_baseline_vectors.rs`) is the only origin of any expected value:
+it builds each fixture from a declared construction intent, calls the reference, and panics when the
+returned variant, the payload fields or the violated-rule set differ from that declaration, so the
+design contract's predictions are inputs to the export and never fields of the corpus. Each case
+publishes the header, the validation context, the canonical serialization of every transaction
+(per-transaction JSON plus leaves for lists of eight transactions or fewer, hex-only above that), the
+computed and claimed roots, `roots_match`, the proof-of-work flag, the coinbase flags, the
+`error_kind`, the `error_payload`, the `reported_rule` and the complete `violated_rules` set. That
+last pair is the contract P4.2B has to reproduce: a port must agree not only with the verdict but
+with *which guard the reference named first*, and the emitter asserts `reported_rule` equals the
+smallest violated row for all 34 cases.
+
+Two absences are recorded rather than papered over. **(B-8, B-9) has no fixture and is not
+claimed to be proven**: `transactions.is_empty()` and `transactions.len() > 2000` are mutually
+exclusive, so no input distinguishes their relative order; the manifest keeps a `deferred_pairs`
+entry saying so, and no `.pair_08_09` identifier exists. **(B-13, B-14) is representable but
+unfrozen** — the corrected design contract did not schedule a case for it, this milestone did not
+invent one, and nothing in the corpus asserts an order between those two rows. Five cases replay
+committed P4.1 blocks byte for byte (`iso_08_no_transactions`, `iso_14_root_mismatch`,
+`bnd_13_near_max_saturating_accept`, `pair_14_15_root_mismatch_and_failing_pow`,
+`pair_14_15_zero_root_claim_and_failing_pow`); the exporter rebuilds the header, the serialized
+transactions and the context from the P4.1 JSON, asserts the rebuild equals what P4.1 published,
+and re-checks that the reused block still solves, so the two corpora cannot drift apart in
+silence.
+
+Unlike the five earlier roots this one is **not yet executable in C++**, and that is the whole
+content of P4.2B: there is no `kernel/tools/p42_conformance.py`, no `kernel_p42_conformance` ctest
+entry, and no runner verb that takes a block and returns a first failing rule, because
+`kernel/src/block.cpp` still exposes only `zk::compare_claimed_merkle_root` — no `Block` type, no
+`validate_structure`, none of the other twelve guards. `run_vectors.py` dispatches by case-id
+namespace and registers no verifier for `chain.block_structure`, so pointing it at this root is a
+structural check only (envelope, manifest, provenance, counts) and reports 34 SKIP with exit 1; the
+P0 gate is unchanged. The independent Python second opinion for this corpus re-derives published
+bytes, not verdicts: every canonical serialization, transaction id, leaf order, Merkle root,
+coinbase flag, PoW status and rejection payload reproduces from
+`test/harness/zro_vectors.py` alone, and it cannot disagree about a verdict because it never
+computes one.
+
 ---
 
 ## 8. RPC contract (C3, planned at P5)

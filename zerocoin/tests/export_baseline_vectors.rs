@@ -31,7 +31,10 @@ use std::path::{Path, PathBuf};
 use serde_json::{json, Value};
 
 use zerocoin::address::{Address, AddressError};
-use zerocoin::consensus::block::{merkle_root, Block, BlockError, BlockHeader, BLOCK_VERSION};
+use zerocoin::consensus::block::{
+    merkle_root, Block, BlockError, BlockHeader, BLOCK_VERSION, MAX_BLOCK_TRANSACTIONS,
+    MAX_FUTURE_SECONDS,
+};
 use zerocoin::consensus::difficulty::{
     compact_from_target, compact_to_target, hash_meets_target, next_difficulty, required_work,
     validate_bits, DifficultyError, DIFFICULTY_PARAMS,
@@ -938,8 +941,14 @@ fn block_error_kind(error: &BlockError) -> &'static str {
     }
 }
 
-/// The numeric payload of the two variants this validator can produce. Every
-/// other variant publishes `null` rather than a guessed shape.
+/// The numeric payload of every `BlockError` variant that carries one, read out of the
+/// variant the reference actually returned. Before the P4.2A exporter this function knew
+/// only the two variants the P3.1B identity cases could produce; the five added here are
+/// the remaining payload-bearing variants of `Block::validate_structure`, so one mapping
+/// serves both corpora. Unit variants keep publishing `null` rather than a guessed shape,
+/// which is why adding these arms rewrites no already-published byte: the only variant
+/// name carrying a payload anywhere in the committed corpora besides `WrongChain` and
+/// `BadHeight` is `NoTransactions`, and that one is a unit variant.
 fn block_error_payload(error: &BlockError) -> Value {
     match error {
         BlockError::WrongChain { expected, found } => {
@@ -948,6 +957,19 @@ fn block_error_payload(error: &BlockError) -> Value {
         BlockError::BadHeight { expected, found } => {
             json!({"expected": expected, "found": found})
         }
+        BlockError::WrongEngine { expected, found } => {
+            json!({"expected": expected, "found": found})
+        }
+        BlockError::BadDifficulty { expected, found } => {
+            json!({"expected": expected, "found": found})
+        }
+        BlockError::TimestampTooOld { median, found } => {
+            json!({"median": median, "found": found})
+        }
+        BlockError::TimestampTooFarFuture { now, found } => {
+            json!({"now": now, "found": found})
+        }
+        BlockError::TooManyTransactions(count) => json!({"count": count}),
         _ => Value::Null,
     }
 }
@@ -4331,6 +4353,2131 @@ fn p41_reference_fixtures_are_reproducible_and_pinned() {
         case_by_id("genesis_root_claim_by_later_block")["expected"]["claimed_root"],
         "the later block must claim exactly the root the genesis block claims"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Group: chain.block_structure (P4.2A)
+//
+// The structural validator as a whole: rules B-3 through B-15, in the order
+// `src/consensus/block.rs` actually evaluates them, with the verdict `Block::
+// validate_structure` itself returned. P4.1 asked one question (B-14) and was
+// allowed one answer (`Ok` or `RootMismatch`); this corpus asks thirteen and
+// publishes whichever of the thirteen variants the reference produced, so a C++
+// port of the whole function has a fixed target for every guard and for every
+// pair of adjacent guards.
+//
+// Rust is the sole authority for `expected`, and the authority is exercised, not
+// claimed: `p42_emit` builds the block, calls `validate_structure` directly (the
+// seven-argument form the reference uses in its own in-source tests, never
+// `Chain::connect_block`, which additionally runs `difficulty::validate_bits` and
+// the reward and UTXO checks a structural fixture does not need), and takes
+// `error_kind`, `error_payload`, `reported_rule` and every digest from that call.
+// The design contract predicted outcomes for these cases; not one of those
+// predictions is written into `expected`. Each instead appears as a *declared
+// construction intent* beside the fixture, and the emitter panics naming the case
+// if the returned variant, the payload inside that variant, or the independently
+// re-evaluated set of violated rules disagrees with the declaration. A fixture
+// whose expectation had become unreachable could not be committed, because
+// generating it is what fails.
+//
+// The third assertion is the one that makes precedence a fact rather than a
+// sentence. `p42_violated_rules` re-evaluates all thirteen predicates against the
+// same input — every one is a pure function of the published header, transaction
+// list and context — and the emitter asserts that the validator's rule row is the
+// *smallest* number in that set. So "B-7 dominates B-8" for `pair_07_08` means the
+// published fixture violates both, measurably, and the reference reported the
+// earlier one; and `chaos_all_later_guards_broken` is a dominance witness because
+// eleven rules are violated at once and row 3 is what came back.
+//
+// Two orderings in `BlockError` must not be conflated, and both are published
+// rather than implied. The *declaration* order (3, 4, 5, 14, 6, 7, 15, 12, 13, 8,
+// 10, 11, 9) is the enum's; the *evaluation* order is B-3 to B-15 and lives in the
+// body of `validate_structure`; and the kernel's `BlockErrorKind` numbering is a
+// third, C++-side sequence. `rule_row` is the evaluation row, `error_kind` is the
+// variant name, and nothing here assigns a numeric code to a port's enum.
+//
+// Two facts this corpus deliberately does not claim. B-8 and B-9 cannot both hold
+// — `transactions.is_empty()` and `transactions.len() > MAX_BLOCK_TRANSACTIONS`
+// are mutually exclusive — so the pair (B-8, B-9) has no fixture, no fake
+// `.pair_08_09` identifier, and no experimental support: the relative order of
+// those two guards is observationally vacuous and the manifest defers the pair
+// with that reason. The emitter records the exclusivity as data: for every case it
+// asserts the derived violated set never contains 8 and 9 together. And B-15 is
+// only reachable when B-14 passed, which is why `iso_15_insufficient_pow` (root
+// matching, nonce failing) is structurally impossible in the P4.1 corpus, whose
+// emitter panics on any variant but `Ok` and `RootMismatch`.
+//
+// Reuse is explicit and byte-exact. Five cases replay a committed P4.1 block
+// unchanged — the published header, the serialized transactions and the seven-key
+// validation context are the same bytes — and add a validator-level claim, which
+// P4.1 could not make: which guard the reference actually reported, and which
+// rules were simultaneously violated. `p42_reference_fixtures_are_reproducible_and_pinned`
+// compares those five against `test/p41-vectors/chain/claimed_merkle_root.json` on
+// disk, so the identity is checked against the published corpus and not against a
+// second copy of the same emitter call.
+//
+// No C++ code is involved, referenced as an authority, or claimed to agree; the
+// differential belongs to P4.2B. The wall clock appears nowhere: `now` is a
+// literal in every case, including the three that deliberately put it next to
+// `u64::MAX` to separate saturating from wrapping addition.
+// ---------------------------------------------------------------------------
+
+/// The commit whose `zerocoin/` production code produced every value in this corpus: the
+/// newest commit that touches a Rust build input. `zerocoin/src` is byte-identical here and
+/// at the P4.2A baseline, so no value depends on a later test-only or documentation-only
+/// commit. Same commit `chain.claimed_merkle_root` records, for the same reason.
+const P42_SOURCE_COMMIT: &str = "b71d769be8357bcf10d768d915770125cf7f7c24";
+
+/// Where `Block::validate_structure`, `Transaction::is_coinbase`, the
+/// `BlockError::TooManyTransactions` variant and `MAX_BLOCK_TRANSACTIONS` each entered
+/// `zerocoin/src` — `git log -S` names this one commit for all four. Between it and
+/// `P42_SOURCE_COMMIT` the only edit to `block.rs` extracts B-3 and B-4 into
+/// `validate_header_identity` (finding F-1), which changes the call graph but no verdict; so
+/// unlike P4.1 this corpus cannot say the guarded lines "have not been edited since", and
+/// does not.
+const P42_REFERENCE_COMMIT: &str = "e464695f92f6884e6d25c6947d452d5fb24229a6";
+
+/// The difficulty every honest fixture advertises: the trivial engine's frozen floor, a
+/// 2^255 target that about half of all nonces meet, so mining costs nothing.
+const P42_BITS: u32 = 0x207f_ffff;
+/// One mantissa step below it. A B-7 fault has to be a value the reference itself can mine
+/// against, so that the *only* undeclared-looking difference from a clean header is the
+/// mismatch with `expected_bits`.
+const P42_WRONG_BITS: u32 = 0x207f_fffe;
+
+/// The anchor block height, and the four anchor context numbers the corrected P4.2 design
+/// contract froze. `header_at(h).timestamp` is `1_700_000_000 + h`, so the natural heights
+/// 4, 5, 7210 and 7211 below produce exactly the contract's timestamps without an override —
+/// which is why `iso_12` and `iso_13` are isolation cases rather than hand-written numbers.
+const P42_HEIGHT: u64 = 5;
+const P42_MEDIAN: u64 = 1_700_000_004;
+const P42_NOW: u64 = 1_700_000_010;
+/// `P42_NOW + MAX_FUTURE_SECONDS`: the largest timestamp B-13 admits at the anchor clock.
+/// The equality is asserted in the pinned test rather than trusted here.
+const P42_LIMIT: u64 = 1_700_007_210;
+/// One second past that limit — the timestamp `iso_13` and `bnd_13_one_above_reject` carry.
+const P42_OVER_LIMIT: u64 = 1_700_007_211;
+
+/// The previous hash a well-formed fixture header already carries, so "the tip this block
+/// points at" and "the digest this block names" are the same value until a B-5 fault says
+/// otherwise.
+const P42_TIP: Hash256 = Hash256([0x33; 32]);
+
+/// `now` one second short of the point where `now + 7200` starts to clamp: the limit is
+/// `M - 1`, so a timestamp of `M` is rejected.
+const P42_EDGE_NOW: u64 = u64::MAX - MAX_FUTURE_SECONDS - 1;
+/// `now` at the last value whose limit is still `M` exactly: a timestamp of `M` fits, with
+/// nothing to spare. `now = M` is the first value that clamps, and that is the case
+/// `bnd_13_near_max_saturating_accept` reuses from P4.1 — the corpus's only witness against a
+/// port that writes `now + 7200` without saturating, because a wrapping limit there is 7199.
+const P42_LAST_EXACT_NOW: u64 = u64::MAX - MAX_FUTURE_SECONDS;
+
+/// Lists no longer than this publish the P4.1 field-by-field transaction form and a leaf
+/// array; longer ones publish canonical hex only, because a 2001-transaction block written
+/// field by field would be most of a megabyte of JSON and the root already commits to every
+/// byte of it.
+const P42_VERBOSE_LIMIT: usize = 8;
+
+/// Which proof-of-work engine the validator is running. The header's `engine_id` field is a
+/// separate thing — every fixture writes the trivial id 0, which is exactly what makes B-6 a
+/// statement about the *selected* engine rather than about a byte in the header.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum P42Engine {
+    Trivial,
+    ScratchPad,
+}
+
+impl P42Engine {
+    /// Builds the engine the reference itself would build. Every published engine id, engine
+    /// name and nonce search goes through the value returned here, so this section never
+    /// restates `PowEngine::id` or `PowEngine::name` as a literal.
+    fn build(&self) -> Box<dyn PowEngine> {
+        match self {
+            P42Engine::Trivial => Box::new(TrivialEngine::new()),
+            // The devnet preset: the same `ScratchPadEngine::balanced()` the production
+            // parameters select, and the only scratchpad fixture cost is a couple of hashes.
+            P42Engine::ScratchPad => Box::new(ScratchPadEngine::balanced()),
+        }
+    }
+
+    /// The engine identity as the reference reports it, published beside the context so a
+    /// reader can see which engine a `WrongEngine` payload's `expected` came from. The
+    /// scratchpad's memory size and round count are deliberately absent: they belong to the
+    /// engine, not to the seven-key validation context P4.1 froze, and putting them there
+    /// would change bytes the reuse cases must replay exactly.
+    fn describe(&self) -> Value {
+        let engine = self.build();
+        match self {
+            P42Engine::Trivial => json!(null),
+            P42Engine::ScratchPad => json!({
+                "engine_id": engine.id(),
+                "engine_name": engine.name(),
+                "preset": "ScratchPadEngine::balanced()",
+            }),
+        }
+    }
+}
+
+/// The context a case hands `validate_structure` beside the block, in the seven published key
+/// names `chain.claimed_merkle_root` already uses — plus which engine is selected, published
+/// under `engine` as the reference's own `PowEngine::name()`.
+struct P42Context {
+    expected_chain: u32,
+    expected_height: u64,
+    expected_previous: Hash256,
+    expected_bits: u32,
+    median_time_past: u64,
+    now: u64,
+    engine: P42Engine,
+}
+
+impl P42Context {
+    fn json(&self) -> Value {
+        json!({
+            "expected_chain": self.expected_chain,
+            "expected_height": self.expected_height,
+            "expected_previous_hex": hx(&self.expected_previous.0),
+            "expected_bits": self.expected_bits,
+            "median_time_past": self.median_time_past,
+            "now": self.now,
+            "engine": self.engine.build().name(),
+        })
+    }
+}
+
+/// A one-transaction block: the coinbase shape the P0 and P4.1 corpora already publish, at
+/// the height the case names. `is_coinbase` reads only the input count and the null prevout,
+/// so this is a coinbase wherever it is placed — and `coinbase_transaction` is the production
+/// builder, not a fixture imitation of one.
+fn p42_single(height: u64) -> Vec<Transaction> {
+    vec![p33_coinbase(height)]
+}
+
+/// A fixture spend, distinct seed per case, so two cases that share a height still share no
+/// transaction id.
+fn p42_spend(seed: u8) -> Transaction {
+    p33_tx(seed)
+}
+
+/// The coinbase pair every duplicate-coinbase fixture is built from: two production coinbase
+/// transactions at two different heights.
+fn p42_two_coinbases() -> Vec<Transaction> {
+    vec![p33_coinbase(5), p33_coinbase(6)]
+}
+
+/// A tail transaction whose `is_coinbase()` is false for the *input* reason: exactly one
+/// input, and its prevout is not null (`txid` non-zero, `vout` not `u32::MAX`).
+fn p42_fill_spends(index: usize) -> Transaction {
+    Transaction {
+        version: 1,
+        inputs: vec![TxIn {
+            previous_output: Outpoint {
+                txid: Hash256([0x11; 32]),
+                vout: index as u32,
+            },
+            script_sig: Vec::new(),
+            sequence: 0xffff_ffff,
+        }],
+        outputs: vec![TxOut {
+            value: index as u64,
+            script_pubkey: vec![0x51],
+        }],
+        lock_time: index as u32,
+    }
+}
+
+/// A tail transaction whose `is_coinbase()` is false for the *count* reason: no inputs at
+/// all. Zero outputs is structurally legal — P4.1 publishes a transaction with neither and the
+/// reference accepts the block — so this shape isolates the input-count half of the predicate.
+fn p42_fill_empty(index: usize) -> Transaction {
+    Transaction {
+        version: 1,
+        inputs: Vec::new(),
+        outputs: Vec::new(),
+        lock_time: index as u32,
+    }
+}
+
+/// The filler at `index`: the two shapes alternate, and `lock_time` carries the index, so no
+/// two leaves in a large list can collide and the published root commits to the order as well
+/// as the set.
+fn p42_fill(index: usize) -> Transaction {
+    if index % 2 == 0 {
+        p42_fill_spends(index)
+    } else {
+        p42_fill_empty(index)
+    }
+}
+
+/// `count` transactions: exactly one coinbase at index 0 and `count - 1` alternating
+/// non-coinbases above it. The 2000 and 2001 fixtures are the same list at two lengths, so
+/// the accepted and rejected pair differs by one transaction and nothing else.
+fn p42_large(count: usize) -> Vec<Transaction> {
+    let mut txs = vec![p33_coinbase(P42_HEIGHT)];
+    txs.extend((1..count).map(p42_fill));
+    txs
+}
+
+/// `count` transactions with no coinbase anywhere: index 0 is a zero-input transaction, so
+/// B-10 is violated as well as B-9, and the `TooManyTransactions` verdict cannot be attributed
+/// to the coinbase scan that follows it.
+fn p42_large_without_coinbase(count: usize) -> Vec<Transaction> {
+    let mut txs = vec![p42_fill_empty(0)];
+    txs.extend((1..count).map(p42_fill));
+    txs
+}
+
+/// What the emitter is being asked to build, and what it is being asked to prove about the
+/// result. The three `declare_*` fields are the design contract's prediction written down as a
+/// *check on the fixture*, never as the published value: `p42_emit` compares them with what the
+/// reference returned and panics on any difference.
+struct P42Spec {
+    id: &'static str,
+    group: &'static str,
+    intent: &'static str,
+    height: u64,
+    timestamp: Option<u64>,
+    chain: Option<u32>,
+    previous: Option<Hash256>,
+    bits: Option<u32>,
+    engine: P42Engine,
+    expected_chain: u32,
+    expected_height: u64,
+    expected_previous: Option<Hash256>,
+    expected_bits: u32,
+    median_time_past: u64,
+    now: u64,
+    transactions: Vec<Transaction>,
+    /// The root the header claims. `None` means the root this list actually computes, which
+    /// is what makes a case's B-14 status a construction fact rather than a coincidence.
+    claim: Option<Hash256>,
+    /// Whether the header claims the root this list actually computes (`false`) or that root
+    /// with one bit of its first internal byte flipped (`true`). A stale claim that is still a
+    /// digest, which is what makes B-14 a comparison rather than a parse failure.
+    stale_claim: bool,
+    /// Whether the nonce is searched to meet the header's own target (`true`, the reference's
+    /// `pow::mine`) or to miss it (`false`, the deterministic scan `consensus_rules.rs` uses).
+    /// Either way it is searched with the *selected* engine, because publishing a proof of work
+    /// verified against a different engine than the validator ran would be an undeclared fault.
+    honest_pow: bool,
+    declare_variant: &'static str,
+    declare_payload: Value,
+    declare_rules: Vec<u8>,
+    /// How many transactions of the list `Transaction::is_coinbase` reports as coinbases, and
+    /// whether index zero is one. Both are checked against the built list before anything is
+    /// published, so a large fixture cannot quietly lose the coinbase it was designed around.
+    declare_coinbase_count: usize,
+    declare_first_is_coinbase: bool,
+    synthetic: bool,
+    reuse_of: Option<&'static str>,
+    check: &'static str,
+}
+
+impl P42Spec {
+    /// Writes down the design contract's prediction as a *check on the construction*. The three
+    /// declared values never reach the corpus: `p42_emit` publishes what the reference returned
+    /// and panics naming the case if the declaration does not match it.
+    fn declare(&mut self, variant: &'static str, payload: Value, rules: &[u8]) {
+        self.declare_variant = variant;
+        self.declare_payload = payload;
+        self.declare_rules = rules.to_vec();
+    }
+}
+
+impl P42Spec {
+    /// The anchor construction: a well-formed header at height 5 with the anchor context, the
+    /// trivial engine selected, an honest proof of work, and a claim equal to its own root —
+    /// that is, a block with no rule violation at all until a case adds one.
+    fn anchor(id: &'static str, group: &'static str, intent: &'static str) -> Self {
+        P42Spec {
+            id,
+            group,
+            intent,
+            height: P42_HEIGHT,
+            timestamp: None,
+            chain: None,
+            previous: None,
+            bits: None,
+            engine: P42Engine::Trivial,
+            expected_chain: REGTEST_CHAIN.0,
+            expected_height: P42_HEIGHT,
+            expected_previous: None,
+            expected_bits: P42_BITS,
+            median_time_past: P42_MEDIAN,
+            now: P42_NOW,
+            transactions: p42_single(P42_HEIGHT),
+            claim: None,
+            stale_claim: false,
+            honest_pow: true,
+            declare_variant: "Ok",
+            declare_payload: Value::Null,
+            declare_rules: Vec::new(),
+            declare_coinbase_count: 1,
+            declare_first_is_coinbase: true,
+            synthetic: false,
+            reuse_of: None,
+            check: "",
+        }
+    }
+}
+
+/// A case with nothing overridden but its own name, group, intent and independent check.
+fn p42_case(id: &'static str, group: &'static str, intent: &'static str, check: &'static str) -> P42Spec {
+    P42Spec { check, ..P42Spec::anchor(id, group, intent) }
+}
+
+/// The evaluation row a variant belongs to. Declaration order and evaluation order differ in
+/// `BlockError`, so this is a property of `validate_structure`'s body, not of the enum.
+fn block_error_rule(error: &BlockError) -> u8 {
+    match error {
+        BlockError::WrongChain { .. } => 3,
+        BlockError::BadHeight { .. } => 4,
+        BlockError::BadPreviousHash => 5,
+        BlockError::WrongEngine { .. } => 6,
+        BlockError::BadDifficulty { .. } => 7,
+        BlockError::NoTransactions => 8,
+        BlockError::TooManyTransactions(_) => 9,
+        BlockError::FirstNotCoinbase => 10,
+        BlockError::DuplicateCoinbase => 11,
+        BlockError::TimestampTooOld { .. } => 12,
+        BlockError::TimestampTooFarFuture { .. } => 13,
+        BlockError::RootMismatch => 14,
+        BlockError::InsufficientProofOfWork => 15,
+    }
+}
+
+/// Every guard that the published input really fails, re-evaluated here as thirteen pure
+/// predicates over that input. This is not a second validator: it returns no verdict, only the
+/// set of rows whose condition holds, and the emitter's assertion that the reference reported
+/// the smallest member of that set is what turns a rejection into precedence evidence.
+///
+/// For an empty list, rows 10 and 11 are *absent* rather than present-and-satisfied:
+/// production returns at B-8 before it reads `transactions[0]` or `transactions[1..]`, and
+/// pretending otherwise would publish an evaluation that never happened. That is also why
+/// rows 8 and 9 can never appear together, which the emitter asserts per case.
+fn p42_violated_rules(
+    header: &BlockHeader,
+    transactions: &[Transaction],
+    context: &P42Context,
+    engine: &dyn PowEngine,
+    computed: &Hash256,
+) -> Vec<u8> {
+    let mut rules: Vec<u8> = Vec::new();
+    if header.chain != context.expected_chain {
+        rules.push(3);
+    }
+    if header.height != context.expected_height {
+        rules.push(4);
+    }
+    if header.previous_hash != context.expected_previous {
+        rules.push(5);
+    }
+    if header.engine_id != engine.id() {
+        rules.push(6);
+    }
+    if header.difficulty_bits != context.expected_bits {
+        rules.push(7);
+    }
+    let empty = transactions.is_empty();
+    if empty {
+        rules.push(8);
+    }
+    if transactions.len() > MAX_BLOCK_TRANSACTIONS {
+        rules.push(9);
+    }
+    if !empty {
+        if !transactions[0].is_coinbase() {
+            rules.push(10);
+        }
+        if transactions[1..].iter().any(Transaction::is_coinbase) {
+            rules.push(11);
+        }
+    }
+    if header.timestamp <= context.median_time_past {
+        rules.push(12);
+    }
+    if header.timestamp > context.now.saturating_add(MAX_FUTURE_SECONDS) {
+        rules.push(13);
+    }
+    if header.merkle_root != *computed {
+        rules.push(14);
+    }
+    if !header.meets_own_target(engine) {
+        rules.push(15);
+    }
+    rules
+}
+
+fn p42_canonical(value: &Value) -> String {
+    serde_json::to_string(value).expect("a published payload serialises")
+}
+
+/// The committed P4.1 case this fixture replays, rebuilt from the bytes that case publishes:
+/// the header field by field, every transaction from its own `serialized_hex`, and all seven
+/// validation-context values. Reuse is therefore byte-exact by construction and not by
+/// transcription — the rebuilt header and context are compared with the published JSON before
+/// anything is derived from them, and every transaction is re-serialised and compared.
+///
+/// The fourth half of the tuple is the proof-of-work status P4.1 recorded, which `p42_emit`
+/// re-checks against the reference so a reused header cannot silently stop solving.
+fn p42_reuse(name: &str) -> (BlockHeader, Vec<Transaction>, P42Context, bool) {
+    let path = p41_root().join("chain").join("claimed_merkle_root.json");
+    let text = fs::read_to_string(&path).unwrap_or_else(|error| {
+        panic!(
+            "P4.2A reuse reads the committed P4.1 corpus at {}: {error}",
+            path.display()
+        )
+    });
+    let document: Value =
+        serde_json::from_str(&text).expect("the committed P4.1 corpus is valid JSON");
+    let id = format!("chain.claimed_merkle_root.{name}");
+    let published = document["cases"]
+        .as_array()
+        .expect("the P4.1 corpus has a cases array")
+        .iter()
+        .find(|candidate| candidate["id"].as_str() == Some(id.as_str()))
+        .unwrap_or_else(|| panic!("{id}: the committed P4.1 corpus has no such case"))
+        .clone();
+    let header_json = &published["input"]["header"];
+    let field = |key: &str| -> u64 {
+        header_json[key]
+            .as_u64()
+            .unwrap_or_else(|| panic!("{id}: header field `{key}` is missing"))
+    };
+    let digest = |object: &Value, key: &str| -> Hash256 {
+        let text = object[key]
+            .as_str()
+            .unwrap_or_else(|| panic!("{id}: field `{key}` is missing"));
+        Hash256::from_slice(&hex::decode(text).expect("a published digest is hex"))
+            .expect("a published digest is one sha256d wide")
+    };
+    let context_json = &published["input"]["validation_context"];
+    let header = BlockHeader {
+        version: field("version") as u32,
+        chain: field("chain") as u32,
+        height: field("height"),
+        previous_hash: digest(header_json, "previous_hash_hex"),
+        merkle_root: digest(header_json, "merkle_root_hex"),
+        timestamp: field("timestamp"),
+        difficulty_bits: field("difficulty_bits") as u32,
+        engine_id: field("engine_id") as u8,
+        nonce: field("nonce"),
+    };
+    let entries = published["input"]["transactions"]
+        .as_array()
+        .expect("a P4.1 case publishes its transactions as an array");
+    let transactions: Vec<Transaction> = entries
+        .iter()
+        .map(|entry| {
+            let text = entry["serialized_hex"]
+                .as_str()
+                .expect("a published P4.1 transaction carries serialized_hex");
+            let bytes = hex::decode(text).expect("a published serialization is hex");
+            let tx = Transaction::deserialize(&bytes)
+                .unwrap_or_else(|error| panic!("{id}: a published transaction: {error}"));
+            assert_eq!(
+                hx(&tx.serialize()),
+                text,
+                "{id}: a P4.1 transaction does not re-serialise to its published bytes"
+            );
+            tx
+        })
+        .collect();
+    let context = P42Context {
+        expected_chain: context_json["expected_chain"]
+            .as_u64()
+            .expect("expected_chain") as u32,
+        expected_height: context_json["expected_height"].as_u64().expect("expected_height"),
+        expected_previous: digest(context_json, "expected_previous_hex"),
+        expected_bits: context_json["expected_bits"]
+            .as_u64()
+            .expect("expected_bits") as u32,
+        median_time_past: context_json["median_time_past"]
+            .as_u64()
+            .expect("median_time_past"),
+        now: context_json["now"].as_u64().expect("now"),
+        engine: P42Engine::Trivial,
+    };
+    assert_eq!(
+        header_input(&header),
+        header_json.clone(),
+        "{id}: the rebuilt header is not the header P4.1 published"
+    );
+    assert_eq!(
+        context.json(),
+        context_json.clone(),
+        "{id}: the rebuilt validation context is not the seven keys P4.1 published"
+    );
+    let proof_of_work = published["expected"]["proof_of_work_meets_target"]
+        .as_bool()
+        .expect("P4.1 publishes proof_of_work_meets_target");
+    (header, transactions, context, proof_of_work)
+}
+
+/// The construction path: a header from the spec's own overrides, a claimed root taken from
+/// the root the reference computes for this exact transaction list, and a nonce searched with
+/// the *selected* engine — mined when the case wants a passing proof of work, scanned for a
+/// failing one when it does not. Both searches are deterministic upward scans from zero, so a
+/// nonce is a function of the header alone and never of a thread count, a clock or an RNG.
+///
+/// `header.engine_id` is pinned to the trivial id for every constructed case: a B-6 fault is a
+/// property of the engine the validator is *running*, not of a byte in the header, which is
+/// exactly what the `WrongEngine{expected, found}` pair is able to say about it.
+fn p42_construct(
+    spec: &P42Spec,
+    engine: &dyn PowEngine,
+) -> (BlockHeader, Vec<Transaction>, P42Context) {
+    let mut header = header_at(spec.height, 0);
+    header.chain = spec.chain.unwrap_or(header.chain);
+    header.previous_hash = spec.previous.unwrap_or(P42_TIP);
+    header.difficulty_bits = spec.bits.unwrap_or(P42_BITS);
+    header.timestamp = spec.timestamp.unwrap_or(header.timestamp);
+    header.engine_id = TrivialEngine::new().id();
+    let transactions = spec.transactions.clone();
+    let computed = Block::compute_merkle_root(&transactions);
+    let claimed = spec.claim.unwrap_or(computed);
+    header.merkle_root = if spec.stale_claim {
+        p41_flip_bit(&claimed, 0, 0)
+    } else {
+        claimed
+    };
+    header.nonce = if spec.honest_pow {
+        mine(
+            engine,
+            &header.preimage(),
+            &compact_to_target(header.difficulty_bits),
+            0,
+        )
+        .expect("the difficulty every P4.2A fixture advertises is solvable from nonce zero")
+        .0
+    } else {
+        (0u64..512)
+            .find(|nonce| {
+                header.nonce = *nonce;
+                !header.meets_own_target(engine)
+            })
+            .expect("a 2^255-class target yields a failing nonce within 512 tries")
+    };
+    let context = P42Context {
+        expected_chain: spec.expected_chain,
+        expected_height: spec.expected_height,
+        expected_previous: spec.expected_previous.unwrap_or(P42_TIP),
+        expected_bits: spec.expected_bits,
+        median_time_past: spec.median_time_past,
+        now: spec.now,
+        engine: spec.engine,
+    };
+    (header, transactions, context)
+}
+
+/// The one emitter every case in this group goes through, and the place the oracle doctrine is
+/// enforced. It calls `Block::validate_structure` directly with the seven arguments the
+/// reference's own in-source test uses, then publishes *that* call's verdict: the variant name,
+/// the payload read out of the variant it actually returned, the evaluation row that variant
+/// belongs to, and the set of rules the published input independently re-evaluates as violated.
+///
+/// Five things are asserted before anything is returned, and each one names the case when it
+/// fails, so a fixture whose expectation had become unreachable stops the export instead of
+/// publishing a wrong `expected`:
+///
+/// 1. every transaction round-trips `deserialize(serialize(tx)) == tx` at its published width;
+/// 2. no two transactions share a leaf id, so the published root commits to the list uniquely;
+/// 3. the coinbase count and the status of index 0 equal what the case was designed around;
+/// 4. the returned variant and its payload equal the *declared construction intent*, which is
+///    the design contract's prediction recorded as a check on the fixture and nowhere else;
+/// 5. the reported row is the smallest member of the derived violated set, and an accept
+///    happens only when that set is empty — the assertion that turns a rejection into evidence
+///    about precedence rather than about a single guard.
+///
+/// The derived set is additionally asserted never to hold 8 and 9 together, which is the
+/// computed backing for the manifest's deferral of that pair.
+fn p42_emit(spec: &P42Spec) -> Value {
+    let engine = spec.engine.build();
+    let label = format!("chain.block_structure.{}", spec.id);
+    let (header, transactions, context) = match spec.reuse_of {
+        None => p42_construct(spec, engine.as_ref()),
+        Some(name) => {
+            let (header, transactions, context, published_pow) = p42_reuse(name);
+            assert_eq!(
+                context.engine, spec.engine,
+                "{label}: {name} replays a P4.1 context whose engine is not the one this case declares"
+            );
+            assert_eq!(context.median_time_past, spec.median_time_past, "{label}: the reused P4.1 `median_time_past` is not the one this case declares");
+            assert_eq!(context.now, spec.now, "{label}: the reused P4.1 `now` is not the one this case declares");
+            assert_eq!(context.expected_chain, spec.expected_chain, "{label}: the reused P4.1 `expected_chain` is not the one this case declares");
+            assert_eq!(context.expected_height, spec.expected_height, "{label}: the reused P4.1 `expected_height` is not the one this case declares");
+            assert_eq!(context.expected_bits, spec.expected_bits, "{label}: the reused P4.1 `expected_bits` is not the one this case declares");
+            assert_eq!(
+                header.engine_id,
+                engine.id(),
+                "{label}: a reused P4.1 header no longer advertises the engine this case selects"
+            );
+            assert_eq!(
+                header.meets_own_target(engine.as_ref()),
+                published_pow,
+                "{label}: the reused P4.1 header no longer solves the target it advertises"
+            );
+            (header, transactions, context)
+        }
+    };
+
+    for (index, tx) in transactions.iter().enumerate() {
+        let bytes = tx.serialize();
+        let rebuilt = Transaction::deserialize(&bytes)
+            .unwrap_or_else(|error| panic!("{label}: transaction {index} does not deserialise: {error}"));
+        assert_eq!(rebuilt, *tx, "{label}: the canonical round-trip is not the identity at index {index}");
+        assert_eq!(hx(&bytes).len(), bytes.len() * 2, "{label}: serialization width moved at index {index}");
+    }
+
+    let leaves: Vec<Hash256> = transactions.iter().map(Transaction::txid).collect();
+    let mut unique: Vec<[u8; 32]> = leaves.iter().map(|leaf| leaf.0).collect();
+    unique.sort();
+    unique.dedup();
+    assert_eq!(
+        unique.len(),
+        leaves.len(),
+        "{label}: two transactions share a leaf id, so the published root would not commit to this list uniquely"
+    );
+
+    let flags: String = transactions
+        .iter()
+        .map(|tx| if tx.is_coinbase() { '1' } else { '0' })
+        .collect();
+    let coinbase_count = flags.matches('1').count();
+    let first_is_coinbase = transactions.first().map_or(false, Transaction::is_coinbase);
+    assert_eq!(
+        coinbase_count, spec.declare_coinbase_count,
+        "{label}: the list holds {coinbase_count} coinbases, not the {} this case was built around",
+        spec.declare_coinbase_count
+    );
+    assert_eq!(
+        first_is_coinbase, spec.declare_first_is_coinbase,
+        "{label}: index 0 is {} a coinbase, contrary to how this case was built",
+        if spec.declare_first_is_coinbase { "" } else { "not" }
+    );
+
+    let computed = Block::compute_merkle_root(&transactions);
+    let claimed = header.merkle_root;
+    let roots_match = computed.0 == claimed.0;
+    let proof_of_work = header.meets_own_target(engine.as_ref());
+
+    let outcome = Block {
+        header: header.clone(),
+        transactions: transactions.clone(),
+    }
+    .validate_structure(
+        engine.as_ref(),
+        context.expected_chain,
+        context.expected_height,
+        &context.expected_previous,
+        context.expected_bits,
+        context.median_time_past,
+        context.now,
+    );
+    let violated = p42_violated_rules(&header, &transactions, &context, engine.as_ref(), &computed);
+    assert!(
+        !(violated.contains(&8) && violated.contains(&9)),
+        "{label}: the derived violated set holds B-8 and B-9 together, which `is_empty()` and \
+         `len() > MAX_BLOCK_TRANSACTIONS` make impossible"
+    );
+
+    let returned = match &outcome {
+        Ok(()) => "Ok",
+        Err(error) => block_error_kind(error),
+    };
+    assert_eq!(
+        returned, spec.declare_variant,
+        "{label}: this fixture was constructed as `{}`, but `validate_structure` returned `{}`",
+        spec.declare_variant,
+        returned
+    );
+    let error_payload = match &outcome {
+        Ok(()) => Value::Null,
+        Err(error) => block_error_payload(error),
+    };
+    assert_eq!(
+        p42_canonical(&error_payload),
+        p42_canonical(&spec.declare_payload),
+        "{label}: the reference returned the payload `{}`, not the `{}` this case was built to carry",
+        p42_canonical(&error_payload),
+        p42_canonical(&spec.declare_payload)
+    );
+    assert_eq!(
+        violated,
+        spec.declare_rules,
+        "{label}: the published input violates rules {violated:?}, not {rules:?} as constructed",
+        rules = spec.declare_rules
+    );
+
+    let reported_rule = match &outcome {
+        Ok(()) => None,
+        Err(error) => Some(block_error_rule(error)),
+    };
+    match (reported_rule, violated.first()) {
+        (None, None) => {}
+        (None, Some(row)) => panic!(
+            "{label}: the reference accepted a block whose published input violates rule B-{row}"
+        ),
+        (Some(row), None) => panic!(
+            "{label}: the reference reported rule B-{row} while no guard of the published input fails"
+        ),
+        (Some(row), Some(&first)) => assert_eq!(
+            row, first,
+            "{label}: the reference reported B-{row}, but B-{first} is the earliest guard the \
+             published input fails — precedence evidence, not a verdict, is what this corpus \
+             publishes, so this must not be papered over"
+        ),
+    }
+
+    let verbose = transactions.len() <= P42_VERBOSE_LIMIT;
+    let mut input = json!({
+        "group": spec.group,
+        "header": header_input(&header),
+        "tx_count": transactions.len(),
+        "validation_context": context.json(),
+        "engine_config": spec.engine.describe(),
+        "synthetic_context": spec.synthetic,
+        "reused_from": spec.reuse_of.map(|name| format!("chain.claimed_merkle_root.{name}")),
+    });
+    if verbose {
+        input["transactions"] = json!(transactions.iter().map(p41_tx_input).collect::<Vec<Value>>());
+    } else {
+        input["transactions_hex"] = json!(
+            transactions
+                .iter()
+                .map(|tx| hx(&tx.serialize()))
+                .collect::<Vec<String>>()
+        );
+    }
+
+    let mut expected = json!({
+        "accepted": outcome.is_ok(),
+        "error_kind": match &outcome {
+            Ok(()) => Value::Null,
+            Err(error) => json!(block_error_kind(error)),
+        },
+        "error_payload": error_payload,
+        "reported_rule": reported_rule,
+        "violated_rules": violated,
+        "is_first_violation": match reported_rule {
+            Some(row) => json!(violated.first() == Some(&row)),
+            None => Value::Null,
+        },
+        "roots_match": roots_match,
+        "computed_root": hash256_json(&computed),
+        "claimed_root": hash256_json(&claimed),
+        "computed_root_len": computed.0.len(),
+        "proof_of_work_meets_target": proof_of_work,
+        "coinbase_flags": flags,
+        "coinbase_count": coinbase_count,
+        "first_is_coinbase": first_is_coinbase,
+        "leaf_count": transactions.len(),
+    });
+    if verbose {
+        expected["leaves"] = json!(
+            leaves
+                .iter()
+                .map(|leaf| json!({ "txid": hash256_json(leaf) }))
+                .collect::<Vec<Value>>()
+        );
+    }
+    case(&label, spec.intent, input, expected, spec.check)
+}
+
+/// The timestamp `header_at(5).timestamp` produces, written once so the two B-12 and two B-13
+/// boundary pairs can be read as the one-second steps they are.
+const P42_ANCHOR_TS: u64 = 1_700_000_005;
+
+/// A case built from the anchor by a closure that applies its own faults and writes down its
+/// own declaration. Every field the closure does not touch stays exactly as `P42Spec::anchor`
+/// set it, so a reader comparing two cases in this list can see the whole difference between
+/// them in the lines that differ.
+fn p42_spec(
+    id: &'static str,
+    group: &'static str,
+    intent: &'static str,
+    check: &'static str,
+    configure: impl FnOnce(&mut P42Spec),
+) -> P42Spec {
+    let mut spec = p42_case(id, group, intent, check);
+    configure(&mut spec);
+    spec
+}
+
+/// The frozen matrix: 14 isolation cases, 8 boundary cases, 11 representable adjacent-pair
+/// cases and 1 dominance witness. 34, with the pair (B-8, B-9) deliberately absent because the
+/// two predicates are mutually exclusive, and the pair (B-13, B-14) absent because the corrected
+/// design contract does not list it — neither gap is presented as proven by a fixture here.
+fn p42_specs() -> Vec<P42Spec> {
+    let specs = vec![
+        // ---- Group A: one guard per case, every earlier guard demonstrably satisfied ----
+        p42_spec(
+            "iso_03_wrong_chain",
+            "A",
+            "rule",
+            "`input.header.chain` differs from `input.validation_context.expected_chain` and no other published field differs from its expected value",
+            |s| {
+                s.chain = Some(0);
+                s.declare(
+                    "WrongChain",
+                    json!({"expected": REGTEST_CHAIN.0, "found": 0}),
+                    &[3],
+                );
+            },
+        ),
+        p42_spec(
+            "iso_04_bad_height",
+            "A",
+            "rule",
+            "`input.header.height` is 6 while the context expects 5; the chain, previous hash, bits, engine and clock all match",
+            |s| {
+                s.height = 6;
+                s.transactions = p42_single(6);
+                s.declare(
+                    "BadHeight",
+                    json!({"expected": P42_HEIGHT, "found": 6}),
+                    &[4],
+                );
+            },
+        ),
+        p42_spec(
+            "iso_05_bad_previous_hash",
+            "A",
+            "rule",
+            "`input.header.previous_hash_hex` is all zero while the context names the 0x33 tip; a unit variant carries no payload",
+            |s| {
+                s.previous = Some(Hash256([0u8; 32]));
+                s.declare("BadPreviousHash", Value::Null, &[5]);
+            },
+        ),
+        p42_spec(
+            "iso_06_wrong_engine",
+            "A",
+            "rule",
+            "the header advertises `TrivialEngine::id()` while `input.validation_context.engine` is the scratchpad's own `PowEngine::name()`; the payload is the reference's two ids, not literals",
+            |s| {
+                s.engine = P42Engine::ScratchPad;
+                s.declare(
+                    "WrongEngine",
+                    json!({
+                        "expected": ScratchPadEngine::balanced().id(),
+                        "found": TrivialEngine::new().id(),
+                    }),
+                    &[6],
+                );
+            },
+        ),
+        p42_spec(
+            "iso_07_bad_difficulty",
+            "A",
+            "rule",
+            "`input.header.difficulty_bits` is one mantissa step below the context's `expected_bits`, and the header is mined against its own advertised bits so B-15 cannot be what fired",
+            |s| {
+                s.bits = Some(P42_WRONG_BITS);
+                s.declare(
+                    "BadDifficulty",
+                    json!({"expected": P42_BITS, "found": P42_WRONG_BITS}),
+                    &[7],
+                );
+            },
+        ),
+        p42_spec(
+            "iso_08_no_transactions",
+            "A",
+            "rule",
+            "the committed P4.1 block whose list is empty, whose claimed root matches and whose proof of work passes: `NoTransactions` is the only verdict the published input can produce",
+            |s| {
+                s.expected_height = 50;
+                s.median_time_past = 0;
+                s.now = u64::MAX;
+                s.declare("NoTransactions", Value::Null, &[8]);
+                s.declare_coinbase_count = 0;
+                s.declare_first_is_coinbase = false;
+                s.reuse_of = Some("empty_list_matching_claim");
+            },
+        ),
+        p42_spec(
+            "iso_09_too_many_transactions",
+            "A",
+            "rule",
+            "`tx_count` is 2001, index 0 is the only coinbase, and `expected.count` is the length the variant itself carried out of `validate_structure`",
+            |s| {
+                s.transactions = p42_large(2_001);
+                s.declare(
+                    "TooManyTransactions",
+                    json!({"count": 2_001}),
+                    &[9],
+                );
+            },
+        ),
+        p42_spec(
+            "iso_10_first_not_coinbase",
+            "A",
+            "rule",
+            "`coinbase_flags` is `00`: two ordinary spends, so B-10 fires on a list of legal length",
+            |s| {
+                s.transactions = vec![p42_spend(20), p42_spend(21)];
+                s.declare("FirstNotCoinbase", Value::Null, &[10]);
+                s.declare_coinbase_count = 0;
+                s.declare_first_is_coinbase = false;
+            },
+        ),
+        p42_spec(
+            "iso_11_duplicate_coinbase",
+            "A",
+            "rule",
+            "`coinbase_flags` is `11`: two production coinbases at two heights, so the second is at index 1",
+            |s| {
+                s.transactions = p42_two_coinbases();
+                s.declare("DuplicateCoinbase", Value::Null, &[11]);
+                s.declare_coinbase_count = 2;
+            },
+        ),
+        p42_spec(
+            "iso_11_duplicate_coinbase_at_last_index",
+            "A",
+            "rule",
+            "`coinbase_flags` is `100001`: the scan of `transactions[1..]` has to reach the sixth element, so a port that stops at index 1 is caught by this case alone",
+            |s| {
+                s.transactions = vec![
+                    p33_coinbase(5),
+                    p42_spend(30),
+                    p42_spend(31),
+                    p42_spend(32),
+                    p42_spend(33),
+                    p33_coinbase(6),
+                ];
+                s.declare("DuplicateCoinbase", Value::Null, &[11]);
+                s.declare_coinbase_count = 2;
+            },
+        ),
+        p42_spec(
+            "iso_12_timestamp_too_old",
+            "A",
+            "rule",
+            "height 4 makes `header_at` produce `timestamp == median_time_past` without an override, so the equality is a construction fact",
+            |s| {
+                s.height = 4;
+                s.expected_height = 4;
+                s.transactions = p42_single(4);
+                s.declare(
+                    "TimestampTooOld",
+                    json!({"median": P42_MEDIAN, "found": P42_MEDIAN}),
+                    &[12],
+                );
+            },
+        ),
+        p42_spec(
+            "iso_13_timestamp_too_far_future",
+            "A",
+            "rule",
+            "height 7211 makes `header_at` produce `timestamp == now + 7201` without an override, one second past the anchor limit",
+            |s| {
+                s.height = 7_211;
+                s.expected_height = 7_211;
+                s.transactions = p42_single(7_211);
+                s.declare(
+                    "TimestampTooFarFuture",
+                    json!({"now": P42_NOW, "found": P42_OVER_LIMIT}),
+                    &[13],
+                );
+            },
+        ),
+        p42_spec(
+            "iso_14_root_mismatch",
+            "A",
+            "rule",
+            "the committed P4.1 block whose fourth transaction made the claim stale: `roots_match` false, `proof_of_work_meets_target` true, `coinbase_flags` `1000`",
+            |s| {
+                s.reuse_of = Some("stale_after_extra_transaction");
+                s.expected_height = 20;
+                s.median_time_past = 0;
+                s.now = u64::MAX;
+                s.declare("RootMismatch", Value::Null, &[14]);
+            },
+        ),
+        p42_spec(
+            "iso_15_insufficient_pow",
+            "A",
+            "rule",
+            "`roots_match` true with `proof_of_work_meets_target` false — a pairing the P4.1 corpus cannot contain, because its invariant is `accepted == roots_match && pow`",
+            |s| {
+                s.honest_pow = false;
+                s.declare("InsufficientProofOfWork", Value::Null, &[15]);
+            },
+        ),
+        // ---- Group B: the boundary itself, one step either side where a step exists ----
+        p42_spec(
+            "bnd_09_count_at_limit_accept",
+            "B",
+            "boundary",
+            "`tx_count` 2000 with `coinbase_flags` `1` followed by 1999 `0`s: the limit is inclusive, and the accept is the reference's own verdict on a list that spends UTXOs nobody has",
+            |s| {
+                s.transactions = p42_large(2_000);
+                s.declare("Ok", Value::Null, &[]);
+            },
+        ),
+        p42_spec(
+            "bnd_12_equal_median_reject",
+            "B",
+            "boundary",
+            "the same header as `.bnd_12_one_above_median_accept` with `median_time_past` one second later, so `timestamp == median` rejects",
+            |s| {
+                s.median_time_past = P42_ANCHOR_TS;
+                s.declare(
+                    "TimestampTooOld",
+                    json!({"median": P42_ANCHOR_TS, "found": P42_ANCHOR_TS}),
+                    &[12],
+                );
+            },
+        ),
+        p42_spec(
+            "bnd_12_one_above_median_accept",
+            "B",
+            "boundary",
+            "`timestamp == median_time_past + 1`: the one-second difference from the case above is the only thing that changes the verdict",
+            |s| s.declare("Ok", Value::Null, &[]),
+        ),
+        p42_spec(
+            "bnd_13_equal_limit_accept",
+            "B",
+            "boundary",
+            "`now` is `timestamp - 7200`, so the limit equals the timestamp exactly and B-13's comparison is strict",
+            |s| {
+                s.median_time_past = 0;
+                s.now = P42_ANCHOR_TS - MAX_FUTURE_SECONDS;
+                s.declare("Ok", Value::Null, &[]);
+            },
+        ),
+        p42_spec(
+            "bnd_13_one_above_reject",
+            "B",
+            "boundary",
+            "`now` one second below the case above, with every other published byte identical: the reject is one clock second away from the accept",
+            |s| {
+                s.median_time_past = 0;
+                s.now = P42_ANCHOR_TS - MAX_FUTURE_SECONDS - 1;
+                s.declare(
+                    "TimestampTooFarFuture",
+                    json!({"now": P42_ANCHOR_TS - MAX_FUTURE_SECONDS - 1, "found": P42_ANCHOR_TS}),
+                    &[13],
+                );
+            },
+        ),
+        p42_spec(
+            "bnd_13_near_max_edge_reject",
+            "B",
+            "boundary",
+            "`now = u64::MAX - 7201` with `timestamp = u64::MAX`: the saturating limit is `MAX - 1`, so the timestamp is one past it and nothing has clamped",
+            |s| {
+                s.median_time_past = 0;
+                s.now = P42_EDGE_NOW;
+                s.timestamp = Some(u64::MAX);
+                s.declare(
+                    "TimestampTooFarFuture",
+                    json!({"now": P42_EDGE_NOW, "found": u64::MAX}),
+                    &[13],
+                );
+            },
+        ),
+        p42_spec(
+            "bnd_13_near_max_last_exact_accept",
+            "B",
+            "boundary",
+            "`now = u64::MAX - 7200` with `timestamp = u64::MAX`: the limit is `MAX` exactly, the last value before the addition starts to clamp",
+            |s| {
+                s.median_time_past = 0;
+                s.now = P42_LAST_EXACT_NOW;
+                s.timestamp = Some(u64::MAX);
+                s.declare("Ok", Value::Null, &[]);
+            },
+        ),
+        p42_spec(
+            "bnd_13_near_max_saturating_accept",
+            "B",
+            "boundary",
+            "`now = u64::MAX` with a realistic timestamp: the corpus's only witness against a port that writes `now + 7200` without saturating, because the wrapping limit there is 7199. The block is the committed P4.1 five-transaction accept, which already carries this context",
+            |s| {
+                s.median_time_past = 0;
+                s.now = u64::MAX;
+                s.declare("Ok", Value::Null, &[]);
+                s.reuse_of = Some("five_transaction_block");
+            },
+        ),
+        // ---- Group C: both faults of an adjacent pair present at once, the earlier row wins ----
+        p42_spec(
+            "pair_03_04_chain_and_height",
+            "C",
+            "ordering",
+            "`violated_rules` is `[3, 4]` and `reported_rule` is 3: the chain and the height are both wrong, and the chain is what the reference named",
+            |s| {
+                s.chain = Some(0);
+                s.height = 6;
+                s.transactions = p42_single(6);
+                s.declare(
+                    "WrongChain",
+                    json!({"expected": REGTEST_CHAIN.0, "found": 0}),
+                    &[3, 4],
+                );
+            },
+        ),
+        p42_spec(
+            "pair_04_05_height_and_previous",
+            "C",
+            "ordering",
+            "`violated_rules` is `[4, 5]` and `reported_rule` is 4: a wrong height masks a wrong previous hash",
+            |s| {
+                s.height = 6;
+                s.previous = Some(Hash256([0u8; 32]));
+                s.transactions = p42_single(6);
+                s.declare(
+                    "BadHeight",
+                    json!({"expected": P42_HEIGHT, "found": 6}),
+                    &[4, 5],
+                );
+            },
+        ),
+        p42_spec(
+            "pair_05_06_previous_and_engine",
+            "C",
+            "ordering",
+            "`violated_rules` is `[5, 6]` and `reported_rule` is 5: a bad previous hash masks the scratchpad being selected while the header advertises the trivial id",
+            |s| {
+                s.previous = Some(Hash256([0u8; 32]));
+                s.engine = P42Engine::ScratchPad;
+                s.declare("BadPreviousHash", Value::Null, &[5, 6]);
+            },
+        ),
+        p42_spec(
+            "pair_06_07_engine_and_bits",
+            "C",
+            "ordering",
+            "`violated_rules` is `[6, 7]` and `reported_rule` is 6: the engine mismatch masks the one-mantissa-step bits mismatch",
+            |s| {
+                s.engine = P42Engine::ScratchPad;
+                s.bits = Some(P42_WRONG_BITS);
+                s.declare(
+                    "WrongEngine",
+                    json!({
+                        "expected": ScratchPadEngine::balanced().id(),
+                        "found": TrivialEngine::new().id(),
+                    }),
+                    &[6, 7],
+                );
+            },
+        ),
+        p42_spec(
+            "pair_07_08_bits_and_empty",
+            "C",
+            "ordering",
+            "`violated_rules` is `[7, 8]` and `reported_rule` is 7: the bits mismatch is returned without ever reaching the empty-list check, so `transactions` is published as `[]` next to a `BadDifficulty`",
+            |s| {
+                s.bits = Some(P42_WRONG_BITS);
+                s.transactions = Vec::new();
+                s.declare(
+                    "BadDifficulty",
+                    json!({"expected": P42_BITS, "found": P42_WRONG_BITS}),
+                    &[7, 8],
+                );
+                s.declare_coinbase_count = 0;
+                s.declare_first_is_coinbase = false;
+            },
+        ),
+        p42_spec(
+            "pair_09_10_over_limit_and_first_not_coinbase",
+            "C",
+            "ordering",
+            "`violated_rules` is `[9, 10]` and `reported_rule` is 9: the list is over the limit *and* carries no coinbase at index 0, so the `TooManyTransactions` verdict cannot be attributed to the coinbase scan that follows it",
+            |s| {
+                s.transactions = p42_large_without_coinbase(2_001);
+                s.declare(
+                    "TooManyTransactions",
+                    json!({"count": 2_001}),
+                    &[9, 10],
+                );
+                s.declare_coinbase_count = 0;
+                s.declare_first_is_coinbase = false;
+            },
+        ),
+        p42_spec(
+            "pair_10_11_first_not_coinbase_and_duplicate",
+            "C",
+            "ordering",
+            "`coinbase_flags` is `01` and `violated_rules` is `[10, 11]`: B-10 fires on the missing first coinbase before the scan that would report the duplicate",
+            |s| {
+                s.transactions = vec![p42_spend(40), p33_coinbase(6)];
+                s.declare("FirstNotCoinbase", Value::Null, &[10, 11]);
+                s.declare_coinbase_count = 1;
+                s.declare_first_is_coinbase = false;
+            },
+        ),
+        p42_spec(
+            "pair_11_12_duplicate_and_old_timestamp",
+            "C",
+            "ordering",
+            "`violated_rules` is `[11, 12]`: two coinbases and a timestamp equal to the median, and the duplicate is what the reference reported",
+            |s| {
+                s.transactions = p42_two_coinbases();
+                s.timestamp = Some(P42_MEDIAN);
+                s.declare("DuplicateCoinbase", Value::Null, &[11, 12]);
+                s.declare_coinbase_count = 2;
+            },
+        ),
+        p42_spec(
+            "pair_12_13_old_and_future",
+            "C",
+            "ordering",
+            "`violated_rules` is `[12, 13]` with `median_time_past` above `now + 7200` — a clock pair no node can produce, which is why this case is labelled synthetic; the stale check runs first and reports the old timestamp",
+            |s| {
+                s.timestamp = Some(P42_OVER_LIMIT);
+                s.median_time_past = P42_OVER_LIMIT + 1;
+                s.synthetic = true;
+                s.declare(
+                    "TimestampTooOld",
+                    json!({"median": P42_OVER_LIMIT + 1, "found": P42_OVER_LIMIT}),
+                    &[12, 13],
+                );
+            },
+        ),
+        p42_spec(
+            "pair_14_15_root_mismatch_and_failing_pow",
+            "C",
+            "ordering",
+            "the committed P4.1 block with a stale root *and* a failing nonce, re-asserted through the validator's verdict: `violated_rules` is `[14, 15]`, `reported_rule` is 14",
+            |s| {
+                s.expected_height = 25;
+                s.median_time_past = 0;
+                s.now = u64::MAX;
+                s.declare("RootMismatch", Value::Null, &[14, 15]);
+                s.reuse_of = Some("stale_root_with_failing_proof_of_work");
+            },
+        ),
+        p42_spec(
+            "pair_14_15_zero_root_claim_and_failing_pow",
+            "C",
+            "ordering",
+            "the committed P4.1 block whose claim is the all-zero digest and whose nonce fails, so the pair is witnessed a second time from a different claim shape: `violated_rules` `[14, 15]`, `reported_rule` 14",
+            |s| {
+                s.expected_height = 26;
+                s.median_time_past = 0;
+                s.now = u64::MAX;
+                s.declare("RootMismatch", Value::Null, &[14, 15]);
+                s.reuse_of = Some("zero_claim_with_failing_proof_of_work");
+            },
+        ),
+        // ---- Group D: one block, every jointly satisfiable later guard broken at once ----
+        p42_spec(
+            "chaos_all_later_guards_broken",
+            "D",
+            "ordering",
+            "`violated_rules` holds ten of the twelve later conditions — 4, 5, 6, 7, 10, 11, 12, 13, 14, 15 — and `reported_rule` is 3, so B-3 dominates all of them at once. B-8 and B-9 are absent by construction: the list has two transactions, and the empty list that B-8 needs excludes B-9, B-10 and B-11",
+            |s| {
+                s.height = 6;
+                s.chain = Some(0);
+                s.previous = Some(Hash256([0u8; 32]));
+                s.bits = Some(P42_WRONG_BITS);
+                s.engine = P42Engine::ScratchPad;
+                s.timestamp = Some(P42_OVER_LIMIT);
+                s.median_time_past = P42_OVER_LIMIT + 1;
+                s.transactions = vec![p42_spend(50), p33_coinbase(6)];
+                s.stale_claim = true;
+                s.honest_pow = false;
+                s.synthetic = true;
+                s.declare(
+                    "WrongChain",
+                    json!({"expected": REGTEST_CHAIN.0, "found": 0}),
+                    &[3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15],
+                );
+                s.declare_coinbase_count = 1;
+                s.declare_first_is_coinbase = false;
+            },
+        ),
+    ];
+    specs
+}
+
+/// The corpus's 34 cases, each one produced by `p42_emit` and therefore by a direct call into
+/// `Block::validate_structure`.
+fn block_structure_cases() -> Vec<Value> {
+    p42_specs().iter().map(p42_emit).collect()
+}
+
+/// The P4.2A envelope: the P4.1 envelope shape with this corpus's own source revision, so one
+/// file answers "which Rust code produced these verdicts" without consulting the manifest.
+fn p42_envelope(group: &str, intent: &str, note: &str, cases: Vec<Value>) -> String {
+    let doc = json!({
+        "schema": "zro-baseline-vectors/1",
+        "group": group,
+        "intent": intent,
+        "note": note,
+        "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+        "source_commit": P42_SOURCE_COMMIT,
+        "provenance": "every `expected` value was produced by a direct call to the shipping \
+`zerocoin/` Rust function `consensus::block::Block::validate_structure` at `source_commit`, \
+which is where rules B-3 through B-15 live; every computed root by `Block::compute_merkle_root` \
+on that call's own transaction list, every leaf id by `Transaction::txid`, every coinbase flag \
+by `Transaction::is_coinbase`, every payload field by matching on the variant that call \
+actually returned, and every header nonce by `consensus::pow::mine` or by the deterministic \
+failing-nonce scan `consensus_rules.rs` uses. No verdict, payload, rule row or digest here is \
+taken from another implementation, predicted by a design document, computed by hand, or \
+derived by a Python or C++ program",
+        "reference_commits": {
+            "validate_structure_introduced": P42_REFERENCE_COMMIT,
+            "block_error_variants_introduced": P42_REFERENCE_COMMIT,
+            "coinbase_rule_introduced": P42_REFERENCE_COMMIT,
+            "max_block_transactions_introduced": P42_REFERENCE_COMMIT,
+        },
+        "generator": "zerocoin/tests/export_baseline_vectors.rs, `p42_*` functions, added by the \
+P4.2A commit that lands immediately after the baseline; a fixture cannot truthfully record the \
+hash of the commit that contains it, so `source_commit` names the code and this field names the \
+exporter separately",
+        "case_count": cases.len(),
+        "cases": cases,
+    });
+    let mut text = serde_json::to_string_pretty(&doc).expect("reference document serialises");
+    text.push('\n');
+    text
+}
+
+/// The P4.2A corpus and its manifest, mirroring `p41_corpus()` above: same `add!` shape, same
+/// write-versus-compare protocol, different root. Every count, id list, rule-coverage array and
+/// synthetic label in the manifest is computed from the cases that were just emitted, so the
+/// manifest cannot describe a corpus that no longer exists.
+fn p42_corpus() -> Vec<(String, String)> {
+    let cases = block_structure_cases();
+    let ids: Vec<String> = cases
+        .iter()
+        .map(|case| {
+            case["id"]
+                .as_str()
+                .expect("every case publishes an id")
+                .to_string()
+        })
+        .collect();
+    let by_group = |letter: &str| -> usize {
+        cases
+            .iter()
+            .filter(|case| case["input"]["group"].as_str() == Some(letter))
+            .count()
+    };
+    let by_intent = |name: &str| -> usize {
+        cases
+            .iter()
+            .filter(|case| case["intent"].as_str() == Some(name))
+            .count()
+    };
+    let accepted_ids: Vec<&str> = cases
+        .iter()
+        .filter(|case| case["expected"]["accepted"].as_bool() == Some(true))
+        .map(|case| case["id"].as_str().expect("id"))
+        .collect();
+    let synthetic_ids: Vec<&str> = cases
+        .iter()
+        .filter(|case| case["input"]["synthetic_context"].as_bool() == Some(true))
+        .map(|case| case["id"].as_str().expect("id"))
+        .collect();
+    let reused_ids: Vec<&str> = cases
+        .iter()
+        .filter(|case| case["input"]["reused_from"].is_string())
+        .map(|case| case["id"].as_str().expect("id"))
+        .collect();
+    let mut reported_rows: Vec<u8> = cases
+        .iter()
+        .filter_map(|case| case["expected"]["reported_rule"].as_u64().map(|row| row as u8))
+        .collect();
+    reported_rows.sort_unstable();
+    reported_rows.dedup();
+    let mut violated_rows: Vec<u8> = cases
+        .iter()
+        .flat_map(|case| {
+            case["expected"]["violated_rules"]
+                .as_array()
+                .expect("every case publishes violated_rules")
+                .iter()
+                .map(|row| row.as_u64().expect("a rule row") as u8)
+        })
+        .collect();
+    violated_rows.sort_unstable();
+    violated_rows.dedup();
+    let precedence: Vec<Value> = cases
+        .iter()
+        .filter(|case| case["intent"].as_str() == Some("ordering"))
+        .map(|case| {
+            json!({
+                "id": case["id"],
+                "violated_rules": case["expected"]["violated_rules"],
+                "reported_rule": case["expected"]["reported_rule"],
+            })
+        })
+        .collect();
+
+    let mut files: Vec<(String, String)> = Vec::new();
+    let mut counts: Vec<Value> = Vec::new();
+
+    macro_rules! add {
+        ($path:expr, $group:expr, $intent:expr, $note:expr, $cases:expr) => {{
+            let cases: Vec<Value> = $cases;
+            counts.push(json!({"path": $path, "group": $group, "cases": cases.len()}));
+            files.push(($path.to_string(), p42_envelope($group, $intent, $note, cases)));
+        }};
+    }
+
+    add!(
+        "chain/block_structure.json",
+        "chain.block_structure",
+        "rule",
+        "The whole structural validator, B-3 through B-15: thirteen guards in the order \
+`Block::validate_structure` evaluates them, plus the precedence between every adjacent pair the \
+corrected design contract froze as representable. Each case publishes the header, the exact \
+serialized transactions, the seven-key validator context and which engine was selected, and the \
+expected side publishes the verdict the reference returned, the payload read out of that \
+variant, the evaluation row it belongs to, and the complete set of rules the published input \
+violates — so a rejection is evidence about ordering as well as about one guard.",
+        cases.clone()
+    );
+
+    let manifest = json!({
+        "schema": "zro-baseline-vectors/1",
+        "phase": "P4.2A",
+        "group": "chain.block_structure",
+        "description": "Rust-authoritative validation fixtures for the Block Structure rules B-3 \
+through B-15 of `zerocoin::consensus::block::Block::validate_structure`, generated for the C++ \
+kernel's future port of that function. This is a fixture-first milestone: it publishes what Rust \
+returns, and it does not implement, run or claim agreement from any C++ validator.",
+        "total_cases": ids.len(),
+        "case_ids": ids,
+        "groups": {
+            "A_isolation": by_group("A"),
+            "B_boundary": by_group("B"),
+            "C_adjacent_pair": by_group("C"),
+            "D_dominance": by_group("D"),
+            "sum": by_group("A") + by_group("B") + by_group("C") + by_group("D"),
+        },
+        "intents": {
+            "rule": by_intent("rule"),
+            "boundary": by_intent("boundary"),
+            "ordering": by_intent("ordering"),
+        },
+        "verdicts": {
+            "accepted": accepted_ids.len(),
+            "accepted_case_ids": accepted_ids,
+            "rejected": ids.len() - accepted_ids.len(),
+        },
+        "rule_coverage": {
+            "rules_covered": [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+            "reported_by_at_least_one_case": reported_rows,
+            "violated_in_at_least_one_case": violated_rows,
+            "note": "`reported_by_at_least_one_case` is the set of guards some case had the \
+reference actually name; `violated_in_at_least_one_case` is the set of guards some case's \
+published input fails, whether or not an earlier one masked it. Both are computed from the \
+cases at export, so neither is a claim this file makes on its own behalf.",
+        },
+        "precedence": {
+            "witnesses": precedence,
+            "adjacent_pairs_represented": [
+                [3, 4], [4, 5], [5, 6], [6, 7], [7, 8], [9, 10], [10, 11], [11, 12], [12, 13],
+                [14, 15],
+            ],
+            "basis": "a pair is represented when one case's published input violates both rows \
+and `reported_rule` equals the smaller of them. The emitter asserts that equality for all 34 \
+cases, so the array above is a summary of assertions that ran during generation, not a list of \
+hopes.",
+        },
+        "deferred_pairs": [
+            {
+                "pair": [8, 9],
+                "pair_before": "B-8_B-9",
+                "fixture": "none",
+                "reason": "`transactions.is_empty()` and `transactions.len() > \
+MAX_BLOCK_TRANSACTIONS` are mutually exclusive, so no input can violate both rows at once and no \
+input can distinguish the two relative orders. The relative order of B-8 and B-9 is \
+observationally vacuous.",
+                "not_claimed": "this corpus does not claim to have experimentally proven which of \
+B-8 and B-9 a conforming port checks first, and no `.pair_08_09` case identifier exists.",
+                "instead_guaranteed_by": [
+                    "`.iso_08_no_transactions` and `.pair_07_08_bits_and_empty`: B-8 is reached \
+without any read of `transactions[0]`, so an empty list cannot be masked by a later rule",
+                    "`.iso_09_too_many_transactions`: `count == 2001` returns \
+`TooManyTransactions` with the length read back out of the variant",
+                    "`.pair_09_10_over_limit_and_first_not_coinbase`: B-9 dominates B-10, and the \
+list carries no coinbase at all, so the verdict cannot be attributed to the coinbase scan",
+                    "the emitter's per-case assertion that the derived violated set never holds \
+both 8 and 9",
+                ],
+            },
+            {
+                "pair": [13, 14],
+                "pair_before": "B-13_B-14",
+                "fixture": "none",
+                "reason": "the pair is representable — a far-future timestamp together with a stale \
+root — but the corrected P4.2 design contract did not freeze a case for it, and this milestone \
+does not add one. A port's ordering of these two rows is therefore not covered by this corpus \
+yet.",
+                "not_claimed": "nothing here asserts B-13 precedes B-14, in either direction.",
+            },
+        ],
+        "synthetic_context_cases": synthetic_ids,
+        "synthetic_context_meaning": "a case labelled synthetic deliberately combines published \
+values that a running node would never produce together — `median_time_past` above `now + \
+MAX_FUTURE_SECONDS`, or eleven guards broken in one block. The isolation and boundary cases reach \
+their verdicts with ordinary contexts; these two need the label so no reader mistakes an \
+observation about guard order for an observation about the network.",
+        "reused_from_p41": reused_ids,
+        "reuse_meaning": "the listed cases replay a committed `chain.claimed_merkle_root` block \
+byte for byte — the same header fields, the same serialized transactions, the same seven-key \
+validation context — and add only a validator-level claim P4.1 could not make. \
+`p42_reference_fixtures_are_reproducible_and_pinned` compares them against \
+`test/p41-vectors/chain/claimed_merkle_root.json` on disk, so the identity is checked against the \
+published corpus rather than against a second copy of the same emitter call. The P4.1 corpus \
+itself is not modified by this milestone.",
+        "source": "cargo +stable-x86_64-pc-windows-gnu test --test export_baseline_vectors",
+        "source_commit": P42_SOURCE_COMMIT,
+        "source_commit_rule": "the newest commit that touches a Rust build input (`zerocoin/src`, \
+`zerocoin/Cargo.toml`, `zerocoin/Cargo.lock`, `zerocoin/build.rs`) and therefore the production \
+code that produced every value here; `zerocoin/src` is byte-identical between it and the baseline \
+this corpus is committed on. Between it and `reference_commits.validate_structure_introduced` the \
+only edit to `block.rs` extracts B-3 and B-4 into `validate_header_identity`, which changes the \
+call graph and no verdict.",
+        "generator": "zerocoin/tests/export_baseline_vectors.rs, `p42_*` functions, added by the \
+P4.2A commit that lands immediately after the baseline; no fixture can record the hash of the \
+commit that contains it, and none here claims to have existed before this exporter did",
+        "reference_commits": {
+            "validate_structure_introduced": P42_REFERENCE_COMMIT,
+            "block_error_variants_introduced": P42_REFERENCE_COMMIT,
+            "coinbase_rule_introduced": P42_REFERENCE_COMMIT,
+            "max_block_transactions_introduced": P42_REFERENCE_COMMIT,
+        },
+        "provenance": P42_SOURCE_COMMIT.to_string() + " — see `source_commit_rule`, `generator` \
+and `reference_commits`; the origin of every expected value is the Rust function named in \
+`description`, called directly by the exporter",
+        "regenerate": "ZRO_VECTOR_WRITE=1 with the same command, then review the diff",
+        "authority_split": {
+            "rust_is_the_only_origin_of": [
+                "accepted", "error_kind", "error_payload", "reported_rule", "violated_rules",
+                "computed_root", "claimed_root", "proof_of_work_meets_target", "coinbase_flags",
+                "leaf ids and serialized transaction bytes",
+            ],
+            "downstream_verification_must_not_be_confused_with": "the Python harness re-derives \
+transaction ids, Merkle roots and canonical serializations from the published hex as a second \
+opinion about the *encoding*, and a C++ port will later be diffed against the *verdicts* in P4.2B \
+(P4.2B, not this milestone). Neither one generates an expected value here, and neither one has \
+been run against a C++ Block Structure validator, because this milestone does not implement one \
+and claims no parity with it.",
+            "exporter_declaration_check": "each fixture carries a declared construction intent — \
+the design contract's predicted variant, payload and rule set — which `p42_emit` compares with \
+what the reference returned and panics on if they differ. The declarations are inputs to the \
+export, not fields of the corpus, so no predicted value can reach a published file.",
+        },
+        "independent_verifier": "test/harness/zro_vectors.py already provides the transaction \
+deserializer, `tx_txid`, `tx_is_coinbase` and `merkle_root` needed to re-derive every published \
+digest and every `serialized_hex` from bytes alone; `run_vectors.py` registers no verifier for \
+this group and this corpus does not wire one in, so the Rust exporter remains the origin of every \
+value published here",
+        "determinism": [
+            "no wall clock, RNG, wallet, data directory or network is used: `now` is a literal in \
+every case, including the three that put it next to `u64::MAX` to separate saturating from \
+wrapping addition",
+            "every header nonce comes from `consensus::pow::mine`, a deterministic single-thread \
+upward scan from zero, or from the same deterministic failing-nonce scan `consensus_rules.rs` \
+uses; neither depends on a thread count or a clock",
+            "every transaction is a literal: `coinbase_transaction` at a fixed height with the \
+published key 1, one of the P0 fixture shapes from a single seed byte, or one of the two filler \
+shapes with the index carried in `lock_time` so no two leaves collide",
+            "the 2000 and 2001 cases are the same list at two lengths, so the accepted/rejected \
+pair differs by one transaction and one root",
+            "five cases are rebuilt from the committed P4.1 corpus on disk, and the rebuild is \
+compared with the published bytes before anything is derived from them",
+            "JSON object keys are emitted in sorted order by serde_json",
+        ],
+        "notes": [
+            "`MAX_BLOCK_TRANSACTIONS` is 2000 and the guard is `len() > 2000`, so 2000 is \
+admitted and 2001 is rejected with the length published back out of the variant.",
+            "`validate_structure` is called directly, with the seven arguments the reference's own \
+in-source test uses, and never through `Chain::connect_block`: the large-list transactions spend \
+UTXOs that do not exist, and `connect_block` additionally runs `difficulty::validate_bits` and the \
+reward and UTXO checks that a structural fixture has no business asserting.",
+            "Three orderings are deliberately not conflated here: `error_kind` names the \
+`BlockError` variant, `reported_rule` is the row of `validate_structure`'s body that returned it, \
+and the kernel's own `BlockErrorKind` numbering is a C++-side sequence this corpus does not assign \
+or assert.",
+            "B-15 is reachable only when B-14 passed, which is why `.iso_15_insufficient_pow` \
+claims its own root — a shape the P4.1 corpus cannot contain at all.",
+            "The version field is published and never validated (F-2), so no case here depends on \
+it; `BLOCK_VERSION` is written by `header_at` and read by nothing in the path under test.",
+            "These 34 cases are new with the `p42_*` exporter. `reference_commits` names the commit \
+whose code is under test, not the commit that introduced these cases, because a fixture cannot \
+truthfully claim to predate its own generator.",
+        ],
+        "files": counts,
+    });
+    let mut text = serde_json::to_string_pretty(&manifest).expect("reference manifest serialises");
+    text.push('\n');
+    files.push(("manifest.json".to_string(), text));
+
+    files.sort_by(|left, right| left.0.cmp(&right.0));
+    files
+}
+
+fn p42_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("test")
+        .join("p42-vectors")
+}
+
+#[test]
+fn p42_vectors_match_the_committed_reference_corpus() {
+    let write = std::env::var("ZRO_VECTOR_WRITE")
+        .map(|value| value == "1")
+        .unwrap_or(false);
+    let root = p42_root();
+    let mut drift: Vec<String> = Vec::new();
+    let mut written = 0usize;
+
+    for (relative, text) in p42_corpus() {
+        let path = root.join(&relative);
+        if write {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).expect("reference directory is creatable");
+            }
+            fs::write(&path, text.as_bytes()).expect("reference vector is writable");
+            written += 1;
+        } else {
+            let committed = fs::read_to_string(&path).unwrap_or_else(|error| {
+                panic!(
+                    "missing reference vector {}: {error}\nrun with ZRO_VECTOR_WRITE=1 to regenerate",
+                    path.display()
+                )
+            });
+            if committed != text {
+                drift.push(relative);
+            }
+        }
+    }
+
+    if write {
+        println!("wrote {written} reference vector files under {}", root.display());
+    } else {
+        assert!(
+            drift.is_empty(),
+            "these reference vectors differ from the committed corpus: {drift:?}\n\
+             run with ZRO_VECTOR_WRITE=1 to regenerate, then review the diff"
+        );
+    }
+}
+
+/// The P4.2A half of the determinism gate, the schema gate, and the corpus's own consistency
+/// test. Every assertion below reads only what the cases publish: each header, transaction list
+/// and validator context is rebuilt from the published JSON, `Block::validate_structure` is
+/// called again on that rebuilt input, and the re-call must return the variant, the payload and
+/// the rule row written beside it. Nothing consults the emitters, so a case that could no longer
+/// be reproduced from its own bytes fails here rather than at generation time. The five reuse
+/// cases are additionally compared against `test/p41-vectors/chain/claimed_merkle_root.json` on
+/// disk, which is where the byte-identity claim about P4.1 becomes executable.
+#[test]
+fn p42_reference_fixtures_are_reproducible_and_pinned() {
+    let first = p42_corpus();
+    let second = p42_corpus();
+    assert_eq!(first, second, "two generations must be byte-identical");
+    assert_eq!(first.len(), 2, "one group plus the manifest");
+    assert_eq!(first[0].0, "chain/block_structure.json", "the group file sorts first");
+
+    let document: Value =
+        serde_json::from_str(&first[0].1).expect("the generated corpus parses as JSON");
+    assert_eq!(document["schema"], json!("zro-baseline-vectors/1"), "schema");
+    assert_eq!(document["group"], json!("chain.block_structure"), "group");
+    assert_eq!(document["source_commit"], json!(P42_SOURCE_COMMIT), "source_commit");
+    let cases = document["cases"].as_array().expect("a cases array").clone();
+    assert_eq!(document["case_count"], json!(cases.len()), "case_count matches the array");
+    assert_eq!(cases.len(), 34, "the pinned case count for P4.2A");
+
+    let manifest: Value =
+        serde_json::from_str(&first[1].1).expect("the generated manifest parses as JSON");
+    assert_eq!(manifest["phase"], json!("P4.2A"), "phase");
+    assert_eq!(manifest["group"], json!("chain.block_structure"), "manifest group");
+    assert_eq!(manifest["total_cases"], json!(34), "manifest total_cases");
+    assert_eq!(manifest["source_commit"], json!(P42_SOURCE_COMMIT), "manifest source_commit");
+    assert_eq!(
+        manifest["case_ids"].as_array().expect("case_ids").len(),
+        34,
+        "the manifest lists one id per case"
+    );
+
+    // The arithmetic the mission statement froze, checked against the ids actually published.
+    let ids: Vec<&str> = cases.iter().map(|c| c["id"].as_str().expect("id")).collect();
+    let unique: std::collections::BTreeSet<&str> = ids.iter().copied().collect();
+    assert_eq!(unique.len(), 34, "every fixture id must appear exactly once");
+    for &id in &ids {
+        assert!(id.starts_with("chain.block_structure."), "{id}: outside the group namespace");
+        assert_ne!(id, "chain.block_structure.pair_08_09", "the deferred pair must not gain a fake case");
+    }
+    let count_group = |letter: &str| -> usize {
+        cases
+            .iter()
+            .filter(|c| c["input"]["group"].as_str() == Some(letter))
+            .count()
+    };
+    assert_eq!(count_group("A"), 14, "Group A is 14 isolation cases");
+    assert_eq!(count_group("B"), 8, "Group B is 8 boundary cases");
+    assert_eq!(count_group("C"), 11, "Group C is the 11 representable adjacent-pair cases");
+    assert_eq!(count_group("D"), 1, "Group D is the single dominance witness");
+    assert_eq!(
+        manifest["groups"],
+        json!({
+            "A_isolation": 14,
+            "B_boundary": 8,
+            "C_adjacent_pair": 11,
+            "D_dominance": 1,
+            "sum": 34,
+        }),
+        "the manifest's group counts must equal the published corpus"
+    );
+
+    let (mut rule, mut boundary, mut ordering) = (0usize, 0usize, 0usize);
+    let (mut accepted_count, mut rejected_count) = (0usize, 0usize);
+    let mut reported: Vec<u8> = Vec::new();
+    for value in &cases {
+        match value["intent"].as_str().expect("intent") {
+            "rule" => rule += 1,
+            "boundary" => boundary += 1,
+            "ordering" => ordering += 1,
+            other => panic!(
+                "{}: intent `{other}` is not one of rule, boundary, ordering",
+                value["id"]
+            ),
+        }
+        if value["expected"]["accepted"].as_bool().expect("accepted") {
+            accepted_count += 1;
+            assert_eq!(value["expected"]["error_kind"], Value::Null, "an accept publishes no variant");
+            assert_eq!(value["expected"]["error_payload"], Value::Null, "an accept publishes no payload");
+            assert_eq!(value["expected"]["reported_rule"], Value::Null, "an accept reports no row");
+            assert_eq!(value["expected"]["violated_rules"], json!([]), "an accept implies no violated guard");
+        } else {
+            rejected_count += 1;
+            assert!(value["expected"]["error_kind"].is_string(), "a rejection publishes a variant name");
+            assert!(value["expected"]["reported_rule"].is_u64(), "a rejection publishes an evaluation row");
+            assert_eq!(
+                value["expected"]["is_first_violation"],
+                json!(true),
+                "{}: a rejection must name the earliest guard the published input fails",
+                value["id"]
+            );
+            reported.push(value["expected"]["reported_rule"].as_u64().expect("row") as u8);
+        }
+    }
+    assert_eq!((rule, boundary, ordering), (14, 8, 12), "the published intent mix");
+    assert_eq!((accepted_count, rejected_count), (5, 29), "the published verdict mix");
+    reported.sort_unstable();
+    reported.dedup();
+    assert_eq!(
+        reported,
+        (3u8..=15).collect::<Vec<u8>>(),
+        "every guard B-3 through B-15 has to be the reported one in at least one case"
+    );
+
+    // Rebuild and re-validate every case from its published bytes alone.
+    let trivial = TrivialEngine::new();
+    let scratchpad = ScratchPadEngine::balanced();
+    let raw_digest = |text: &str| -> Hash256 {
+        Hash256::from_slice(&hex::decode(text).expect("published hex decodes"))
+            .expect("a published digest is one sha256d wide")
+    };
+    let internal = |value: &Value| -> String {
+        value["internal_hex"]
+            .as_str()
+            .expect("a published digest carries internal_hex")
+            .to_string()
+    };
+    for case in &cases {
+        let id = case["id"].as_str().expect("id");
+        let header_json = &case["input"]["header"];
+        let header = BlockHeader {
+            version: header_json["version"].as_u64().expect("version") as u32,
+            chain: header_json["chain"].as_u64().expect("chain") as u32,
+            height: header_json["height"].as_u64().expect("height"),
+            previous_hash: raw_digest(header_json["previous_hash_hex"].as_str().expect("previous")),
+            merkle_root: raw_digest(header_json["merkle_root_hex"].as_str().expect("root")),
+            timestamp: header_json["timestamp"].as_u64().expect("timestamp"),
+            difficulty_bits: header_json["difficulty_bits"].as_u64().expect("bits") as u32,
+            engine_id: header_json["engine_id"].as_u64().expect("engine_id") as u8,
+            nonce: header_json["nonce"].as_u64().expect("nonce"),
+        };
+        assert_eq!(header_input(&header), *header_json, "{id}: the header does not round-trip through its published form");
+
+        let context_json = &case["input"]["validation_context"];
+        let name = context_json["engine"].as_str().expect("engine");
+        let (engine, selected): (Box<dyn PowEngine>, P42Engine) = if name == trivial.name() {
+            (Box::new(trivial), P42Engine::Trivial)
+        } else if name == scratchpad.name() {
+            (Box::new(scratchpad), P42Engine::ScratchPad)
+        } else {
+            panic!("{id}: `{name}` is not an engine this corpus knows");
+        };
+        let context = P42Context {
+            expected_chain: context_json["expected_chain"].as_u64().expect("expected_chain") as u32,
+            expected_height: context_json["expected_height"].as_u64().expect("expected_height"),
+            expected_previous: raw_digest(
+                context_json["expected_previous_hex"].as_str().expect("expected_previous_hex"),
+            ),
+            expected_bits: context_json["expected_bits"].as_u64().expect("expected_bits") as u32,
+            median_time_past: context_json["median_time_past"].as_u64().expect("median_time_past"),
+            now: context_json["now"].as_u64().expect("now"),
+            engine: selected,
+        };
+        assert_eq!(context.json(), *context_json, "{id}: the context does not round-trip through its published form");
+
+        let from_bytes = |hex_text: &str| -> Transaction {
+            let bytes = hex::decode(hex_text).expect("a published serialization is hex");
+            let tx = Transaction::deserialize(&bytes)
+                .unwrap_or_else(|error| panic!("{id}: a published transaction: {error}"));
+            assert_eq!(hx(&tx.serialize()), hex_text, "{id}: canonical serialization is not the published byte string");
+            tx
+        };
+        let transactions: Vec<Transaction> = match case["input"]["transactions"].as_array() {
+            Some(entries) => entries
+                .iter()
+                .map(|entry| from_bytes(entry["serialized_hex"].as_str().expect("serialized_hex")))
+                .collect(),
+            None => case["input"]["transactions_hex"]
+                .as_array()
+                .expect("a long list publishes transactions_hex")
+                .iter()
+                .map(|entry| from_bytes(entry.as_str().expect("a hex string")))
+                .collect(),
+        };
+        assert_eq!(
+            transactions.len(),
+            case["input"]["tx_count"].as_u64().expect("tx_count") as usize,
+            "{id}: tx_count disagrees with the published list"
+        );
+
+        let computed = Block::compute_merkle_root(&transactions);
+        assert_eq!(
+            internal(&case["expected"]["computed_root"]),
+            hx(&computed.0),
+            "{id}: the published computed root is not the root of the published list"
+        );
+        assert_eq!(
+            case["expected"]["roots_match"],
+            json!(computed.0 == header.merkle_root.0),
+            "{id}: roots_match disagrees with the two published digests"
+        );
+        assert_eq!(
+            case["expected"]["proof_of_work_meets_target"],
+            json!(header.meets_own_target(engine.as_ref())),
+            "{id}: the published proof-of-work status is not what the selected engine reports"
+        );
+        let flags: String = transactions
+            .iter()
+            .map(|tx| if tx.is_coinbase() { '1' } else { '0' })
+            .collect();
+        assert_eq!(case["expected"]["coinbase_flags"], json!(flags), "{id}: coinbase_flags disagrees with `Transaction::is_coinbase`");
+        assert_eq!(
+            case["expected"]["first_is_coinbase"],
+            json!(transactions.first().map_or(false, Transaction::is_coinbase)),
+            "{id}: first_is_coinbase disagrees with the published list"
+        );
+        if let Some(leaves) = case["expected"]["leaves"].as_array() {
+            assert_eq!(
+                leaves.len(),
+                transactions.len(),
+                "{id}: one published leaf per published transaction"
+            );
+            for (index, leaf) in leaves.iter().enumerate() {
+                assert_eq!(
+                    internal(&leaf["txid"]),
+                    hx(&transactions[index].txid().0),
+                    "{id}: leaf {index} is not `Transaction::txid` of the published transaction"
+                );
+            }
+        } else {
+            assert!(transactions.len() > P42_VERBOSE_LIMIT, "{id}: a short list must publish its leaves");
+        }
+
+        let outcome = Block {
+            header: header.clone(),
+            transactions: transactions.clone(),
+        }
+        .validate_structure(
+            engine.as_ref(),
+            context.expected_chain,
+            context.expected_height,
+            &context.expected_previous,
+            context.expected_bits,
+            context.median_time_past,
+            context.now,
+        );
+        let kind = match &outcome {
+            Ok(()) => "Ok",
+            Err(error) => block_error_kind(error),
+        };
+        assert_eq!(
+            case["expected"]["error_kind"],
+            if kind == "Ok" { json!(null) } else { json!(kind) },
+            "{id}: the reference no longer returns the published variant"
+        );
+        assert_eq!(
+            case["expected"]["accepted"],
+            json!(outcome.is_ok()),
+            "{id}: the published accept no longer matches the reference"
+        );
+        match &outcome {
+            Ok(()) => assert_eq!(
+                violated_of(&header, &transactions, &context, engine.as_ref(), &computed),
+                Vec::<u8>::new(),
+                "{id}: the published input violates a guard while the reference accepts"
+            ),
+            Err(error) => {
+                assert_eq!(
+                    p42_canonical(&block_error_payload(error)),
+                    p42_canonical(&case["expected"]["error_payload"]),
+                    "{id}: the reference no longer returns the published payload"
+                );
+                let violated = violated_of(&header, &transactions, &context, engine.as_ref(), &computed);
+                assert_eq!(
+                    case["expected"]["violated_rules"],
+                    json!(violated),
+                    "{id}: the published violated_rules no longer re-derives from the published input"
+                );
+                assert_eq!(
+                    block_error_rule(error),
+                    violated[0],
+                    "{id}: the published rejection no longer names the earliest violated guard"
+                );
+            }
+        }
+    }
+
+    // The five reuse cases must be the committed P4.1 blocks, byte for byte, on disk.
+    let p41_path = p41_root().join("chain").join("claimed_merkle_root.json");
+    let p41_text = fs::read_to_string(&p41_path)
+        .unwrap_or_else(|error| panic!("reading the committed P4.1 corpus at {}: {error}", p41_path.display()));
+    let p41: Value = serde_json::from_str(&p41_text).expect("the P4.1 corpus parses");
+    assert_eq!(
+        p41["cases"].as_array().expect("P4.1 cases").len(),
+        30,
+        "P4.1 must still be the 30-case corpus this milestone replays"
+    );
+    assert_eq!(p41["source_commit"], json!(P41_SOURCE_COMMIT), "the P4.1 corpus is unchanged");
+    let p41_case = |name: &str| -> Value {
+        let id = format!("chain.claimed_merkle_root.{name}");
+        p41["cases"]
+            .as_array()
+            .expect("P4.1 cases")
+            .iter()
+            .find(|c| c["id"].as_str() == Some(id.as_str()))
+            .cloned()
+            .unwrap_or_else(|| panic!("{id}: missing from the committed P4.1 corpus"))
+    };
+    let hex_list = |case: &Value| -> Vec<String> {
+        match case["input"]["transactions"].as_array() {
+            Some(entries) => entries
+                .iter()
+                .map(|e| e["serialized_hex"].as_str().expect("serialized_hex").to_string())
+                .collect(),
+            None => case["input"]["transactions_hex"]
+                .as_array()
+                .expect("transactions_hex")
+                .iter()
+                .map(|e| e.as_str().expect("hex").to_string())
+                .collect(),
+        }
+    };
+    for case in &cases {
+        let source = match case["input"]["reused_from"].as_str() {
+            Some(source) => source,
+            None => continue,
+        };
+        let name = source
+            .strip_prefix("chain.claimed_merkle_root.")
+            .expect("a reused_from names a P4.1 case");
+        let original = p41_case(name);
+        let id = case["id"].as_str().expect("id");
+        assert_eq!(
+            case["input"]["header"], original["input"]["header"],
+            "{id}: the reused header is not the header P4.1 published"
+        );
+        assert_eq!(
+            case["input"]["validation_context"], original["input"]["validation_context"],
+            "{id}: the reused context is not the context P4.1 published"
+        );
+        assert_eq!(
+            hex_list(case),
+            hex_list(&original),
+            "{id}: the reused transaction bytes are not the bytes P4.1 published"
+        );
+        assert_eq!(
+            case["expected"]["roots_match"], original["expected"]["roots_match"],
+            "{id}: the reused block's root status drifted from P4.1's"
+        );
+        assert_eq!(
+            case["expected"]["proof_of_work_meets_target"],
+            original["expected"]["proof_of_work_meets_target"],
+            "{id}: the reused block's proof-of-work status drifted from P4.1's"
+        );
+    }
+    assert_eq!(
+        cases
+            .iter()
+            .filter(|c| c["input"]["reused_from"].is_string())
+            .count(),
+        5,
+        "exactly five cases replay a committed P4.1 block"
+    );
+    // P4.1 already recorded, for its own empty-list case, which guard fired before the
+    // comparison. The validator-level claim published beside `.iso_08_no_transactions` has to be
+    // the same variant, or the two corpora disagree about a block neither of them changed.
+    let empty = p41_case("empty_list_matching_claim");
+    assert_eq!(
+        empty["expected"]["guard_before_comparison"]["error_kind"],
+        json!("NoTransactions"),
+        "P4.1's recorded pre-comparison guard changed, so the reuse pairing above needs revisiting"
+    );
+    assert_eq!(
+        cases
+            .iter()
+            .find(|c| c["input"]["reused_from"] == json!("chain.claimed_merkle_root.empty_list_matching_claim"))
+            .expect(".iso_08 reuses the empty list")
+            ["expected"]["error_kind"],
+        json!("NoTransactions"),
+        "the validator and the recorded guard no longer agree about the empty list"
+    );
+
+    // The literals the section's comments promise, asserted rather than trusted.
+    assert_eq!(MAX_BLOCK_TRANSACTIONS, 2_000, "the B-9 limit this corpus is built around");
+    assert_eq!(MAX_FUTURE_SECONDS, 7_200, "the B-13 window this corpus is built around");
+    assert_eq!(P42_LIMIT, P42_NOW + MAX_FUTURE_SECONDS, "the anchor limit literal");
+    assert_eq!(P42_OVER_LIMIT, P42_LIMIT + 1, "the one-past-limit literal");
+    assert_eq!(P42_ANCHOR_TS, header_at(P42_HEIGHT, 0).timestamp, "the anchor timestamp literal");
+    assert_eq!(P42_MEDIAN + 1, P42_ANCHOR_TS, "the B-12 isolation rests on this adjacency");
+    assert_eq!(P42_EDGE_NOW, u64::MAX - MAX_FUTURE_SECONDS - 1, "the first saturating-edge literal");
+    assert_eq!(
+        P42_LAST_EXACT_NOW.saturating_add(MAX_FUTURE_SECONDS),
+        u64::MAX,
+        "the last exact limit literal"
+    );
+    assert_eq!(
+        P42_NOW.wrapping_add(MAX_FUTURE_SECONDS),
+        P42_NOW + MAX_FUTURE_SECONDS,
+        "the anchor clock must be far from the saturation point: wrapping and checked addition agree"
+    );
+    assert_eq!(
+        P42_EDGE_NOW.saturating_add(MAX_FUTURE_SECONDS),
+        u64::MAX - 1,
+        "at the first edge the limit is one below `u64::MAX`, so a timestamp of `u64::MAX` is rejected"
+    );
+}
+
+/// The violated-rule set recomputed inside the pinned test from published input alone. The same
+/// pure predicate list `p42_emit` uses, called from the rebuilt values rather than the specs.
+fn violated_of(
+    header: &BlockHeader,
+    transactions: &[Transaction],
+    context: &P42Context,
+    engine: &dyn PowEngine,
+    computed: &Hash256,
+) -> Vec<u8> {
+    p42_violated_rules(header, transactions, context, engine, computed)
 }
 
 // ---------------------------------------------------------------------------
