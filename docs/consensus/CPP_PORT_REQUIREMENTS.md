@@ -156,6 +156,60 @@ green P3.3 gate must not be read as one. F-1 remains **deferred** — the C++ ha
 untrusted-height work is untouched — C-29's remaining obligation is still P4's, and no claim of
 full consensus parity, audit or production readiness is made.
 
+**Implementation status (P4.0, 2026-10-25).** `kernel/src/pow.cpp` implements **C-4** —
+`engine.hash(preimage, nonce)` for `engine_id` 0 and 1 — and it is registered here for the first
+time, because the milestone landed without a documentation pass. Both engines run over the
+already-owned C-3 107-byte preimage, and the nonce is appended *outside* it, so the digest a
+header commits to is unchanged by this addition. The target side is reused, not re-derived:
+the port calls the P1 compact decode (C-8) and the inclusive big-endian `hash <= target`
+comparison (C-24), so F-11 is reproduced rather than corrected. `zk::engine_for_id` returns
+nothing for any identifier other than 0 or 1, so no untrusted byte is dispatched onto an engine;
+a caller holding a header uses `zk::header_engine_matches` to compare the byte against the
+network's own engine instead (B-6 is still not ported — nothing validates it as a rule yet).
+Scratchpad size and rounds are compile-time constants selected per network (C-21); cell count
+follows Rust's truncating budget division (C-22), and because both shipped profiles are powers
+of two, the modulo branch is exercised only by a test-local differential and **not** by any
+committed vector — recorded rather than smoothed over. Allocation failure is a caught error
+here, not an abort (C-23), which is the one deliberate robustness divergence F-8 permits. Mining
+is deliberately absent from the production API: the single-threaded search from nonce zero lives
+in the conformance runner and replays `verify_pow`, which is what C-25 allows. The gate is
+`kernel_p4_conformance` over the 11 committed `test/vectors/pow/engines.json` cases — the same
+P0 root, a group `g1_conformance.py` does not load because it walks an explicit four-file
+allowlist — with zero deferred cases and no divergence allowance, plus 27 tests in
+`kernel/tests/test_pow.cpp`. What this left open was consumption: a digest now existed that
+nothing compared to anything, and the claimed-root rule it feeds was still unported.
+
+**Implementation status (P4.1B, 2026-10-30).** `kernel/src/block.cpp` closes the first item of
+the three-gap list above: the **claimed-root comparison** (B-1/B-14) and its `RootMismatch`
+taxonomy entry. `zk::compare_claimed_merkle_root(const BlockHeader&, const Transaction*,
+std::size_t)` computes the root with the P3.3B composition (C-5), compares it against
+`header.merkle_root` byte for byte in **internal** order, and returns `BlockErrorKind::kNone` or
+`BlockErrorKind::kRootMismatch`. The comparison is not over display hex — `display_hex` is a
+printing-only reversal produced by the hex types and never what a consensus rule sees, so
+`chain.claimed_merkle_root.display_order_claim` is the case that rejects a port which
+re-encodes before comparing. C-14 is met for this variant: the name the fixture asserts is the
+reference's own (`RootMismatch`), and it carries no payload, unlike `WrongChain` and `BadHeight`,
+which is why `block_error_kind_has_payload` answers per variant rather than per struct (C-12).
+C-13 is met *for this rule in isolation* and must not be read as met for a block: B-1…B-13 run
+before B-14 and B-15 runs after it, none of them ported, there is no `Block` type and no
+`validate_structure`, so the port has no first-failing-rule order to reproduce yet — the corpus
+proves the earlier guards *passed* (its exporter panics on any variant other than `Ok` and
+`RootMismatch`) rather than implementing them. There is also no transaction-count limit here: B-9
+`MAX_BLOCK_TRANSACTIONS` is a `validate_structure` rule checked outside the comparison (C-17,
+C-11). The gate is `kernel_p41_conformance`, replaying all 30 committed cases in
+`test/p41-vectors/chain/claimed_merkle_root.json` against `source_commit b71d769` — every
+expected outcome the `Result` that the shipping Rust `Block::validate_structure` itself returned,
+none computed by C++, transcribed from documentation or typed by hand — and cross-checking the
+fixture against `test/harness/zro_vectors.py` before the runner is invoked, plus 14 tests in
+`kernel/tests/test_block.cpp`. Its one deferred expected key is `guard_before_comparison`, on the
+two `boundary` cases, because B-8 `NoTransactions` rejects an empty list before B-14 is reached.
+Still **not** implemented, and unchanged by this milestone: a block header decoder, any `Block`
+type, the other twelve `validate_structure` rules and their order, B-15 as a rule (the C-4 hash
+exists; nothing branches on it), the reward rules, and `connect_block`. **Nothing in C++
+validates or accepts a block**, a green P4.1 gate must not be read as one, F-1 remains
+**deferred**, C-29's remaining obligation is still P4's, and no claim of full consensus parity is
+made.
+
 
 ---
 
@@ -229,6 +283,13 @@ on `hash <= target` inclusive (F-11). Bitcoin's little-endian comparison MUST NO
 accepted nonce for a given `(preimage, target, start = 0)` MUST equal the Rust result when
 the port is asked for a single-threaded search from zero (DET-10). Multi-threaded mining is
 out of consensus scope.
+
+**Implementation status (P4.0, 2026-10-25).** C-19…C-25 are implemented in
+`kernel/src/pow.cpp`; the full disposition, including the one requirement whose non-power-of-two
+branch has no committed vector behind it, is recorded in §2 rather than duplicated here. §4's
+consequence for the rest of this document is narrow but real: C-4 stopped being an input to
+nothing when P4.1B made the claimed-root comparison consume a header, and B-15 remains the rule
+that still does not exist in C++ even though the hash it would compare now does.
 
 ---
 
@@ -440,6 +501,29 @@ ordered around a difficulty-schedule lookup, which is the defect this row record
 Criterion 4 of M-F1 — the matching `connect_block` negative test — is therefore still
 not met, the row above keeps reading "Deferred (untestable)", never "identical", and
 this milestone closes neither F-1 nor C-29 nor consensus parity.
+
+**P4.0 note (2026-10-25).** F-11 is now reproduced on the acceptance-shaped path rather than
+only in the difficulty module: `kernel/src/pow.cpp` compares the engine's digest against the
+compact target as a big-endian integer, inclusively, and `kernel/tools/p4_conformance.py` replays
+the 11 committed `pow` cases against it. F-8 is reproduced in the hashes and *fixed* in the two
+ways §10 requires — 64-bit index arithmetic and a caught allocation error instead of an abort —
+which is the permitted robustness divergence and changes no accepted hash. The F-1 row's
+disposition is **unchanged**: a PoW hash is not a block validation rule, and the kernel still had
+no claimed-root comparison at this milestone, so nothing consumed a digest as a verdict.
+
+**P4.1B note (2026-10-30).** The F-1 row's disposition is again **unchanged**, and this note
+records one evidence correction rather than any finding change. B-14's own disposition is
+"reproduce", and it now is: `zk::compare_claimed_merkle_root` returns the reference's
+`RootMismatch` for the reference's condition, with the whole corpus of 30 verdicts coming from
+the shipping Rust validator. What the milestone found, and records instead of silently fixing,
+is that the Rust regression test cited for the B-14-before-B-15 precedence
+(`zerocoin/tests/consensus_rules.rs::merkle_mismatch_is_reported_before_proof_of_work`) does not
+exercise that precedence: a header commits to the root it claims, so mutating a block's
+transactions leaves the header, its preimage and its nonce untouched, and the second rule never
+fires in the test. The precedence is true of the source and is pinned with a real failing nonce by
+the two `ordering` cases in `test/p41-vectors/chain/claimed_merkle_root.json`; the test itself is
+left unedited, and `CONSENSUS_RULES.md` §3 and §16 now carry the record. C-13 is met for this one
+rule in isolation, not for a block, and F-1, C-29 and full consensus parity remain unresolved.
 
 ---
 

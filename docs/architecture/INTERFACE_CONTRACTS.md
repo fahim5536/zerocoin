@@ -59,6 +59,12 @@ These rules apply to every header under `kernel/include/zerocoin/`.
    The departure is a documented exception to rule 2, was reviewed before the
    signature was added, and adds no error path: there is nothing for the caller to
    check, and the reference's own two lines have none either.
+   `zk::compare_claimed_merkle_root` (P4.1B) inherits that policy rather than arguing
+   for it again: it composes the P3.3B root, so it is non-`noexcept` for the identical
+   reason and allocates nothing the root function had not already allocated. Its
+   failure channel is `BlockErrorKind`, the enum the owner already has
+   (`BlockError`), appended — never inserted — so `kNone` still means "accepted" and no
+   existing discriminant moved when `kRootMismatch` was added.
 5. **Constants are `inline constexpr` and frozen by `static_assert`.** A change
    to a limit is a consensus change and cannot be a local edit.
 6. **Warnings are errors** for every target, tests included
@@ -318,13 +324,17 @@ stdout:
 exit: 0 all cases passed | 1 any case failed | 2 usage, fixture or I/O error
 ```
 
-The 25 verbs: `sha256_utf8`, `sha256d_utf8`, `hash160_sec1`, `display_reversal`,
+The 30 verbs: `sha256_utf8`, `sha256d_utf8`, `hash160_sec1`, `display_reversal`,
 `varint_encode`, `tx_build`, `tx_roundtrip`, `tx_decode_error`, `compact`,
 `script_push_data`, `p2pkh_script_pubkey`, `p2pkh_script_sig`, `script_verify`,
 `sighash`, `sighash_distinct`, `p2pkh_spend`, `difficulty_params`,
 `difficulty_validate_bits`, `difficulty_hash_meets_target`,
 `difficulty_required_work`, `difficulty_next`, `header_preimage`,
-`header_identity`, `merkle_root`, `merkle_root_from_txs`.
+`header_identity`, `merkle_root`, `merkle_root_from_txs`, `claimed_merkle_root`,
+`pow_engine_ids`, `pow_trivial_hash`, `pow_scratchpad_hash`, `pow_mine_from_zero`.
+The last five entered the runner in P4.0 and P4.1B; the list was registered here at
+25 verbs across P1–P3.3B, so this sentence is the correction of a documentation gap
+rather than a change to the protocol.
 
 `p2pkh_spend` (added in P2.10 §7) is the only verb that checks a real
 signature: it deserialises the transaction, derives the sighash for the bound
@@ -370,13 +380,45 @@ leaves and a wrong tree". Its width is not a free variable: the wrapper requires
 object per published transaction and parses each leaf id as exactly 64 lowercase hex
 characters, so `leaf_txids_hex` is `64 × tx_count` characters before the runner is invoked.
 
+`claimed_merkle_root` (added in P4.1B) is the first verb whose input is a whole header *and*
+a transaction list: the nine `IN header.<field>` lines of P3.1B, the repeated
+`IN tx_hex=<serialized hex>` lines of P3.3B, and one `IN engine=<engine name>` line naming
+the validation context the corpus was exported under. It returns **both sides** of the
+comparison — `computed_root_internal_hex`, `computed_root_display_hex`,
+`claimed_root_internal_hex`, `claimed_root_display_hex`, `computed_root_len` — plus the
+verdict triple (`accepted`, `error_kind`, `error_payload_present`), the echoed `tx_count`,
+`leaf_count` and `leaf_txids_hex`, and `proof_of_work_meets_target`. Two of those outputs
+exist only to make the verdict hard to fake. `roots_match` is the byte equality between the
+two published digests, and the verdict must equal it, so a runner that returned
+`RootMismatch` while publishing two equal digests — or `None` while publishing two different
+ones — fails there instead of satisfying a plausible `error_kind`. `proof_of_work_meets_target`
+is published and never branched on: B-15 is not ported, and the corpus's two `ordering` cases
+are precisely the cases where that flag is `false` and the verdict is still `RootMismatch`, so
+the runner has to state which of the two it observed without letting the second one move the
+first. The declared engine name and the header's `engine_id` byte are both checked before the
+comparison runs, so a case cannot quietly be replayed against an engine other than the one the
+reference validated with; `engine_for_id` is deliberately *not* used for that check, because
+`pow.h` fixes the trust boundary at "a caller holding a header compares its engine byte
+against the network's own engine", not at resolving a peer-supplied id.
+
+The four `pow_*` verbs (added in P4.0) are the runner's surface for C-4.
+`pow_engine_ids` echoes the two ids a header may commit to and resolves a supplied byte
+through `zk::engine_for_id`, which returns nothing for any id other than 0 or 1 — so an
+unknown id is never mapped onto an engine. `pow_trivial_hash` and `pow_scratchpad_hash`
+return `engine.hash(preimage, nonce)` for the two engines over the frozen 107-byte C-3
+preimage, with the nonce appended *outside* it. `pow_mine_from_zero` replays the reference's
+single-threaded search from nonce zero (C-25); mining is not in the production API and lives
+only here.
+
 ### 7.2 The wrappers
 
 `kernel/tools/g1_conformance.py`, `p2_conformance.py` and `p3_conformance.py` own
 the translation from `test/vectors/**` JSON to the fixture grammar;
 `kernel/tools/p31_conformance.py`, `kernel/tools/p32_conformance.py` and
 `kernel/tools/p33_conformance.py` own the same translation for the header corpus, the
-leaf-level Merkle corpus and the transaction-level Merkle corpus in §7.3. They must:
+leaf-level Merkle corpus and the transaction-level Merkle corpus in §7.3;
+`kernel/tools/p4_conformance.py` owns it for the PoW group inside the P0 root, and
+`kernel/tools/p41_conformance.py` for the claimed-root corpus. They must:
 
 1. read `source_commit` from the corpus and print it, so a stale build is visible;
 2. fail if a case is missing, duplicated or mapped twice;
@@ -462,6 +504,33 @@ equal the Rust `serialized_hex` byte for byte — so a Python/Rust disagreement 
 is caught too, not only about the tree. All three are *fixture* assertions that surface as a
 mapping failure (exit 2) naming the derived value against the published one; none is ever
 reported as a Merkle root mismatch against the kernel.
+
+`test/p41-vectors/**` is the fifth corpus root and holds one group, `chain.claimed_merkle_root`
+(30 cases: 12 correct claims, 14 wrong claims of the kinds a real port plausibly makes, the 2
+cases whose proof of work fails as well, and the 2 boundary cases an empty transaction list can
+honestly reach; by verdict 13 accepted and 17 `RootMismatch`, with no other block error present
+in the file). Its `source_commit` (b71d769) is the newest commit touching a Rust build input and
+`zerocoin/src` is byte-identical to it at this baseline; `reference_commits` names `e464695f`
+three times — for the comparison, for the `RootMismatch` variant and for `validate_structure`
+alike, none of which has been edited since — and the generator field names the `p41_*` exporter
+that landed with the corpus, because a fixture cannot truthfully claim to predate its own
+generator. Every expected outcome is the `Result` the shipping Rust
+`Block::validate_structure` returned for that exact block. That is the one thing this corpus
+cannot fake: the exporter panics on any variant other than `Ok(())` and
+`BlockError::RootMismatch`, so a rejection that actually came from an earlier guard cannot be
+committed as a claimed-root case by accident. Since P4.1B the corpus is replayed by
+`kernel/tools/p41_conformance.py` and registered as the `kernel_p41_conformance` ctest entry,
+which the gate scripts pick up because they run the whole ctest set. Its **one** deferred
+expected key is `guard_before_comparison`, present on the two `boundary` cases only: production
+rejects an empty list with B-8 `NoTransactions` before it ever reaches B-14, so the validator has
+no comparison verdict to publish there, and the key carries the guard's name instead. Like the
+P3.2 and P3.3 corpora it has an independent cross-check through
+`test/harness/zro_vectors.py` (`tx_from_json`, `tx_serialize`, `tx_txid`, `merkle_root`, plus
+`sha256d`, `header_preimage`, `trivial_hash`, `compact_to_target` and `hash_meets_target`), which
+re-derives every leaf, every root, the digest comparison and the published proof-of-work flag
+before the runner is invoked; a disagreement is a mapping failure (exit 2) against the fixture,
+never a root mismatch blamed on the kernel. The corpus also records, rather than edits, one
+stale claim in `docs/consensus/CONSENSUS_RULES.md` §3: see the B-14 boundary note there.
 
 ---
 

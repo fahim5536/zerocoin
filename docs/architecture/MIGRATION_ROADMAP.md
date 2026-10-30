@@ -91,6 +91,50 @@ is removed. P2.1 created no service and started no phase.
 > signature (§2 rules 2 and 4 of `INTERFACE_CONTRACTS.md`), which follows from the allocating
 > P1 API it is built on.
 
+> **P4.0 addendum (2026-10-25).** The first proof-of-work slice, registered here for the first
+> time — the milestone landed with no documentation pass, and this change set corrects that
+> rather than restating it as if it were new. `kernel/src/pow.cpp` implements C-4
+> (`engine.hash(preimage, nonce)`) for both shipped engines over the frozen 107-byte C-3
+> preimage, reusing the P1 compact-target decode (C-8) and the inclusive big-endian comparison
+> (C-24, F-11) instead of re-deriving either, and `zk::engine_for_id` resolves nothing for an id
+> other than 0 or 1, so no untrusted byte is dispatched onto an engine. The nonce stays outside
+> the preimage, so the digest a header commits to is unchanged. Mining is not in the production
+> API; the single-threaded search from zero lives in the conformance runner (C-25). The gate is
+> a new additive `kernel_p4_conformance` target (`kernel/tools/p4_conformance.py`, 11 committed
+> `test/vectors/pow/engines.json` cases, zero deferred, no divergence allowance) plus 27 tests in
+> `kernel/tests/test_pow.cpp`; the P0 corpus, every other fixture and every gate expectation are
+> byte-for-byte unchanged. Header hashing therefore now exists — closing the clause in the P3.3B
+> addendum that listed it as undelivered — but nothing consumed a digest as a verdict yet, which
+> is what the P4.1B slice below does. F-1 remains **deferred** and C-29's obligation is still
+> P4's.
+
+> **P4.1 addendum (2026-10-30).** Two commits, deliberately split, because the port doctrine
+> requires the oracle to exist before the implementation. **P4.1A** (`test` commit) added a
+> `p41_*` section to `zerocoin/tests/export_baseline_vectors.rs` and the corpus
+> `test/p41-vectors/chain/claimed_merkle_root.json`: 30 cases whose every expected outcome is
+> the `Result` that the shipping Rust `Block::validate_structure` returned for that exact block,
+> with the exporter panicking on any variant other than `Ok` and `RootMismatch` so a rejection
+> from an earlier guard cannot be committed as a claimed-root case by accident. **P4.1B** (this
+> slice) implements the rule against it: `zk::compare_claimed_merkle_root` in
+> `kernel/src/block.cpp` ports B-14 alone — compute with the P3.3B composition, compare the
+> header's committed root byte for byte in internal order, return `kNone` or the appended
+> `BlockErrorKind::kRootMismatch` — with no `Block` type, no `validate_structure`, no ordering,
+> no count limit and no proof-of-work branch. The gates are 14 tests in
+> `kernel/tests/test_block.cpp` and the additive `kernel_p41_conformance` entry
+> (`kernel/tools/p41_conformance.py`), which replays all 30 cases through the runner's new
+> `claimed_merkle_root` verb, cross-checks the fixture against `test/harness/zro_vectors.py`
+> before the runner is invoked, and publishes `roots_match` so the verdict cannot disagree with
+> the two digests beside it; its one deferred key is `guard_before_comparison`, the B-8 guard
+> that production runs first. The corpus records, and this document now repeats, that the Rust
+> test normally cited for the B-14-before-B-15 precedence is vacuous — a header commits to the
+> root it claims, so mutating transactions never moves its nonce — and the two `ordering` cases
+> here are the same experiment with the failing nonce actually present. Header hashing, the
+> claimed-root comparison and the `RootMismatch` taxonomy are therefore delivered; the other
+> twelve `validate_structure` rules, B-15 as a rule, `connect_block`, chain replay, UTXO apply
+> and storage are not, **nothing in C++ validates or accepts a block**, and this slice must not
+> be read as a block-validation path. No historical fixture, vector or gate expectation changed;
+> F-1 remains **deferred** and C-29's obligation is still P4's.
+
 Related: doc `03` (the original phase proposal), `COMPONENT_OWNERSHIP.md`,
 `THREE_LANGUAGE_ARCHITECTURE.md`, `INTERFACE_CONTRACTS.md`,
 `CRYPTO_BACKEND_DECISION.md`.
@@ -129,8 +173,8 @@ Nothing in this table is restated in prose elsewhere; the gate regenerates it
 | **P2** | Script, sighash, signature verification | G2 | **Partial** at this snapshot — script and sighash complete; ECDSA blocked as G2c. Closed in P2.10: 22/22 with one signing deferral |
 | **P2.1** | Backend investigation, three-language architecture | none (documentation) | **Complete in this change** |
 | **P2.2–P2.10** | Backend evidence, provenance, integration, conformance, gate closure | G2 | **Complete** — CB-1…CB-4 RESOLVED, CB-5 CLOSED; G2c: GO (`CRYPTO_BLOCKER_REGISTER.md` §6) |
-| **P3** | Header, Merkle, difficulty, PoW, reward, anchors, params, genesis | G3 | In progress — P3.0 delivered difficulty; P3.1B delivered the header preimage and identity rule; P3.2B delivered the leaf-level Merkle root; P3.3B delivered the transaction-level Merkle root (PoW, reward, anchors, params, genesis, and the claimed-root comparison plus the block acceptance layer that consumes Merkle remain) |
-| **P4** | UTXO apply, `connect_block`, storage read | G4 | Not started |
+| **P3** | Header, Merkle, difficulty, PoW, reward, anchors, params, genesis | G3 | In progress — P3.0 delivered difficulty; P3.1B delivered the header preimage and identity rule; P3.2B delivered the leaf-level Merkle root; P3.3B delivered the transaction-level Merkle root; P4.0 delivered the PoW engines and the target comparison (C-4). Reward, anchors, params, genesis and the block acceptance layer that consumes Merkle remain |
+| **P4** | UTXO apply, `connect_block`, storage read | G4 | Not started for its own scope. Two preparation slices landed ahead of it: P4.1B delivered the claimed-Merkle-root comparison (B-14) as a standalone rule with no `Block` type, and P4.0 (registered under P3 above) delivered the digest B-15 will consume. UTXO apply, `connect_block`, storage read and every other `validate_structure` rule remain not started, and nothing in C++ validates or accepts a block |
 | **P5** | Storage write, P2P, RPC, wallet, keystore, CLI | G5 | Not started |
 | **P6** | Differential soak | G6 | Not started |
 | **P7** | Fuzzing, sanitizers, CI, packaging | G7 | Not started |

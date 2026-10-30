@@ -5,10 +5,12 @@
 // The scope is exactly the two functions the P3.1A corpus pins, and nothing
 // else. This module does NOT decode a serialized header, does NOT hash the
 // preimage and does NOT dispatch a proof-of-work engine: the block's identity
-// is `engine.hash(preimage, nonce)` (CPP_PORT_REQUIREMENTS.md C-4), the engine
-// is not ported, and the kernel has no `Block` type or chain state, so
-// `connect_block` and its ordering obligation stay in P4. Rust remains the
-// oracle and F-1 is not closed by this file.
+// is `engine.hash(preimage, nonce)` (CPP_PORT_REQUIREMENTS.md C-4), the kernel
+// has no `Block` type or chain state, so `connect_block` and its ordering
+// obligation stay in P4. Rust remains the oracle and F-1 is not closed by this
+// file. The one block rule ported so far — the claimed-Merkle-root comparison
+// of B-14 — is not a header rule and does not live here either; it is in
+// block.h, and only the `BlockError` taxonomy below is shared between them.
 //
 // Two behaviours are compatibility requirements rather than choices:
 //
@@ -86,20 +88,38 @@ struct BlockHeader {
 /// return type.
 std::array<std::uint8_t, kHeaderPreimageSize> header_preimage(const BlockHeader& header) noexcept;
 
-/// The two `BlockError` variants this validator can produce, named exactly as
-/// the reference names them (C-14) because the fixture asserts the names.
+/// The `BlockError` variants the kernel can produce, named exactly as the
+/// reference names them (C-14) because the fixture asserts the names.
 ///
-/// The numbering is the kernel's own, NOT the Rust discriminants
-/// (`BlockError::WrongChain` is discriminant 0 there): `kNone` must occupy 0 so
-/// a default-constructed result means "accepted", which is the convention
-/// `DifficultyError` already sets. The remaining eleven `BlockError` variants
-/// are not declared here — nothing produces them yet, and declaring them would
-/// imply a ported rule that does not exist.
+/// The numbering is the kernel's own declaration order, NOT the Rust
+/// discriminants (`BlockError::WrongChain` is discriminant 0 there): `kNone`
+/// must occupy 0 so a default-constructed result means "accepted", which is the
+/// convention `DifficultyError` already sets. A variant is therefore appended,
+/// never inserted, so no existing value moves when a rule is ported. The
+/// remaining ten `BlockError` variants are not declared here — nothing produces
+/// them yet, and declaring them would imply a ported rule that does not exist.
+///
+/// `kRootMismatch` belongs to this enum because the Rust type is one enum: it is
+/// the variant `Block::validate_structure` returns for the B-14 comparison, which
+/// block.h ports. It carries no payload (C-12), unlike the two identity
+/// variants, which is why the payload question is answered per variant by
+/// `block_error_kind_has_payload` rather than per struct.
 enum class BlockErrorKind : std::uint8_t {
   kNone = 0,
   kWrongChain = 1,
   kBadHeight = 2,
+  kRootMismatch = 3,
 };
+
+/// Whether the reference's `BlockError` variant carries a numeric payload
+/// (C-12). Answered per variant because the variants differ: `WrongChain` and
+/// `BadHeight` do, `RootMismatch` is a unit variant and does not, and `None` is
+/// not a rejection at all. Declared before `BlockIdentityError` so the member
+/// below can call it — a name declared after the class is not yet visible in an
+/// inline member body.
+constexpr bool block_error_kind_has_payload(BlockErrorKind kind) noexcept {
+  return kind == BlockErrorKind::kWrongChain || kind == BlockErrorKind::kBadHeight;
+}
 
 /// The rejection, with the reference's payload widths kept distinct per variant
 /// (C-12): `WrongChain` carries two `u32`s, `BadHeight` two `u64`s. Exactly one
@@ -116,9 +136,10 @@ struct BlockIdentityError {
 
   constexpr bool ok() const noexcept { return kind == BlockErrorKind::kNone; }
 
-  /// Whether the reference's variant carries a numeric payload. `Ok` carries
-  /// none, and the fixture publishes `null` for it rather than a guessed shape.
-  constexpr bool has_payload() const noexcept { return kind != BlockErrorKind::kNone; }
+  /// Whether the reference's variant carries a numeric payload. `Ok` and
+  /// `RootMismatch` carry none, and the fixture publishes `null` for them rather
+  /// than a guessed shape.
+  constexpr bool has_payload() const noexcept { return block_error_kind_has_payload(kind); }
 };
 
 /// The stable name the conformance fixture asserts against.

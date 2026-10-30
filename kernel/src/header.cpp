@@ -68,6 +68,10 @@ const char* block_error_kind_name(BlockErrorKind kind) noexcept {
       return "WrongChain";
     case BlockErrorKind::kBadHeight:
       return "BadHeight";
+    case BlockErrorKind::kRootMismatch:
+      // The reference's name is `BlockError::RootMismatch`; the fixture asserts
+      // it verbatim, and it has no payload to name afterwards (C-14).
+      return "RootMismatch";
   }
   return "Unknown";
 }

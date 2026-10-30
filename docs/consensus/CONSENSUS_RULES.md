@@ -184,8 +184,14 @@ named in case ids: `.order_abc` against `.order_cba` (the root is positional, so
 list is a different block) and `.two_identical_transactions` /
 `.three_copies_of_one_transaction` (a repeated transaction is a repeated leaf, never a
 collapsed one). `.empty` fixes the zero-transaction behaviour of the public function, which is
-the empty-tag branch, not an error. This is the root **computation** only: comparing a block's
-committed root against a header remains B-1/B-14 and is not implemented in C++.
+the empty-tag branch, not an error. Since P4.1B the *comparison* of that computed root
+against a header's committed `merkle_root` — rule B-1/B-14 and the `RootMismatch` outcome — is
+also implemented in C++, as `zk::compare_claimed_merkle_root` (`kernel/src/block.cpp`), replayed
+against the 30-case `chain.claimed_merkle_root.*` group in
+`test/p41-vectors/chain/claimed_merkle_root.json` by `kernel_p41_conformance`. What remains
+unimplemented is everything around it: there is no `Block` type, no `validate_structure`, and
+therefore none of the ordering between B-1…B-13 and B-15 that decides which error a real block
+gets. A green P4.1 gate is one rule, not a block-validation path.
 
 
 Rule **B-1** — A block's committed `merkle_root` MUST equal
@@ -297,7 +303,21 @@ Boundary notes, observed and tested:
 - B-13 is `>`: `timestamp == now + 7200` is accepted, `now + 7201` is rejected. The
   addition saturates at `u64::MAX` (`saturating_add`).
 - B-14 runs before B-15, so a tampered transaction or root reports `RootMismatch` even if
-  the nonce would also fail.
+  the nonce would also fail. **Recorded, not re-proved here (P4.1A).** The claim is true of the
+  code — `block.rs:218` precedes `block.rs:222` — but the Rust test normally cited for it,
+  `zerocoin/tests/consensus_rules.rs::merkle_mismatch_is_reported_before_proof_of_work`, is
+  vacuous as a test of the *precedence*: its comment asserts that mutating a transaction
+  invalidates both the root and the proof of work "because the root is in the preimage", which
+  is not true of a block as received. A header commits to the root it claims, so changing the
+  block's transactions leaves the header, its 107-byte preimage and its nonce untouched; the
+  proof-of-work condition never changes and never fires, and the test passes because B-14 is
+  reached, not because both rules would have rejected. The precedence is therefore tested
+  elsewhere: `chain.claimed_merkle_root.stale_root_with_failing_proof_of_work` and
+  `chain.claimed_merkle_root.zero_claim_with_failing_proof_of_work` in
+  `test/p41-vectors/chain/claimed_merkle_root.json` carry a stale claim *and* a nonce that
+  misses the header's own target, with `proof_of_work_meets_target` published as `false` and
+  the verdict still `RootMismatch`. That corpus is the evidence; this note is a correction of
+  the assumption, and the test itself is deliberately left unedited.
 - **No rule validates `header.version`.** `BLOCK_VERSION` is written when headers are built
   (`src/chain.rs:380`, `src/genesis.rs:70`) and is never read by validation. See F-2.
 - **No block byte-size or weight rule exists.** The only block-level limits are 2000
@@ -950,7 +970,7 @@ Unverified by this milestone (open questions, not claims):
 | B-3 … B-15 matrix, check order | `structural_rejections_follow_the_documented_order` |
 | B-9 / B-11 boundary (2000 vs 2001) | `transaction_count_boundary_is_two_thousand` |
 | B-12 / B-13 boundaries | `timestamp_boundaries_are_strictly_above_median_and_at_most_two_hours_ahead` |
-| B-14 before B-15 | `merkle_mismatch_is_reported_before_proof_of_work` |
+| B-14 before B-15 | `merkle_mismatch_is_reported_before_proof_of_work` — **vacuous for this precedence**, per §3; the real evidence is the two `ordering` cases in `test/p41-vectors/chain/claimed_merkle_root.json` |
 | F-2 (version ignored) | `block_version_is_not_validated` |
 | R-1 / R-2 constants and subsidy table | `reward_constants_match_the_p0_vectors` |
 | R-3 … R-10, R-12 check order | `coinbase_checks_run_in_the_documented_order` |

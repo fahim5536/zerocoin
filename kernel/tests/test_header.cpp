@@ -311,4 +311,32 @@ ZK_TEST(header_error_kind_names_are_the_reference_variant_names) {
   ZK_CHECK(std::string(zk::block_error_kind_name(BlockErrorKind::kNone)) == "None");
   ZK_CHECK(std::string(zk::block_error_kind_name(BlockErrorKind::kWrongChain)) == "WrongChain");
   ZK_CHECK(std::string(zk::block_error_kind_name(BlockErrorKind::kBadHeight)) == "BadHeight");
+  // The name B-14's fixture asserts. It is the reference's variant name, so a
+  // rename in block.rs is a disagreement here rather than a silent pass.
+  ZK_CHECK(std::string(zk::block_error_kind_name(BlockErrorKind::kRootMismatch)) == "RootMismatch");
+
+  // The kernel's own numbering, frozen: 0 means accepted and every existing
+  // value keeps its slot, so a newly ported variant is appended and never
+  // inserted. These are declaration order, NOT the Rust discriminants.
+  static_assert(static_cast<std::uint8_t>(BlockErrorKind::kNone) == 0);
+  static_assert(static_cast<std::uint8_t>(BlockErrorKind::kWrongChain) == 1);
+  static_assert(static_cast<std::uint8_t>(BlockErrorKind::kBadHeight) == 2);
+  static_assert(static_cast<std::uint8_t>(BlockErrorKind::kRootMismatch) == 3);
+
+  // The payload question is per variant (C-12). The two identity variants carry
+  // numbers; `RootMismatch` is a unit variant in the reference and `None` is not
+  // a rejection at all, so answering it from the struct's shape would let the
+  // runner publish a payload that the reference publishes as null.
+  ZK_CHECK(!zk::block_error_kind_has_payload(BlockErrorKind::kNone));
+  ZK_CHECK(zk::block_error_kind_has_payload(BlockErrorKind::kWrongChain));
+  ZK_CHECK(zk::block_error_kind_has_payload(BlockErrorKind::kBadHeight));
+  ZK_CHECK(!zk::block_error_kind_has_payload(BlockErrorKind::kRootMismatch));
+
+  // And the member agrees with the free function for every variant, including a
+  // default-constructed one.
+  const zk::BlockIdentityError default_error{};
+  ZK_CHECK(default_error.has_payload() == zk::block_error_kind_has_payload(default_error.kind));
+  zk::BlockIdentityError mismatch{};
+  mismatch.kind = BlockErrorKind::kRootMismatch;
+  ZK_CHECK(!mismatch.has_payload());
 }

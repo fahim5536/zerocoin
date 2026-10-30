@@ -102,6 +102,62 @@ changes no code, no vector and no consensus rule.
 > `Block::compute_merkle_root` need "a C++ transaction-id surface this milestone was told not
 > to invent": that surface has existed since P1, and is what this slice used.
 
+> **P4.0 addendum (2026-10-25).** The fifth P3/P4 derived implementation is C-4, and it is
+> registered here for the first time: this change set is the documentation pass for work that
+> landed without one. `kernel/src/pow.cpp` with `kernel/include/zerocoin/pow.h` and
+> `kernel/src/pow_internal.h` ports the owner's `TrivialEngine` and `ScratchPadEngine` over the
+> P3.1B 107-byte preimage, reusing the already-owned compact-target decode (C-8) and the
+> inclusive big-endian `hash <= target` comparison (C-24, F-11) rather than re-deriving either.
+> The nonce stays outside the preimage and enters only through the engine, so the digest a
+> header commits to is unchanged. `zk::engine_for_id` resolves nothing for an identifier other
+> than 0 or 1, so no untrusted byte is ever dispatched onto an engine. Cell count follows
+> Rust's truncating budget division; both shipped profiles are powers of two, so the
+> mask-versus-remainder branch is pinned only by a test-local differential and is **not** backed
+> by any committed vector — recorded here rather than smoothed over. Mining is not in the
+> production API; the nonce search lives in the conformance runner and replays `verify_pow`
+> (C-25). The gate is `kernel_p4_conformance` (`kernel/tools/p4_conformance.py`, which replays
+> all 11 committed cases in `test/vectors/pow/engines.json`; `g1_conformance.py` does not load
+> that file because it walks an explicit four-file allowlist) plus 27 tests in
+> `kernel/tests/test_pow.cpp`, with **zero** deferred cases and no divergence allowance.
+> Ownership has not moved: Rust is still the oracle. Header hashing now exists, but there was
+> still no claimed-root comparison at that milestone, so nothing consumed a digest as a
+> validation verdict — and that gap is what P4.1B below closes.
+
+> **P4.1B addendum (2026-10-30).** The sixth derived implementation is the comparison the
+> P3.3B addendum listed as *not* covered, and it is the first kernel function to return a block
+> validation verdict: `zk::compare_claimed_merkle_root(const BlockHeader&, const Transaction*,
+> std::size_t)` in `kernel/src/block.cpp` ports rule B-14 (`src/consensus/block.rs:216`–`219`)
+> and nothing else — compute the root with the already-owned P3.3B composition, compare the
+> header's committed `merkle_root` byte for byte in internal order, return `kNone` or the new
+> `BlockErrorKind::kRootMismatch`. The variant is the third rejection kind the kernel declares
+> (C-14), appended rather than inserted so `kNone` keeps 0 and no existing value moves; that its
+> number happens to equal Rust's `RootMismatch` discriminant is a coincidence, not a contract —
+> the kernel's numbering is its own declaration order. It is a unit variant, which is why the
+> payload question is answered per variant by `block_error_kind_has_payload` rather than per
+> struct. It deliberately owns no *ordering*: B-1…B-13 before it and
+> B-15 after it are not ported, there is no `Block` type and no `validate_structure`, so C-13's
+> "same first failing rule" obligation is met for this rule in isolation and not for a block.
+> The gate is `kernel_p41_conformance` (`kernel/tools/p41_conformance.py`, which replays all 30
+> committed cases in `test/p41-vectors/chain/claimed_merkle_root.json` against
+> `source_commit b71d769`; the comparison, the `RootMismatch` variant and `validate_structure`
+> all entered `zerocoin/src` at `reference_commits.*`, `e464695f`) plus 14 tests in
+> `kernel/tests/test_block.cpp`. Every expected outcome is the `Result` that the shipping Rust
+> validator itself returned — the P4.1A exporter panics on any other variant — so no verdict in
+> that corpus was computed by C++ or written by hand; `test/harness/zro_vectors.py` re-derives
+> every leaf, root and the digest comparison independently at replay time and is not the origin
+> of any published value. Its one deferred expected key is `guard_before_comparison`, on the two
+> `boundary` cases only, because B-8 `NoTransactions` rejects an empty list before B-14 and the
+> validator therefore has no comparison verdict to publish there. What is *not* covered, and is
+> the reason no row moves to "Done": the other twelve `validate_structure` rules, the ten
+> undeclared `BlockError` variants, `connect_block`, chain replay, UTXO effects and acceptance.
+> **A root can now be compared to a claim in C++; nothing in C++ validates or accepts a block**,
+> and this milestone must not be read as a block-validation path. Ownership has not moved and no
+> phase moved: Rust is still the oracle, and the P0 corpus, the P3.1/P3.2/P3.3 fixtures and the
+> 121-case differential fixture were not touched. F-1 remains **deferred** and C-29's remaining
+> obligation is still P4's. This addendum supersedes the clause in the P3.3B addendum that the
+> claimed-root comparison and the `RootMismatch` taxonomy are not covered: they are, for this
+> one rule.
+
 
 Related: `THREE_LANGUAGE_ARCHITECTURE.md` (what each language may do),
 `INTERFACE_CONTRACTS.md` (the interfaces owners expose),
@@ -149,9 +205,9 @@ file the phase produced or will produce; "—" means no C++ module exists yet.
 | Script interpreter | `src/ledger/script.rs` | `kernel/src/script.cpp` | P2 | Done |
 | Sighash preimage and digest | `src/ledger/sighash.rs` | `kernel/src/sighash.cpp` | P2 | Done |
 | ECDSA verification, SEC1, DER | `src/crypto/secp256k1.rs` (`k256 0.13.4`) | `kernel/src/secp256k1_verifier.cpp` (vendored libsecp256k1 0.8.0, PRIVATE link) | P2 / G2c | Done in P2.10 — verification only, signing stays Rust/test-only; `CRYPTO_BACKEND_SELECTION_AUDIT.md` §20 |
-| Block header and Merkle root | `src/consensus/block.rs` | `kernel/src/header.cpp`, `kernel/src/merkle.cpp` | P3 | Header slice done in P3.1B: the 107-byte preimage (C-3) and `validate_header_identity`. Leaf-level Merkle root (C-5) done in P3.2B: `zk::merkle_root` over 32-byte leaves. Transaction-level Merkle root (C-5) done in P3.3B: `zk::merkle_root_from_transactions`, the composition of the P1 `txid()` with the P3.2B leaf rule. The claimed-root comparison (B-1/B-14), a header decoder, header hashing and PoW dispatch (C-4) and any block acceptance path are not started |
+| Block header and Merkle root | `src/consensus/block.rs` | `kernel/src/header.cpp`, `kernel/src/merkle.cpp`, `kernel/src/block.cpp` | P3 / P4.1 | Header slice done in P3.1B: the 107-byte preimage (C-3) and `validate_header_identity`. Leaf-level Merkle root (C-5) done in P3.2B: `zk::merkle_root` over 32-byte leaves. Transaction-level Merkle root (C-5) done in P3.3B: `zk::merkle_root_from_transactions`, the composition of the P1 `txid()` with the P3.2B leaf rule. Claimed-root comparison (B-1/B-14) done in P4.1B: `zk::compare_claimed_merkle_root`, the comparison of that computed root against a header's committed `merkle_root`, with the `RootMismatch` outcome. A header decoder, any `Block` type, `validate_structure` and any block acceptance path are not started |
 | Difficulty retarget | `src/consensus/difficulty.rs` | `kernel/src/difficulty.cpp` | P3 | Done in P3.0; reproduces F-6 and F-11, diverges deliberately on F-7 |
-| Proof of work | `src/consensus/pow.rs` | — | P3 | Not started |
+| Proof of work | `src/consensus/pow.rs` | `kernel/src/pow.cpp` | P3 / P4.0 | Done in P4.0 for C-4: both engines over the 107-byte preimage, the inclusive big-endian target comparison (C-24, F-11), and `engine_for_id` refusing any id other than 0 or 1. Mining is not in the production API — the single-threaded search from zero lives in the conformance runner (C-25) |
 | Subsidy, maturity, coinbase split | `src/consensus/reward.rs` | — | P3 | Not started |
 | Anchors and state-root probe | `src/consensus/immutability.rs` | — | P3 | Not started |
 | Chain parameters | `src/params.rs` | — | P3 | Not started |
@@ -201,7 +257,9 @@ consensus code.
 | P3.1 header conformance mapping | `kernel/tools/p31_conformance.py` | Owns the P3.1A corpus slice, the header field mapping, the printed deferral and the corruption self-check | 19 cases (10 preimage + 9 identity) |
 | P3.2 Merkle conformance mapping | `kernel/tools/p32_conformance.py` | Owns the P3.2 corpus slice, the repeated-leaf input mapping, the 32-byte leaf gate, the independent Python cross-check and the corruption self-check | 20 cases (0–9 leaves plus edge shapes) |
 | P3.3 transaction-to-Merkle conformance mapping | `kernel/tools/p33_conformance.py` | Owns the P3.3 corpus slice, the repeated-transaction input mapping, the per-leaf serialization/txid gates, the independent Python re-derivation of every id and root, the `leaf_txids_hex` mapping check and the corruption self-check | 22 cases (0–17 transactions, coinbases, order and duplicate shapes) |
-| Conformance runner protocol | `kernel/conformance/main.cpp` | Owns the 25 verbs and `SUMMARY` output | Stable |
+| P4 proof-of-work conformance mapping | `kernel/tools/p4_conformance.py` | Owns the PoW slice of the P0 root (which `g1_conformance.py` does not load), the engine-name and id mapping, the four `pow_*` verbs and the corruption self-check | 11 cases (`test/vectors/pow/engines.json`), 0 deferred |
+| P4.1 claimed-root conformance mapping | `kernel/tools/p41_conformance.py` | Owns the P4.1A corpus slice, the header-plus-repeated-transaction input mapping, the independent Python re-derivation of every leaf, root and digest comparison, the `roots_match` verdict cross-check and the corruption self-check | 30 cases (12 correct claims, 14 wrong, 2 failing-PoW, 2 empty-list boundary) + 1 deferred key (`guard_before_comparison`, B-8) |
+| Conformance runner protocol | `kernel/conformance/main.cpp` | Owns the 30 verbs and `SUMMARY` output | Stable |
 | Build and gate | `kernel/CMakeLists.txt`, `scripts/gate-g1.ps1`, `scripts/gate-p2-6.ps1`, `scripts/gate-p2-10-provenance.ps1` | Exit code is the verdict (doc `03` §1 rule 5) | Green |
 | Rust dependency set | `Cargo.toml`, `Cargo.lock` | `k256 0.13.4` is the curve implementation actually shipped | Locked |
 | Architecture records | `docs/architecture/**` | This set; decisions are recorded here, not in chat | New |

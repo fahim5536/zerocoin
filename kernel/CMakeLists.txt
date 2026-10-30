@@ -71,6 +71,7 @@ add_library(zerocoin_kernel STATIC
   src/header.cpp
   src/pow.cpp
   src/merkle.cpp
+  src/block.cpp
   src/varint.cpp
   src/transaction.cpp
   src/script.cpp
@@ -105,6 +106,7 @@ add_executable(kernel_tests
   tests/test_header.cpp
   tests/test_pow.cpp
   tests/test_merkle.cpp
+  tests/test_block.cpp
   tests/test_varint.cpp
   tests/test_transaction.cpp
   tests/test_script.cpp
@@ -203,4 +205,16 @@ add_test(NAME kernel_p4_conformance
   COMMAND ${PYTHON_EXECUTABLE}
           ${CMAKE_CURRENT_SOURCE_DIR}/tools/p4_conformance.py
           --vectors ${CMAKE_CURRENT_SOURCE_DIR}/../test/vectors
+          --runner $<TARGET_FILE:kernel_conformance>)
+
+# P4.1 replays the thirty claimed-Merkle-root cases the P4.1A corpus exports,
+# from its own root test/p41-vectors through the same runner binary. Its corpus is
+# separate for the reason P3.1-P3.3 each gave theirs: the P0 manifest pins one
+# source_commit across the 117 historical cases, and these values came from the
+# P4.1A exporter instead. Additive entry only — no existing test changes count,
+# and gate-g1.ps1 runs the whole ctest set, so this line is the gate wiring.
+add_test(NAME kernel_p41_conformance
+  COMMAND ${PYTHON_EXECUTABLE}
+          ${CMAKE_CURRENT_SOURCE_DIR}/tools/p41_conformance.py
+          --vectors ${CMAKE_CURRENT_SOURCE_DIR}/../test/p41-vectors
           --runner $<TARGET_FILE:kernel_conformance>)

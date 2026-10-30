@@ -6,7 +6,9 @@
 // replayed the same way; it lives outside that root, in test/p31-vectors/chain/, and
 // tools/p31_conformance.py renders it. Since P3.2B the leaf-level Merkle corpus
 // is replayed the same way too, from test/p32-vectors/chain/, rendered by
-// tools/p32_conformance.py.
+// tools/p32_conformance.py. Since P4.1B the claimed-root comparison corpus is
+// replayed the same way, from test/p41-vectors/chain/, rendered by
+// tools/p41_conformance.py.
 //
 // Fixture grammar (one directive per line, `value` is everything after the
 // first '=' so empty values are unambiguous):
@@ -38,6 +40,7 @@
 #include <utility>
 #include <vector>
 
+#include "zerocoin/block.h"
 #include "zerocoin/difficulty.h"
 #include "zerocoin/hash.h"
 #include "zerocoin/header.h"
@@ -674,6 +677,75 @@ Produced op_merkle_root_from_txs(const Case& c) {
   };
 }
 
+// --- P4: the claimed-Merkle-root comparison ----------------------------------
+
+/// `chain.claimed_merkle_root.*`: rule B-14 on its own. The header arrives with
+/// all nine fields and the transactions arrive as canonical bytes, so the runner
+/// re-derives the leaves and the root from the same inputs the reference used and
+/// publishes both sides of the comparison instead of only the verdict.
+///
+/// The engine is NOT an operand of the rule: `compare_claimed_merkle_root` reads
+/// no nonce, no `difficulty_bits` and no engine. It is resolved here for two
+/// checks the corpus can state but the function must not obey — the header's
+/// engine byte must be the engine the corpus's validation context names, and
+/// whether the header's own work meets its own target is published as the
+/// evidence that the two `ordering` cases reach B-14 with a failing proof of
+/// work. Nothing below branches on `proof_of_work_meets_target`, so B-15 cannot
+/// move B-14's verdict while the case still says which one it observed.
+Produced op_claimed_merkle_root(const Case& c) {
+  const zk::BlockHeader header = header_of(c, "header.");
+  const std::string declared_engine = c.one("engine");
+  if (declared_engine != std::string(zk::kTrivialEngineName)) {
+    fail("engine: corpus names " + declared_engine + ", this runner replays only " +
+         std::string(zk::kTrivialEngineName));
+  }
+  const zk::PowEngine engine = zk::PowEngine::trivial();
+  // The trust boundary pow.h draws: a caller holding a header compares its engine
+  // byte against the network's own engine rather than resolving the peer's byte
+  // through `engine_for_id`.
+  if (!zk::header_engine_matches(header, engine)) {
+    fail("header.engine_id: " + std::to_string(header.engine_id) +
+         " is not the engine the corpus names");
+  }
+
+  const std::vector<std::string> hexes = c.all("tx_hex");
+  std::vector<Transaction> txs;
+  txs.reserve(hexes.size());
+  for (const std::string& hex : hexes) {
+    txs.push_back(tx_of(hex, "tx_hex"));
+  }
+
+  // The empty list is a null pointer with a zero count — the one combination
+  // block.h documents as meaningful, and what the two `boundary` cases pin.
+  const zk::BlockErrorKind kind =
+      zk::compare_claimed_merkle_root(header, txs.data(), txs.size());
+  const Hash256 root = zk::merkle_root_from_transactions(txs.data(), txs.size());
+
+  std::string leaves;
+  for (const Transaction& tx : txs) {
+    leaves += txid_internal(tx);
+  }
+
+  return {
+      {"accepted", bool_text(kind == zk::BlockErrorKind::kNone)},
+      {"error_kind", zk::block_error_kind_name(kind)},
+      {"error_payload_present", bool_text(zk::block_error_kind_has_payload(kind))},
+      {"computed_root_internal_hex", root.to_hex().str()},
+      {"computed_root_display_hex", root.to_display_hex().str()},
+      {"computed_root_len", std::to_string(root.bytes.size())},
+      {"claimed_root_internal_hex", header.merkle_root.to_hex().str()},
+      {"claimed_root_display_hex", header.merkle_root.to_display_hex().str()},
+      // The verdict must be exactly this byte comparison. A port that returned
+      // `RootMismatch` while publishing two equal digests, or the reverse, fails
+      // here instead of hiding behind a matching `error_kind`.
+      {"roots_match", bool_text(header.merkle_root == root)},
+      {"tx_count", std::to_string(txs.size())},
+      {"leaf_count", std::to_string(txs.size())},
+      {"leaf_txids_hex", leaves},
+      {"proof_of_work_meets_target", bool_text(zk::header_meets_own_target(header, engine))},
+  };
+}
+
 // --- proof-of-work ----------------------------------------------------------
 
 // The corpus publishes the pad budget as a JSON integer; the kernel's parameters
@@ -834,6 +906,7 @@ Produced execute(const Case& c) {
   if (c.op == "header_identity") return op_header_identity(c);
   if (c.op == "merkle_root") return op_merkle_root(c);
   if (c.op == "merkle_root_from_txs") return op_merkle_root_from_txs(c);
+  if (c.op == "claimed_merkle_root") return op_claimed_merkle_root(c);
   if (c.op == "pow_engine_ids") return op_pow_engine_ids(c);
   if (c.op == "pow_trivial_hash") return op_pow_trivial_hash(c);
   if (c.op == "pow_scratchpad_hash") return op_pow_scratchpad_hash(c);
