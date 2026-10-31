@@ -138,8 +138,8 @@ is removed. P2.1 created no service and started no phase.
 > **P4.2A addendum (2026-10-30; fixtures only).** The oracle half of the next slice, committed on
 > its own because the doctrine requires the reference to exist before anything is implemented
 > against it. A `p42_*` section in `zerocoin/tests/export_baseline_vectors.rs` generates
-> `test/p42-vectors/chain/block_structure.json` (group `chain.block_structure`, **34** cases —
-> 14 isolation, 8 boundary, 11 adjacent-pair, 1 dominance; 5 accepted, 29 rejected) whose every
+> `test/p42-vectors/chain/block_structure.json` (group `chain.block_structure`, **35** cases —
+> 14 isolation, 8 boundary, 12 adjacent-pair, 1 dominance; 5 accepted, 30 rejected) whose every
 > expected value is the `Result` the shipping Rust `Block::validate_structure` returned when the
 > exporter called it directly with the seven published context arguments, deliberately not through
 > `Chain::connect_block`. The exporter fails loudly whenever the returned variant, a payload field
@@ -147,18 +147,24 @@ is removed. P2.1 created no service and started no phase.
 > corrected design contract's predictions are inputs to the export and never fields of the corpus.
 > The relative order is published as data — `reported_rule` beside the complete `violated_rules`
 > set, with an emitter assertion that the former is the smallest of the latter — which is what
-> makes C-13 falsifiable per rule pair instead of per document reading. Two orders are recorded as
+> makes C-13 falsifiable per rule pair instead of per document reading. One order is recorded as
 > deliberately **absent**: (B-8, B-9) is non-representable, because an empty transaction list and a
 > list longer than 2000 cannot co-occur, so no input distinguishes them and no `.pair_08_09`
-> identifier exists; (B-13, B-14) is representable but unfrozen. Neither is claimed proven. The
-> 2000-transaction accepted case and the 2001-transaction rejection carry the canonical
+> identifier exists. The pair (B-13, B-14), which the P4.2A manifest deferred, is frozen by the
+> P4.2A.1 fixture `chain.block_structure.pair_13_14_future_and_stale_root`: a header that fails the
+> far-future timestamp bound *and* claims a Merkle root different from the one the reference
+> computes for its own transaction list, on which `Block::validate_structure` returned
+> `TimestampTooFarFuture` with `reported_rule` 13 and `violated_rules` `[13, 14]`. That is a Rust
+> evaluation-order fact read directly out of the shipping reference, not a claim that any C++
+> implementation agrees with it. The 2000-transaction accepted case and the 2001-transaction
+> rejection carry the canonical
 > serialization of every transaction and the length read back out of the variant, so §11.3's
 > "2000/2001 transactions" fuzz row now has a deterministic input. **No C++ rule is delivered by
 > this milestone**: `kernel/src/block.cpp` is untouched, there is no `Block` type, no
 > `validate_structure`, no B-15 rule, no `kernel/tools/p42_conformance.py` and no
 > `kernel_p42_conformance` ctest entry; `run_vectors.py` registers no verifier for the namespace
-> and reports 34 SKIP with exit 1 by design, which is a structural gate and must not be read as a
-> passing conformance gate. P4.2B — replaying these 34 cases against a C++ validator without
+> and reports 35 SKIP with exit 1 by design, which is a structural gate and must not be read as a
+> passing conformance gate. P4.2B — replaying these 35 cases against a C++ validator without
 > editing a published expectation — is the next slice and is **not started**. The P0 corpus
 > (`PASS 112 ANCHOR 5 SKIP 0 FAIL 0`), the P3.1/P3.2/P3.3 fixtures, the P4.1 corpus and its
 > expected results are byte-for-byte unchanged; F-1 remains **deferred**, C-29's obligation is
@@ -203,7 +209,7 @@ Nothing in this table is restated in prose elsewhere; the gate regenerates it
 | **P2.1** | Backend investigation, three-language architecture | none (documentation) | **Complete in this change** |
 | **P2.2–P2.10** | Backend evidence, provenance, integration, conformance, gate closure | G2 | **Complete** — CB-1…CB-4 RESOLVED, CB-5 CLOSED; G2c: GO (`CRYPTO_BLOCKER_REGISTER.md` §6) |
 | **P3** | Header, Merkle, difficulty, PoW, reward, anchors, params, genesis | G3 | In progress — P3.0 delivered difficulty; P3.1B delivered the header preimage and identity rule; P3.2B delivered the leaf-level Merkle root; P3.3B delivered the transaction-level Merkle root; P4.0 delivered the PoW engines and the target comparison (C-4). Reward, anchors, params, genesis and the block acceptance layer that consumes Merkle remain |
-| **P4** | UTXO apply, `connect_block`, storage read | G4 | Not started for its own scope. Two preparation slices landed ahead of it: P4.1B delivered the claimed-Merkle-root comparison (B-14) as a standalone rule with no `Block` type, and P4.0 (registered under P3 above) delivered the digest B-15 will consume. P4.1A/P4.2A also delivered the oracle side: 30 committed claimed-root cases plus 34 committed block-structure cases covering B-3 … B-15 and their relative order, every verdict generated by the Rust validator itself. UTXO apply, `connect_block`, storage read and every `validate_structure` rule other than B-14 remain not started, nothing in C++ validates or accepts a block, and the C++ differential against the P4.2A corpus is P4.2B |
+| **P4** | UTXO apply, `connect_block`, storage read | G4 | Not started for its own scope. Two preparation slices landed ahead of it: P4.1B delivered the claimed-Merkle-root comparison (B-14) as a standalone rule with no `Block` type, and P4.0 (registered under P3 above) delivered the digest B-15 will consume. P4.1A/P4.2A also delivered the oracle side: 30 committed claimed-root cases plus 35 committed block-structure cases covering B-3 … B-15 and their relative order, every verdict generated by the Rust validator itself. UTXO apply, `connect_block`, storage read and every `validate_structure` rule other than B-14 remain not started, nothing in C++ validates or accepts a block, and the C++ differential against the P4.2A corpus is P4.2B |
 | **P5** | Storage write, P2P, RPC, wallet, keystore, CLI | G5 | Not started |
 | **P6** | Differential soak | G6 | Not started |
 | **P7** | Fuzzing, sanitizers, CI, packaging | G7 | Not started |

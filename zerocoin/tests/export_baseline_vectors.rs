@@ -5204,10 +5204,13 @@ fn p42_spec(
     spec
 }
 
-/// The frozen matrix: 14 isolation cases, 8 boundary cases, 11 representable adjacent-pair
-/// cases and 1 dominance witness. 34, with the pair (B-8, B-9) deliberately absent because the
-/// two predicates are mutually exclusive, and the pair (B-13, B-14) absent because the corrected
-/// design contract does not list it — neither gap is presented as proven by a fixture here.
+/// The frozen matrix: 14 isolation cases, 8 boundary cases, 12 representable adjacent-pair
+/// cases and 1 dominance witness. 35. One pair is deliberately absent: (B-8, B-9), because the
+/// two predicates are mutually exclusive, so no input violates both and no input can distinguish
+/// their order — that gap is not presented as proven by a fixture here. The pair (B-13, B-14),
+/// which the corrected P4.2 design contract left unfrozen and the original P4.2A corpus deferred,
+/// is now frozen by `pair_13_14_future_and_stale_root`: one block, both predicates failing, and
+/// the reference's own verdict recorded as row 13.
 fn p42_specs() -> Vec<P42Spec> {
     let specs = vec![
         // ---- Group A: one guard per case, every earlier guard demonstrably satisfied ----
@@ -5640,6 +5643,27 @@ fn p42_specs() -> Vec<P42Spec> {
             },
         ),
         p42_spec(
+            "pair_13_14_future_and_stale_root",
+            "C",
+            "ordering",
+            "`iso_13_timestamp_too_far_future` with exactly one fault added: `stale_claim` is true, so the \
+same header at the same height with the same transaction list now fails B-13 *and* B-14. `violated_rules` \
+is `[13, 14]` and `reported_rule` is 13 — the reference named the far-future timestamp and never reached \
+the root comparison, which is the relative order the P4.2A corpus previously deferred. The nonce is mined \
+*after* the stale claim is written, so B-15 passes and the pair is attributable to rows 13 and 14 alone",
+            |s| {
+                s.height = 7_211;
+                s.expected_height = 7_211;
+                s.transactions = p42_single(7_211);
+                s.stale_claim = true;
+                s.declare(
+                    "TimestampTooFarFuture",
+                    json!({"now": P42_NOW, "found": P42_OVER_LIMIT}),
+                    &[13, 14],
+                );
+            },
+        ),
+        p42_spec(
             "pair_14_15_root_mismatch_and_failing_pow",
             "C",
             "ordering",
@@ -5696,7 +5720,7 @@ fn p42_specs() -> Vec<P42Spec> {
     specs
 }
 
-/// The corpus's 34 cases, each one produced by `p42_emit` and therefore by a direct call into
+/// The corpus's 35 cases, each one produced by `p42_emit` and therefore by a direct call into
 /// `Block::validate_structure`.
 fn block_structure_cases() -> Vec<Value> {
     p42_specs().iter().map(p42_emit).collect()
@@ -5810,6 +5834,16 @@ fn p42_corpus() -> Vec<(String, String)> {
             })
         })
         .collect();
+    // The B-13/B-14 precedence fixture the manifest's `resolved_pairs` records. Read from the
+    // emitted case rather than restated as a literal, so the metadata cannot describe a verdict the
+    // corpus stopped carrying: the emitter already asserted that the reported row is the smallest
+    // violated one, so these two published values are the whole of the claim.
+    let pair_13_14 = cases
+        .iter()
+        .find(|case| {
+            case["id"].as_str() == Some("chain.block_structure.pair_13_14_future_and_stale_root")
+        })
+        .expect("the corpus must carry the B-13/B-14 precedence fixture");
 
     let mut files: Vec<(String, String)> = Vec::new();
     let mut counts: Vec<Value> = Vec::new();
@@ -5827,8 +5861,8 @@ fn p42_corpus() -> Vec<(String, String)> {
         "chain.block_structure",
         "rule",
         "The whole structural validator, B-3 through B-15: thirteen guards in the order \
-`Block::validate_structure` evaluates them, plus the precedence between every adjacent pair the \
-corrected design contract froze as representable. Each case publishes the header, the exact \
+`Block::validate_structure` evaluates them, plus the precedence between every adjacent pair this \
+corpus represents. Each case publishes the header, the exact \
 serialized transactions, the seven-key validator context and which engine was selected, and the \
 expected side publishes the verdict the reference returned, the payload read out of that \
 variant, the evaluation row it belongs to, and the complete set of rules the published input \
@@ -5876,10 +5910,10 @@ cases at export, so neither is a claim this file makes on its own behalf.",
             "witnesses": precedence,
             "adjacent_pairs_represented": [
                 [3, 4], [4, 5], [5, 6], [6, 7], [7, 8], [9, 10], [10, 11], [11, 12], [12, 13],
-                [14, 15],
+                [13, 14], [14, 15],
             ],
             "basis": "a pair is represented when one case's published input violates both rows \
-and `reported_rule` equals the smaller of them. The emitter asserts that equality for all 34 \
+and `reported_rule` equals the smaller of them. The emitter asserts that equality for all 35 \
 cases, so the array above is a summary of assertions that ran during generation, not a list of \
 hopes.",
         },
@@ -5905,15 +5939,28 @@ list carries no coinbase at all, so the verdict cannot be attributed to the coin
 both 8 and 9",
                 ],
             },
+        ],
+        "resolved_pairs": [
             {
                 "pair": [13, 14],
                 "pair_before": "B-13_B-14",
-                "fixture": "none",
-                "reason": "the pair is representable — a far-future timestamp together with a stale \
-root — but the corrected P4.2 design contract did not freeze a case for it, and this milestone \
-does not add one. A port's ordering of these two rows is therefore not covered by this corpus \
-yet.",
-                "not_claimed": "nothing here asserts B-13 precedes B-14, in either direction.",
+                "fixture": pair_13_14["id"],
+                "reported_rule": pair_13_14["expected"]["reported_rule"],
+                "violated_rules": pair_13_14["expected"]["violated_rules"],
+                "history": "the original P4.2A corpus deferred this pair, because the corrected \
+design contract froze no case for it and that milestone added none. P4.2A.1 adds the fixture, so \
+the deferral is closed and this pair is no longer listed in `deferred_pairs`.",
+                "evidence": "one constructed block carries the height-7211 timestamp, which is \
+`now + 7201` and therefore fails B-13, and a claimed root with bit 0 of byte 0 flipped away from \
+the root the reference computes for the same transaction list, which fails B-14. The header's \
+nonce is mined after that stale claim is written, so B-15 passes, and rows 3 through 12 all pass, \
+so the verdict cannot be attributed to an earlier guard. The published `violated_rules` is the set \
+`p42_violated_rules` re-evaluates from the published input alone, and the published \
+`reported_rule` is the row of the variant `validate_structure` actually returned; the emitter \
+asserts that the reported row is the smallest violated one.",
+                "not_claimed": "this records what the shipping Rust reference does. Nothing here \
+implements, runs or claims agreement from a C++ `validate_structure`, and whether a port orders \
+these two rows the same way is a P4.2B differential question, not a claim of this corpus.",
             },
         ],
         "synthetic_context_cases": synthetic_ids,
@@ -6004,9 +6051,15 @@ or assert.",
 claims its own root — a shape the P4.1 corpus cannot contain at all.",
             "The version field is published and never validated (F-2), so no case here depends on \
 it; `BLOCK_VERSION` is written by `header_at` and read by nothing in the path under test.",
-            "These 34 cases are new with the `p42_*` exporter. `reference_commits` names the commit \
+            "These 35 cases are new with the `p42_*` exporter. `reference_commits` names the commit \
 whose code is under test, not the commit that introduced these cases, because a fixture cannot \
 truthfully claim to predate its own generator.",
+            "`pair_13_14_future_and_stale_root` is the one case added after the original P4.2A \
+corpus: it is `.iso_13_timestamp_too_far_future` with a single extra fault, a stale claimed root, \
+so the two cases differ in one construction line and the pair's verdict is the reference's own \
+`TimestampTooFarFuture`. That closes the (B-13, B-14) deferral — see `resolved_pairs` — and no \
+older case, id or expected value changed. The (B-8, B-9) deferral is untouched, because no input \
+can represent that pair.",
         ],
         "files": counts,
     });
@@ -6089,24 +6142,28 @@ fn p42_reference_fixtures_are_reproducible_and_pinned() {
     assert_eq!(document["source_commit"], json!(P42_SOURCE_COMMIT), "source_commit");
     let cases = document["cases"].as_array().expect("a cases array").clone();
     assert_eq!(document["case_count"], json!(cases.len()), "case_count matches the array");
-    assert_eq!(cases.len(), 34, "the pinned case count for P4.2A");
+    assert_eq!(cases.len(), 35, "the pinned case count for P4.2A plus the P4.2A.1 precedence fixture");
 
     let manifest: Value =
         serde_json::from_str(&first[1].1).expect("the generated manifest parses as JSON");
     assert_eq!(manifest["phase"], json!("P4.2A"), "phase");
     assert_eq!(manifest["group"], json!("chain.block_structure"), "manifest group");
-    assert_eq!(manifest["total_cases"], json!(34), "manifest total_cases");
+    assert_eq!(manifest["total_cases"], json!(35), "manifest total_cases");
     assert_eq!(manifest["source_commit"], json!(P42_SOURCE_COMMIT), "manifest source_commit");
     assert_eq!(
         manifest["case_ids"].as_array().expect("case_ids").len(),
-        34,
+        35,
         "the manifest lists one id per case"
     );
 
     // The arithmetic the mission statement froze, checked against the ids actually published.
     let ids: Vec<&str> = cases.iter().map(|c| c["id"].as_str().expect("id")).collect();
     let unique: std::collections::BTreeSet<&str> = ids.iter().copied().collect();
-    assert_eq!(unique.len(), 34, "every fixture id must appear exactly once");
+    assert_eq!(unique.len(), 35, "every fixture id must appear exactly once");
+    assert!(
+        ids.contains(&"chain.block_structure.pair_13_14_future_and_stale_root"),
+        "the B-13/B-14 precedence fixture must be part of the corpus that resolves the deferral"
+    );
     for &id in &ids {
         assert!(id.starts_with("chain.block_structure."), "{id}: outside the group namespace");
         assert_ne!(id, "chain.block_structure.pair_08_09", "the deferred pair must not gain a fake case");
@@ -6119,16 +6176,16 @@ fn p42_reference_fixtures_are_reproducible_and_pinned() {
     };
     assert_eq!(count_group("A"), 14, "Group A is 14 isolation cases");
     assert_eq!(count_group("B"), 8, "Group B is 8 boundary cases");
-    assert_eq!(count_group("C"), 11, "Group C is the 11 representable adjacent-pair cases");
+    assert_eq!(count_group("C"), 12, "Group C is the 12 representable adjacent-pair cases");
     assert_eq!(count_group("D"), 1, "Group D is the single dominance witness");
     assert_eq!(
         manifest["groups"],
         json!({
             "A_isolation": 14,
             "B_boundary": 8,
-            "C_adjacent_pair": 11,
+            "C_adjacent_pair": 12,
             "D_dominance": 1,
-            "sum": 34,
+            "sum": 35,
         }),
         "the manifest's group counts must equal the published corpus"
     );
@@ -6165,14 +6222,216 @@ fn p42_reference_fixtures_are_reproducible_and_pinned() {
             reported.push(value["expected"]["reported_rule"].as_u64().expect("row") as u8);
         }
     }
-    assert_eq!((rule, boundary, ordering), (14, 8, 12), "the published intent mix");
-    assert_eq!((accepted_count, rejected_count), (5, 29), "the published verdict mix");
+    assert_eq!((rule, boundary, ordering), (14, 8, 13), "the published intent mix");
+    assert_eq!((accepted_count, rejected_count), (5, 30), "the published verdict mix");
     reported.sort_unstable();
     reported.dedup();
     assert_eq!(
         reported,
         (3u8..=15).collect::<Vec<u8>>(),
         "every guard B-3 through B-15 has to be the reported one in at least one case"
+    );
+
+    // ---- The P4.2A.1 precedence fixture, pinned on its own ------------------------------------
+    // Everything below reads only what this one case publishes, so the (B-13, B-14) claim is
+    // checkable without re-running the emitter: both predicates are measurably false on the
+    // published input, the reference's verdict is the earlier row, and the difference from the
+    // B-13 isolation case is the stale claim alone.
+    let fixture = cases
+        .iter()
+        .find(|c| c["id"] == json!("chain.block_structure.pair_13_14_future_and_stale_root"))
+        .expect("the B-13/B-14 precedence fixture");
+    let iso_13 = cases
+        .iter()
+        .find(|c| c["id"] == json!("chain.block_structure.iso_13_timestamp_too_far_future"))
+        .expect("the B-13 isolation case");
+    assert_eq!(fixture["intent"], json!("ordering"), "the fixture is an ordering case");
+    assert_eq!(fixture["input"]["group"], json!("C"), "the fixture is an adjacent-pair case");
+    assert_eq!(
+        fixture["input"]["synthetic_context"],
+        json!(false),
+        "separating these two rows needs no clock a node could not produce"
+    );
+    assert_eq!(
+        fixture["input"]["reused_from"],
+        Value::Null,
+        "the fixture is constructed by this exporter, not replayed from the P4.1 corpus"
+    );
+
+    // B-13 fails: the published timestamp is one second past the published context's own limit,
+    // and it is above the median, so row 12 is not what the reference stopped on.
+    let stamp = fixture["input"]["header"]["timestamp"].as_u64().expect("timestamp");
+    let now = fixture["input"]["validation_context"]["now"].as_u64().expect("now");
+    let median = fixture["input"]["validation_context"]["median_time_past"]
+        .as_u64()
+        .expect("median_time_past");
+    assert_eq!(stamp, P42_OVER_LIMIT, "B-13: the published timestamp is the one-past-limit literal");
+    assert_eq!(
+        stamp,
+        now.saturating_add(MAX_FUTURE_SECONDS) + 1,
+        "B-13: the timestamp is exactly one past the limit the reference computes from the \
+         published `now`"
+    );
+    assert!(stamp > median, "B-12: the same timestamp is above the median, so the stale check passed");
+
+    // B-14 fails: the claimed root is not the root of the published list, and B-15 does not,
+    // because the nonce was mined after the stale claim was written into the header.
+    assert_ne!(
+        fixture["input"]["header"]["merkle_root_hex"],
+        fixture["expected"]["computed_root"]["internal_hex"],
+        "B-14: the claimed root differs from the root the reference computes for this list"
+    );
+    assert_eq!(
+        fixture["expected"]["roots_match"],
+        json!(false),
+        "B-14: the two published digests disagree"
+    );
+    assert_eq!(
+        fixture["expected"]["proof_of_work_meets_target"],
+        json!(true),
+        "B-15: the header solves, so the pair is rows 13 and 14 and nothing is masking row 14"
+    );
+    assert_eq!(
+        fixture["expected"]["coinbase_flags"],
+        json!("1"),
+        "rows 8 through 11: one coinbase, at index 0, in a list of one"
+    );
+
+    // The reference's verdict, as published beside that input.
+    assert_eq!(fixture["expected"]["accepted"], json!(false), "the reference rejected the block");
+    assert_eq!(
+        fixture["expected"]["error_kind"],
+        json!("TimestampTooFarFuture"),
+        "the reference reported B-13, not B-14"
+    );
+    assert_eq!(
+        p42_canonical(&fixture["expected"]["error_payload"]),
+        p42_canonical(&json!({ "now": now, "found": stamp })),
+        "the payload is the reference's own `now`/`found` pair, read out of the variant it returned"
+    );
+    assert_eq!(fixture["expected"]["reported_rule"], json!(13), "the reported evaluation row is B-13");
+    assert_eq!(
+        fixture["expected"]["violated_rules"],
+        json!([13, 14]),
+        "the published input violates B-13 and B-14, and no other row"
+    );
+    assert_eq!(
+        fixture["expected"]["is_first_violation"],
+        json!(true),
+        "the reported row is the earliest violated row"
+    );
+
+    // The whole difference from the isolation case is the second fault, so the added violation
+    // is the only thing that could have changed the verdict — and the verdict did not change. Two
+    // header fields move: the claimed root, which is this case's fault, and the nonce, which the
+    // emitter mines *after* that claim is written so that B-15 passes on the stale header.
+    let header_minus = |case: &Value, keys: &[&str]| -> Value {
+        let mut header = case["input"]["header"].clone();
+        for key in keys {
+            let removed = header
+                .as_object_mut()
+                .expect("a published header is an object")
+                .remove(*key);
+            assert!(removed.is_some(), "`{key}` is a published header field");
+        }
+        header
+    };
+    assert_eq!(
+        header_minus(fixture, &["merkle_root_hex", "nonce"]),
+        header_minus(iso_13, &["merkle_root_hex", "nonce"]),
+        "the fixture is the B-13 isolation header with nothing changed but the claimed root and \
+         the nonce mined against it"
+    );
+    assert_ne!(
+        fixture["input"]["header"]["merkle_root_hex"],
+        iso_13["input"]["header"]["merkle_root_hex"],
+        "the stale claim is the only header field that differs"
+    );
+    assert_eq!(
+        fixture["input"]["validation_context"],
+        iso_13["input"]["validation_context"],
+        "the context is unchanged, so the pair cannot be attributed to a different clock"
+    );
+    assert_eq!(
+        fixture["input"]["transactions"],
+        iso_13["input"]["transactions"],
+        "the transaction list is unchanged"
+    );
+    assert_eq!(
+        fixture["expected"]["computed_root"],
+        iso_13["expected"]["computed_root"],
+        "both cases compute the same root from the same list"
+    );
+    assert_eq!(
+        iso_13["expected"]["violated_rules"],
+        json!([13]),
+        "the isolation case still violates B-13 alone; P4.2A.1 did not change its expectations"
+    );
+    assert_eq!(
+        iso_13["expected"]["reported_rule"],
+        json!(13),
+        "the isolation case still reports B-13"
+    );
+
+    // The manifest's pair bookkeeping must be the corpus's, not a literal kept in sync by hand:
+    // (B-13, B-14) moves out of `deferred_pairs` into `resolved_pairs`, whose numbers are copies
+    // of the published fixture, and `adjacent_pairs_represented` is re-derived from the cases.
+    let deferred: Vec<Vec<u8>> = manifest["deferred_pairs"]
+        .as_array()
+        .expect("deferred_pairs")
+        .iter()
+        .map(|entry| {
+            entry["pair"]
+                .as_array()
+                .expect("a deferred pair names two rows")
+                .iter()
+                .map(|row| row.as_u64().expect("row") as u8)
+                .collect()
+        })
+        .collect();
+    assert_eq!(
+        deferred,
+        vec![vec![8u8, 9u8]],
+        "the only deferred relative order left is the non-representable (B-8, B-9)"
+    );
+    let resolved = manifest["resolved_pairs"]
+        .as_array()
+        .expect("resolved_pairs")
+        .clone();
+    assert_eq!(resolved.len(), 1, "exactly one pair is recorded as resolved by a fixture");
+    assert_eq!(resolved[0]["pair"], json!([13, 14]), "the resolved pair is (B-13, B-14)");
+    assert_eq!(resolved[0]["fixture"], fixture["id"], "the resolution names the published fixture");
+    assert_eq!(
+        resolved[0]["reported_rule"],
+        fixture["expected"]["reported_rule"],
+        "the resolution copies the published row rather than restating it"
+    );
+    assert_eq!(
+        resolved[0]["violated_rules"],
+        fixture["expected"]["violated_rules"],
+        "the resolution copies the published violated set rather than restating it"
+    );
+    let mut derived_pairs: Vec<Vec<u8>> = Vec::new();
+    for first in 3u8..15 {
+        if cases.iter().any(|c| {
+            c["expected"]["violated_rules"] == json!([first, first + 1])
+                && c["expected"]["reported_rule"] == json!(first)
+        }) {
+            derived_pairs.push(vec![first, first + 1]);
+        }
+    }
+    assert_eq!(
+        manifest["precedence"]["adjacent_pairs_represented"],
+        json!(derived_pairs),
+        "the manifest's adjacent-pair array is what the cases publish, not a hand-kept literal"
+    );
+    assert!(
+        derived_pairs.contains(&vec![13u8, 14u8]),
+        "(B-13, B-14) is now a represented pair"
+    );
+    assert!(
+        !derived_pairs.contains(&vec![8u8, 9u8]),
+        "(B-8, B-9) stays unrepresented, because no input can violate both"
     );
 
     // Rebuild and re-validate every case from its published bytes alone.

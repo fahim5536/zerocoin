@@ -346,11 +346,20 @@ Boundary notes, observed and tested:
   without any read of `transactions[0]`, `.iso_09_too_many_transactions` returns the length out
   of the variant, and `.pair_09_10_over_limit_and_first_not_coinbase` shows B-9 dominating B-10 on
   a 2001-entry list that contains no coinbase at all.
-- **B-13 versus B-14 is representable and is not yet covered (P4.2A).** A far-future timestamp
-  together with a stale root fails both rows, so a case could be built; the corrected design
-  contract did not freeze one and this milestone did not invent one. Nothing in the corpus asserts
-  that B-13 precedes B-14, in either direction. It is recorded as the second deferred pair in
-  `test/p42-vectors/manifest.json`.
+- **B-13 precedes B-14, and P4.2A.1 pins it with a Rust oracle fixture.** The pair was the second
+  deferral in the original P4.2A corpus: a far-future timestamp together with a stale root fails
+  both rows, so a case could be built, but the corrected design contract froze none and that
+  milestone invented none. `chain.block_structure.pair_13_14_future_and_stale_root` now supplies it:
+  `.iso_13_timestamp_too_far_future` with exactly one added fault, a claimed root with bit 0 of byte
+  0 flipped away from the root computed for the same transaction list, so row 13
+  (`timestamp > now.saturating_add(7200)`) and row 14 (`merkle_root != computed`) both hold while
+  rows 3 … 12 pass and the nonce, mined after the stale claim, keeps row 15 passing. The committed
+  expected value is what `Block::validate_structure` returned for that block —
+  `TimestampTooFarFuture { now, found }`, published as `reported_rule` 13 beside `violated_rules`
+  `[13, 14]` — which is the corpus asserting B-13 first rather than a reader asserting it. The
+  manifest moved the pair from `deferred_pairs` to `resolved_pairs`; only (B-8, B-9) remains
+  deferred. No C++ validator exists, so nothing here claims that a port orders the two rows the
+  same way — that question is P4.2B's.
 - **No rule validates `header.version`.** `BLOCK_VERSION` is written when headers are built
   (`src/chain.rs:380`, `src/genesis.rs:70`) and is never read by validation. See F-2.
 - **No block byte-size or weight rule exists.** The only block-level limits are 2000
@@ -363,7 +372,7 @@ OBSERVED — `validate_structure` is a public method; calling it directly does n
 acceptance is only `Chain::connect_block`.
 
 **P4.2A (2026-10-30, fixtures only).** The order in the table above is no longer only a reading of
-the source. `test/p42-vectors/chain/block_structure.json` publishes **34** cases in group
+the source. `test/p42-vectors/chain/block_structure.json` publishes **35** cases in group
 `chain.block_structure` whose every expected outcome is the `Result` that the shipping Rust
 `Block::validate_structure` returned for that exact block, called directly with the seven published
 context arguments — not through `Chain::connect_block`, which would add the bits check, the UTXO
@@ -372,8 +381,9 @@ replay and the reward check on top. The emitter (`p42_*` in
 intent, calls the reference, and **panics** if the returned variant or its payload differs from that
 declaration, so a fixture whose expectation Rust does not share cannot be committed; no predicted
 verdict is ever written into a published file. Coverage is every rule B-3 … B-15 both as the
-reported guard and as a violated guard, and 10 of the 11 representable adjacent pairs
-(3,4) … (14,15) plus the two gaps above. Group D is a single dominance witness —
+reported guard and as a violated guard, and all 11 representable adjacent pairs
+(3,4) … (14,15) — the (13,14) entry of that array is the P4.2A.1 fixture described above, and the
+only pair no input can represent is (8,9). Group D is a single dominance witness —
 `.chaos_all_later_guards_broken`, one block violating the **ten** jointly-satisfiable later
 conditions, which `WrongChain` still reports first; the earlier "every rule from B-4 to B-15"
 framing was retracted because B-8 excludes B-10 and B-11 by construction, so no such block exists.
@@ -1046,7 +1056,7 @@ Unverified by this milestone (open questions, not claims):
 | P0 corpus | `python test/harness/run_vectors.py` (117 cases) |
 | P0 emitter | `cargo test --test export_baseline_vectors` |
 | P4.1A claimed-root oracle | `test/p41-vectors/chain/claimed_merkle_root.json` (30 cases), pinned by `p41_reference_fixtures_are_reproducible_and_pinned` |
-| P4.2A B-3 … B-15 oracle: isolation, boundaries, adjacent pairs, dominance | `test/p42-vectors/chain/block_structure.json` (34 cases), generated and re-validated by `p42_vectors_match_the_committed_reference_corpus` and `p42_reference_fixtures_are_reproducible_and_pinned`; the structural gate is `python test/harness/run_vectors.py --vectors test/p42-vectors` |
+| P4.2A B-3 … B-15 oracle: isolation, boundaries, adjacent pairs, dominance | `test/p42-vectors/chain/block_structure.json` (35 cases), generated and re-validated by `p42_vectors_match_the_committed_reference_corpus` and `p42_reference_fixtures_are_reproducible_and_pinned`; the structural gate is `python test/harness/run_vectors.py --vectors test/p42-vectors` |
 
 The tests live in `zerocoin/tests/consensus_rules.rs` and reuse, rather than invent, the
 values in `test/vectors/` and the pinned constants in `src/consensus/immutability.rs`.

@@ -47,6 +47,7 @@
     "chain.block_structure.pair_10_11_first_not_coinbase_and_duplicate",
     "chain.block_structure.pair_11_12_duplicate_and_old_timestamp",
     "chain.block_structure.pair_12_13_old_and_future",
+    "chain.block_structure.pair_13_14_future_and_stale_root",
     "chain.block_structure.pair_14_15_root_mismatch_and_failing_pow",
     "chain.block_structure.pair_14_15_zero_root_claim_and_failing_pow",
     "chain.block_structure.chaos_all_later_guards_broken"
@@ -67,16 +68,6 @@
       ],
       "pair_before": "B-8_B-9",
       "reason": "`transactions.is_empty()` and `transactions.len() > MAX_BLOCK_TRANSACTIONS` are mutually exclusive, so no input can violate both rows at once and no input can distinguish the two relative orders. The relative order of B-8 and B-9 is observationally vacuous."
-    },
-    {
-      "fixture": "none",
-      "not_claimed": "nothing here asserts B-13 precedes B-14, in either direction.",
-      "pair": [
-        13,
-        14
-      ],
-      "pair_before": "B-13_B-14",
-      "reason": "the pair is representable — a far-future timestamp together with a stale root — but the corrected P4.2 design contract did not freeze a case for it, and this milestone does not add one. A port's ordering of these two rows is therefore not covered by this corpus yet."
     }
   ],
   "description": "Rust-authoritative validation fixtures for the Block Structure rules B-3 through B-15 of `zerocoin::consensus::block::Block::validate_structure`, generated for the C++ kernel's future port of that function. This is a fixture-first milestone: it publishes what Rust returns, and it does not implement, run or claim agreement from any C++ validator.",
@@ -90,7 +81,7 @@
   ],
   "files": [
     {
-      "cases": 34,
+      "cases": 35,
       "group": "chain.block_structure",
       "path": "chain/block_structure.json"
     }
@@ -100,14 +91,14 @@
   "groups": {
     "A_isolation": 14,
     "B_boundary": 8,
-    "C_adjacent_pair": 11,
+    "C_adjacent_pair": 12,
     "D_dominance": 1,
-    "sum": 34
+    "sum": 35
   },
   "independent_verifier": "test/harness/zro_vectors.py already provides the transaction deserializer, `tx_txid`, `tx_is_coinbase` and `merkle_root` needed to re-derive every published digest and every `serialized_hex` from bytes alone; `run_vectors.py` registers no verifier for this group and this corpus does not wire one in, so the Rust exporter remains the origin of every value published here",
   "intents": {
     "boundary": 8,
-    "ordering": 12,
+    "ordering": 13,
     "rule": 14
   },
   "notes": [
@@ -116,7 +107,8 @@
     "Three orderings are deliberately not conflated here: `error_kind` names the `BlockError` variant, `reported_rule` is the row of `validate_structure`'s body that returned it, and the kernel's own `BlockErrorKind` numbering is a C++-side sequence this corpus does not assign or assert.",
     "B-15 is reachable only when B-14 passed, which is why `.iso_15_insufficient_pow` claims its own root — a shape the P4.1 corpus cannot contain at all.",
     "The version field is published and never validated (F-2), so no case here depends on it; `BLOCK_VERSION` is written by `header_at` and read by nothing in the path under test.",
-    "These 34 cases are new with the `p42_*` exporter. `reference_commits` names the commit whose code is under test, not the commit that introduced these cases, because a fixture cannot truthfully claim to predate its own generator."
+    "These 35 cases are new with the `p42_*` exporter. `reference_commits` names the commit whose code is under test, not the commit that introduced these cases, because a fixture cannot truthfully claim to predate its own generator.",
+    "`pair_13_14_future_and_stale_root` is the one case added after the original P4.2A corpus: it is `.iso_13_timestamp_too_far_future` with a single extra fault, a stale claimed root, so the two cases differ in one construction line and the pair's verdict is the reference's own `TimestampTooFarFuture`. That closes the (B-13, B-14) deferral — see `resolved_pairs` — and no older case, id or expected value changed. The (B-8, B-9) deferral is untouched, because no input can represent that pair."
   ],
   "phase": "P4.2A",
   "precedence": {
@@ -158,11 +150,15 @@
         13
       ],
       [
+        13,
+        14
+      ],
+      [
         14,
         15
       ]
     ],
-    "basis": "a pair is represented when one case's published input violates both rows and `reported_rule` equals the smaller of them. The emitter asserts that equality for all 34 cases, so the array above is a summary of assertions that ran during generation, not a list of hopes.",
+    "basis": "a pair is represented when one case's published input violates both rows and `reported_rule` equals the smaller of them. The emitter asserts that equality for all 35 cases, so the array above is a summary of assertions that ran during generation, not a list of hopes.",
     "witnesses": [
       {
         "id": "chain.block_structure.pair_03_04_chain_and_height",
@@ -237,6 +233,14 @@
         ]
       },
       {
+        "id": "chain.block_structure.pair_13_14_future_and_stale_root",
+        "reported_rule": 13,
+        "violated_rules": [
+          13,
+          14
+        ]
+      },
+      {
         "id": "chain.block_structure.pair_14_15_root_mismatch_and_failing_pow",
         "reported_rule": 14,
         "violated_rules": [
@@ -279,6 +283,24 @@
     "validate_structure_introduced": "e464695f92f6884e6d25c6947d452d5fb24229a6"
   },
   "regenerate": "ZRO_VECTOR_WRITE=1 with the same command, then review the diff",
+  "resolved_pairs": [
+    {
+      "evidence": "one constructed block carries the height-7211 timestamp, which is `now + 7201` and therefore fails B-13, and a claimed root with bit 0 of byte 0 flipped away from the root the reference computes for the same transaction list, which fails B-14. The header's nonce is mined after that stale claim is written, so B-15 passes, and rows 3 through 12 all pass, so the verdict cannot be attributed to an earlier guard. The published `violated_rules` is the set `p42_violated_rules` re-evaluates from the published input alone, and the published `reported_rule` is the row of the variant `validate_structure` actually returned; the emitter asserts that the reported row is the smallest violated one.",
+      "fixture": "chain.block_structure.pair_13_14_future_and_stale_root",
+      "history": "the original P4.2A corpus deferred this pair, because the corrected design contract froze no case for it and that milestone added none. P4.2A.1 adds the fixture, so the deferral is closed and this pair is no longer listed in `deferred_pairs`.",
+      "not_claimed": "this records what the shipping Rust reference does. Nothing here implements, runs or claims agreement from a C++ `validate_structure`, and whether a port orders these two rows the same way is a P4.2B differential question, not a claim of this corpus.",
+      "pair": [
+        13,
+        14
+      ],
+      "pair_before": "B-13_B-14",
+      "reported_rule": 13,
+      "violated_rules": [
+        13,
+        14
+      ]
+    }
+  ],
   "reuse_meaning": "the listed cases replay a committed `chain.claimed_merkle_root` block byte for byte — the same header fields, the same serialized transactions, the same seven-key validation context — and add only a validator-level claim P4.1 could not make. `p42_reference_fixtures_are_reproducible_and_pinned` compares them against `test/p41-vectors/chain/claimed_merkle_root.json` on disk, so the identity is checked against the published corpus rather than against a second copy of the same emitter call. The P4.1 corpus itself is not modified by this milestone.",
   "reused_from_p41": [
     "chain.block_structure.iso_08_no_transactions",
@@ -344,7 +366,7 @@
     "chain.block_structure.chaos_all_later_guards_broken"
   ],
   "synthetic_context_meaning": "a case labelled synthetic deliberately combines published values that a running node would never produce together — `median_time_past` above `now + MAX_FUTURE_SECONDS`, or eleven guards broken in one block. The isolation and boundary cases reach their verdicts with ordinary contexts; these two need the label so no reader mistakes an observation about guard order for an observation about the network.",
-  "total_cases": 34,
+  "total_cases": 35,
   "verdicts": {
     "accepted": 5,
     "accepted_case_ids": [
@@ -354,6 +376,6 @@
       "chain.block_structure.bnd_13_near_max_last_exact_accept",
       "chain.block_structure.bnd_13_near_max_saturating_accept"
     ],
-    "rejected": 29
+    "rejected": 30
   }
 }

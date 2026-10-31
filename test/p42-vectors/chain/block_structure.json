@@ -1,5 +1,5 @@
 {
-  "case_count": 34,
+  "case_count": 35,
   "cases": [
     {
       "expected": {
@@ -9079,6 +9079,98 @@
       "expected": {
         "accepted": false,
         "claimed_root": {
+          "display_hex": "0ce5a3c694e06208b0aada7b26a53cc3bb2fd903992f2605498ba651c639936b",
+          "internal_hex": "6b9339c651a68b4905262f9903d92fbbc33ca5267bdaaab00862e094c6a3e50c"
+        },
+        "coinbase_count": 1,
+        "coinbase_flags": "1",
+        "computed_root": {
+          "display_hex": "0ce5a3c694e06208b0aada7b26a53cc3bb2fd903992f2605498ba651c639936a",
+          "internal_hex": "6a9339c651a68b4905262f9903d92fbbc33ca5267bdaaab00862e094c6a3e50c"
+        },
+        "computed_root_len": 32,
+        "error_kind": "TimestampTooFarFuture",
+        "error_payload": {
+          "found": 1700007211,
+          "now": 1700000010
+        },
+        "first_is_coinbase": true,
+        "is_first_violation": true,
+        "leaf_count": 1,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "0ce5a3c694e06208b0aada7b26a53cc3bb2fd903992f2605498ba651c639936a",
+              "internal_hex": "6a9339c651a68b4905262f9903d92fbbc33ca5267bdaaab00862e094c6a3e50c"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "reported_rule": 13,
+        "roots_match": false,
+        "violated_rules": [
+          13,
+          14
+        ]
+      },
+      "id": "chain.block_structure.pair_13_14_future_and_stale_root",
+      "independent_check": "`iso_13_timestamp_too_far_future` with exactly one fault added: `stale_claim` is true, so the same header at the same height with the same transaction list now fails B-13 *and* B-14. `violated_rules` is `[13, 14]` and `reported_rule` is 13 — the reference named the far-future timestamp and never reached the root comparison, which is the relative order the P4.2A corpus previously deferred. The nonce is mined *after* the stale claim is written, so B-15 passes and the pair is attributable to rows 13 and 14 alone",
+      "input": {
+        "engine_config": null,
+        "group": "C",
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 0,
+          "height": 7211,
+          "merkle_root_hex": "6b9339c651a68b4905262f9903d92fbbc33ca5267bdaaab00862e094c6a3e50c",
+          "nonce": 2,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700007211,
+          "version": 1
+        },
+        "reused_from": null,
+        "synthetic_context": false,
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "022b1c085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0c022b1c085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 97,
+            "version": 1
+          }
+        ],
+        "tx_count": 1,
+        "validation_context": {
+          "engine": "sha256d-trivial",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 7211,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 1700000004,
+          "now": 1700000010
+        }
+      },
+      "intent": "ordering"
+    },
+    {
+      "expected": {
+        "accepted": false,
+        "claimed_root": {
           "display_hex": "a6ed296ca6d4bbaeecf92e7f1ff9954cf156bdad157c1590ba74997f2ab69aa3",
           "internal_hex": "a39ab62a7f9974ba90157c15adbd56f14c95f91f7f2ef9ecaebbd4a66c29eda6"
         },
@@ -9524,7 +9616,7 @@
   "generator": "zerocoin/tests/export_baseline_vectors.rs, `p42_*` functions, added by the P4.2A commit that lands immediately after the baseline; a fixture cannot truthfully record the hash of the commit that contains it, so `source_commit` names the code and this field names the exporter separately",
   "group": "chain.block_structure",
   "intent": "rule",
-  "note": "The whole structural validator, B-3 through B-15: thirteen guards in the order `Block::validate_structure` evaluates them, plus the precedence between every adjacent pair the corrected design contract froze as representable. Each case publishes the header, the exact serialized transactions, the seven-key validator context and which engine was selected, and the expected side publishes the verdict the reference returned, the payload read out of that variant, the evaluation row it belongs to, and the complete set of rules the published input violates — so a rejection is evidence about ordering as well as about one guard.",
+  "note": "The whole structural validator, B-3 through B-15: thirteen guards in the order `Block::validate_structure` evaluates them, plus the precedence between every adjacent pair this corpus represents. Each case publishes the header, the exact serialized transactions, the seven-key validator context and which engine was selected, and the expected side publishes the verdict the reference returned, the payload read out of that variant, the evaluation row it belongs to, and the complete set of rules the published input violates — so a rejection is evidence about ordering as well as about one guard.",
   "provenance": "every `expected` value was produced by a direct call to the shipping `zerocoin/` Rust function `consensus::block::Block::validate_structure` at `source_commit`, which is where rules B-3 through B-15 live; every computed root by `Block::compute_merkle_root` on that call's own transaction list, every leaf id by `Transaction::txid`, every coinbase flag by `Transaction::is_coinbase`, every payload field by matching on the variant that call actually returned, and every header nonce by `consensus::pow::mine` or by the deterministic failing-nonce scan `consensus_rules.rs` uses. No verdict, payload, rule row or digest here is taken from another implementation, predicted by a design document, computed by hand, or derived by a Python or C++ program",
   "reference_commits": {
     "block_error_variants_introduced": "e464695f92f6884e6d25c6947d452d5fb24229a6",

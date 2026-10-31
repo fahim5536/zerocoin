@@ -532,9 +532,9 @@ before the runner is invoked; a disagreement is a mapping failure (exit 2) again
 never a root mismatch blamed on the kernel. The corpus also records, rather than edits, one
 stale claim in `docs/consensus/CONSENSUS_RULES.md` §3: see the B-14 boundary note there.
 
-`test/p42-vectors/**` is the sixth corpus root and holds one group, `chain.block_structure` (34
-cases: 14 isolation, 8 boundary, 11 adjacent-pair precedence, 1 dominance witness; by verdict 5
-accepted and 29 rejected). Its `source_commit` is the same `b71d769` as the P4.1 root, and
+`test/p42-vectors/**` is the sixth corpus root and holds one group, `chain.block_structure` (35
+cases: 14 isolation, 8 boundary, 12 adjacent-pair precedence, 1 dominance witness; by verdict 5
+accepted and 30 rejected). Its `source_commit` is the same `b71d769` as the P4.1 root, and
 `zerocoin/src/consensus/block.rs` is byte-identical to it at this baseline, so the two corpora
 describe one validator; `reference_commits` again names `e464695f` for the introduction of
 `validate_structure`, the `BlockError` variants, the 2000 limit and the coinbase rule. Every
@@ -552,15 +552,22 @@ computed and claimed roots, `roots_match`, the proof-of-work flag, the coinbase 
 `error_kind`, the `error_payload`, the `reported_rule` and the complete `violated_rules` set. That
 last pair is the contract P4.2B has to reproduce: a port must agree not only with the verdict but
 with *which guard the reference named first*, and the emitter asserts `reported_rule` equals the
-smallest violated row for all 34 cases.
+smallest violated row for all 35 cases.
 
-Two absences are recorded rather than papered over. **(B-8, B-9) has no fixture and is not
+One absence is recorded rather than papered over. **(B-8, B-9) has no fixture and is not
 claimed to be proven**: `transactions.is_empty()` and `transactions.len() > 2000` are mutually
 exclusive, so no input distinguishes their relative order; the manifest keeps a `deferred_pairs`
-entry saying so, and no `.pair_08_09` identifier exists. **(B-13, B-14) is representable but
-unfrozen** — the corrected design contract did not schedule a case for it, this milestone did not
-invent one, and nothing in the corpus asserts an order between those two rows. Five cases replay
-committed P4.1 blocks byte for byte (`iso_08_no_transactions`, `iso_14_root_mismatch`,
+entry saying so, and no `.pair_08_09` identifier exists. **(B-13, B-14) was the pair the original
+P4.2A corpus deferred, and P4.2A.1 froze it**: `chain.block_structure.pair_13_14_future_and_stale_root`
+is `.iso_13_timestamp_too_far_future` with exactly one added fault — a claimed root whose bit 0 is
+flipped away from the root the reference computes for the same transaction list — so the same
+header at the same height with the same transactions violates row 13 (`timestamp >
+now.saturating_add(7200)`) and row 14 (`merkle_root != computed`) at once, while its nonce is mined
+after the stale claim is written and row 15 therefore passes. The reference returned
+`TimestampTooFarFuture`, published as `reported_rule` 13 beside `violated_rules` `[13, 14]`, and the
+manifest moved that pair from `deferred_pairs` to `resolved_pairs`. That is an observed Rust
+ordering and nothing more: no C++ `validate_structure` exists, so no port ordering is claimed here.
+Five cases replay committed P4.1 blocks byte for byte (`iso_08_no_transactions`, `iso_14_root_mismatch`,
 `bnd_13_near_max_saturating_accept`, `pair_14_15_root_mismatch_and_failing_pow`,
 `pair_14_15_zero_root_claim_and_failing_pow`); the exporter rebuilds the header, the serialized
 transactions and the context from the P4.1 JSON, asserts the rebuild equals what P4.1 published,
@@ -573,7 +580,7 @@ entry, and no runner verb that takes a block and returns a first failing rule, b
 `kernel/src/block.cpp` still exposes only `zk::compare_claimed_merkle_root` — no `Block` type, no
 `validate_structure`, none of the other twelve guards. `run_vectors.py` dispatches by case-id
 namespace and registers no verifier for `chain.block_structure`, so pointing it at this root is a
-structural check only (envelope, manifest, provenance, counts) and reports 34 SKIP with exit 1; the
+structural check only (envelope, manifest, provenance, counts) and reports 35 SKIP with exit 1; the
 P0 gate is unchanged. The independent Python second opinion for this corpus re-derives published
 bytes, not verdicts: every canonical serialization, transaction id, leaf order, Merkle root,
 coinbase flag, PoW status and rejection payload reproduces from

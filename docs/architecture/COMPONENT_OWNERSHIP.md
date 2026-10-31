@@ -162,7 +162,7 @@ changes no code, no vector and no consensus rule.
 > moved, no phase moved, and **no C++ component is registered by this milestone**. What is added
 > is an oracle: the `p42_*` exporter inside
 > `zerocoin/tests/export_baseline_vectors.rs` now generates
-> `test/p42-vectors/chain/block_structure.json` (34 cases) for the owner row
+> `test/p42-vectors/chain/block_structure.json` (35 cases) for the owner row
 > `src/consensus/block.rs`, covering rules B-3 … B-15 and their relative order. The exporter is
 > the sole origin of every expected verdict in that file: it constructs each block from a declared
 > construction intent, calls the shipping Rust `Block::validate_structure` **directly** with the
@@ -171,15 +171,22 @@ changes no code, no vector and no consensus rule.
 > inputs to the export, never fields of the corpus, and no expected value is computed by Python,
 > transcribed from documentation or typed by hand. `test/harness/zro_vectors.py` re-derives
 > published serializations, transaction ids, leaf order, Merkle roots, coinbase flags, PoW status,
-> rejection payloads and validation contexts — byte re-derivation only, never a verdict. Two
-> relative orders are recorded as **not** owned by any fixture: (B-8, B-9) is non-representable
+> rejection payloads and validation contexts — byte re-derivation only, never a verdict. One
+> relative order is recorded as **not** owned by any fixture: (B-8, B-9) is non-representable
 > because `transactions.is_empty()` and `transactions.len() > 2000` are mutually exclusive, so no
-> input distinguishes them and no `.pair_08_09` case exists; (B-13, B-14) is representable but
-> unfrozen. Both live in the manifest as `deferred_pairs`, and neither is claimed to be proven.
+> input distinguishes them and no `.pair_08_09` case exists; it stays in the manifest as a
+> `deferred_pairs` entry and is not claimed to be proven. The order (B-13, B-14) that P4.2A
+> deferred is now owned by the P4.2A.1 fixture
+> `chain.block_structure.pair_13_14_future_and_stale_root`, which fails both the far-future
+> timestamp predicate (`timestamp > now.saturating_add(7200)`) and the root equality (claimed root
+> different from the computed transaction Merkle root) and on which the Rust reference returned
+> `TimestampTooFarFuture` — `reported_rule` 13 beside `violated_rules` `[13, 14]`. That is
+> ownership of a Rust evaluation-order fact, and the manifest lists it under `resolved_pairs`;
+> it is not a claim about any C++ behaviour.
 > `kernel/src/block.cpp` gains nothing: still no header decoder, no `Block` type, no
 > `validate_structure`, no B-15 rule, no acceptance path; there is no
 > `kernel/tools/p42_conformance.py` and no `kernel_p42_conformance` ctest entry, and
-> `run_vectors.py` reports the group as 34 SKIP with exit 1 because it registers no verifier for
+> `run_vectors.py` reports the group as 35 SKIP with exit 1 because it registers no verifier for
 > the namespace. **The differential against C++ is P4.2B; nothing here is a parity claim.** The
 > P0 corpus, the P3.1/P3.2/P3.3 fixtures, the P4.1 corpus and the 121-case differential fixture
 > were not touched, and F-1 remains **deferred**.
@@ -285,8 +292,8 @@ consensus code.
 | P3.3 transaction-to-Merkle conformance mapping | `kernel/tools/p33_conformance.py` | Owns the P3.3 corpus slice, the repeated-transaction input mapping, the per-leaf serialization/txid gates, the independent Python re-derivation of every id and root, the `leaf_txids_hex` mapping check and the corruption self-check | 22 cases (0–17 transactions, coinbases, order and duplicate shapes) |
 | P4 proof-of-work conformance mapping | `kernel/tools/p4_conformance.py` | Owns the PoW slice of the P0 root (which `g1_conformance.py` does not load), the engine-name and id mapping, the four `pow_*` verbs and the corruption self-check | 11 cases (`test/vectors/pow/engines.json`), 0 deferred |
 | P4.1 claimed-root conformance mapping | `kernel/tools/p41_conformance.py` | Owns the P4.1A corpus slice, the header-plus-repeated-transaction input mapping, the independent Python re-derivation of every leaf, root and digest comparison, the `roots_match` verdict cross-check and the corruption self-check | 30 cases (12 correct claims, 14 wrong, 2 failing-PoW, 2 empty-list boundary) + 1 deferred key (`guard_before_comparison`, B-8) |
-| P4.2 block-structure expected verdicts (oracle) | `zerocoin/tests/export_baseline_vectors.rs` (`p42_*` exporter) | Every expected value in `test/p42-vectors/**` is the `Result` the shipping Rust `Block::validate_structure` returned when the exporter called it directly; the exporter panics when the returned variant, its payload or the violated-rule set differs from the fixture's declared construction intent, so no verdict is transcribed from a design document, computed by Python or written by hand | 34 cases (14 isolation, 8 boundary, 11 adjacent-pair, 1 dominance); 5 accepted, 29 rejected; 2 deferred relative orders; deterministic regeneration; **no C++ wrapper exists** |
-| P4.2 corpus structural gate | `test/harness/run_vectors.py` | Dispatches by case-id namespace and registers no verifier for `chain.block_structure`, so it validates schema, manifest, ids and provenance only — it cannot disagree with a verdict because it never computes one | 34 SKIP, 0 FAIL, exit 1 by design; P0 gate unchanged |
+| P4.2 block-structure expected verdicts (oracle) | `zerocoin/tests/export_baseline_vectors.rs` (`p42_*` exporter) | Every expected value in `test/p42-vectors/**` is the `Result` the shipping Rust `Block::validate_structure` returned when the exporter called it directly; the exporter panics when the returned variant, its payload or the violated-rule set differs from the fixture's declared construction intent, so no verdict is transcribed from a design document, computed by Python or written by hand | 35 cases (14 isolation, 8 boundary, 12 adjacent-pair, 1 dominance); 5 accepted, 30 rejected; 1 deferred relative order, 1 resolved relative order (`pair_13_14_future_and_stale_root`); deterministic regeneration; **no C++ wrapper exists** |
+| P4.2 corpus structural gate | `test/harness/run_vectors.py` | Dispatches by case-id namespace and registers no verifier for `chain.block_structure`, so it validates schema, manifest, ids and provenance only — it cannot disagree with a verdict because it never computes one | 35 SKIP, 0 FAIL, exit 1 by design; P0 gate unchanged |
 | Conformance runner protocol | `kernel/conformance/main.cpp` | Owns the 30 verbs and `SUMMARY` output | Stable |
 | Build and gate | `kernel/CMakeLists.txt`, `scripts/gate-g1.ps1`, `scripts/gate-p2-6.ps1`, `scripts/gate-p2-10-provenance.ps1` | Exit code is the verdict (doc `03` §1 rule 5) | Green |
 | Rust dependency set | `Cargo.toml`, `Cargo.lock` | `k256 0.13.4` is the curve implementation actually shipped | Locked |

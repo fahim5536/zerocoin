@@ -212,7 +212,7 @@ made.
 
 **Oracle status (P4.2A, 2026-10-30; fixtures only, no C++).**
 `test/p42-vectors/chain/block_structure.json` and its manifest add the sixth committed corpus
-root, group `chain.block_structure`, **34** cases whose every expected value is the `Result` the
+root, group `chain.block_structure`, **35** cases whose every expected value is the `Result` the
 shipping Rust `Block::validate_structure` returned when the exporter called it directly on that
 exact block. It is the oracle C-13 and C-14 have been waiting for: 14 isolation cases (one per
 guard, with all thirteen guards reported at least once), 8 boundary cases (2000 transactions
@@ -220,14 +220,16 @@ accepted against 2001 rejected with the length read back out of the variant; a t
 the median rejected against `median + 1` accepted; `now + 7200` accepted against `now + 7201`
 rejected; and the three `saturating_add` corners at `u64::MAX - 7201`, `- 7200` and `u64::MAX`,
 which are the only executed witnesses that a wrapping `now + 7200` in C++ would be a consensus
-divergence rather than a style choice), 11 adjacent-pair cases pinning the winner of 10
+divergence rather than a style choice), 12 adjacent-pair cases pinning the winner of all 11
 representable pairs, and 1 dominance case where `WrongChain` is reported over ten simultaneous
 later violations. Payloads are published per variant, so C-14 is checkable for the six
 payload-carrying block errors and not only for `RootMismatch`. **Nothing in this paragraph is a
 port claim**: P4.2A implements no C++ rule, adds no `Block` type, no `validate_structure`, no
 `kernel/tools/p42_conformance.py` and no `kernel_p42_conformance` ctest entry; `run_vectors.py`
-registers no verifier for the group and reports 34 SKIP by design; the differential against C++
-is P4.2B, and no parity is claimed here.
+registers no verifier for the group and reports 35 SKIP by design; the differential against C++
+is P4.2B, and no parity is claimed here. P4.2A.1 added one more fixture to that same root,
+`chain.block_structure.pair_13_14_future_and_stale_root`, which is the B-13/B-14 precedence witness
+described in C-13 below; it is still Rust-side evidence only.
 
 
 ---
@@ -239,14 +241,19 @@ return the same accept/reject decision and the same *first* failing rule as
 `validate_structure` (`CONSENSUS_RULES.md` §3, order B-3 … B-15). The order is observable
 because it determines which error is reported; a port that checks PoW before the merkle root
 would report a different error for the same block. Since P4.2A the whole order has a committed
-Rust oracle to be diffed against — 34 cases in `test/p42-vectors/chain/block_structure.json`,
+Rust oracle to be diffed against — 35 cases in `test/p42-vectors/chain/block_structure.json`,
 each publishing the returned `error_kind`, its `error_payload`, the `reported_rule` and the full
 `violated_rules` set — so C-13 is now falsifiable per rule pair rather than per document reading.
-Two of its pairs are deliberately **not** obligations: (B-8, B-9) cannot be distinguished by any
+One of its pairs is deliberately **not** an obligation: (B-8, B-9) cannot be distinguished by any
 input, because `transactions.is_empty()` and `transactions.len() > 2000` are mutually exclusive, so
 no conforming port can be faulted for either relative order and no fixture claims to have settled
-it; and (B-13, B-14) is representable but unfrozen, so an ordering claim there needs a new fixture
-before it can be a differential row.
+it. The pair (B-13, B-14), which P4.2A left unfrozen, now is: the P4.2A.1 fixture
+`chain.block_structure.pair_13_14_future_and_stale_root` violates both
+`timestamp > now.saturating_add(7200)` and the claimed-versus-computed Merkle-root equality in one
+block, and the Rust reference answered `TimestampTooFarFuture{now: 1700000010, found: 1700007211}`
+with `reported_rule` 13 and `violated_rules` `[13, 14]`. B-13 before B-14 is therefore a directly
+demonstrated Rust ordering, and P4.2B can take it as a differential row; nothing here states that
+a C++ implementation produces the same first failure.
 
 **C-14** — The port MUST expose the same error *taxonomy*, even if names differ:
 `WrongChain`, `BadHeight`, `BadPreviousHash`, `WrongEngine`, `BadDifficulty`,
@@ -587,7 +594,7 @@ The C++ port milestone is not complete until all four layers pass.
   would have encoded a Rust panic as expected behaviour. M-F1 supplies the Rust negative
   tests (`findings_regression.rs`); the matching C++ test stays deferred with the P3 block
   module (§10), so the exclusion currently has no C++ counterpart.
-- Since P4.2A the block-structure half of §11.3 has a committed, deterministic input set: the 34
+- Since P4.2A the block-structure half of §11.3 has a committed, deterministic input set: the 35
   `chain.block_structure.*` cases in `test/p42-vectors/`, including the 2000- and
   2001-transaction lists §11.3 asks for as fuzz cases. P4.2B MUST replay them against the C++
   validator once one exists, and MUST replay them **without** editing a published expectation: a
