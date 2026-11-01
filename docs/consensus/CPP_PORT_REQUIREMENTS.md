@@ -343,6 +343,44 @@ obligation is unchanged**: the ordering delegates chain-before-height precedence
 `validate_header_identity` rather than re-deciding it. `validate_structure` accepting a block in C++
 is not consensus parity, not `connect_block`, and not production readiness; Rust remains the oracle.
 
+**Implementation status (P4.2B-2, 2026-11-01; the independent Python verifier, still not the
+differential).** The paragraph above nominates a Python independent verifier as the thing the next
+slice must supply; that verifier now exists and this block records exactly how far it goes.
+`test/harness/zro_vectors.py` gained `_verify_block_structure` and `test/harness/run_vectors.py`
+registers it for the `chain.block_structure.` group, so `python test/harness/run_vectors.py --vectors
+test/p42-vectors` reports `PASS 35 ANCHOR 0 SKIP 0 FAIL 0` and prints
+`block-structure cases independently verified: 35`; the verdict is recomputed from each case's own
+`input` — transaction re-serialization, per-transaction ids, the composed Merkle root, the header
+preimage, the proof-of-work digest, the count, the coinbase placement, the context comparisons, the
+first failing rule, the payload and the accept/reject verdict — and no published expectation is read
+to produce it. Three semantics the corpus forced into the open: (1) **B-13 is saturating**, and the
+three ceiling fixtures separate it from a wrapping read (`now = u64::MAX` accepts an ordinary
+timestamp, `now = u64::MAX − 7200` is the last exact accept, `now = u64::MAX − 7201` rejects); (2)
+proof of work is checked with the **context** engine against the **header's own** `difficulty_bits`,
+which the four scratchpad-context fixtures require — `ScratchPadEngine::balanced()` is
+`64 * 1024` bytes and `1_024` rounds, read from `pow.rs`, not guessed — and every fixture here sets
+`expected_bits` equal to `header.difficulty_bits`, so **no case in this corpus can distinguish the
+header's own bits from the context's required bits**; the verifier follows the reference's
+`meets_own_target` wording and the ambiguity stays unfalsified; (3) `violated_rules` is the
+non-short-circuit set of conditions that hold while `reported_rule` is the first of them in source
+order, so the verifier evaluates all thirteen and short-circuits only the report. Malformed or
+self-contradictory fixtures raise `VectorMismatch` (FAIL), an unmodelled engine or preset raises
+`Unsupported` (SKIP), and nothing in that path can turn into a PASS. `test/harness/`
+`test_block_structure_verifier.py` holds 63 tests over all 35 fixtures, every isolated rule, all 11
+representable pairs, the B-13/B-14 and B-14/B-15 edges, the 2000/2001 boundary and the saturation
+boundaries. Existing behaviour is unchanged: the P0 run is byte-identical to the same command on the
+baseline commit (`PASS 112 ANCHOR 5 SKIP 0 FAIL 0`), and the P4.1 and P3.3 wrappers — which import
+this same module as their independent verifier — still replay 30/30 and 22/22.
+
+**What P4.2B-2 does not close.** It verifies the *fixtures*, not the port. No C++ code is called by
+anything above: `kernel/tools/p42_conformance.py` still does not exist, no CTest entry is registered,
+no fixture was replayed against `zk::validate_block_structure`, and no committed expectation in
+`test/p42-vectors/` was edited to reach these results. The two evidence limitations carry over
+unchanged — (B-8, B-9) remains unobservable by any input, and B-8's precedence over B-14/B-15 is
+still inferred from Rust source order rather than demonstrated by a fixture. **F-1 and C-29 are
+untouched by this slice.** The differential against C++ remains open. This is not consensus parity
+and Rust remains the oracle.
+
 
 ---
 

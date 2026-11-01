@@ -6,10 +6,12 @@ interpreter, sighash, difficulty, subsidy, proof of work, block headers and the
 UTXO state root.
 
 Nothing here imports from the Rust tree. Every expected value under
-``test/vectors/`` is recomputed from the published ``input`` alone, so a case
-passes only when two independent implementations agree byte for byte. Values
-that cannot be recomputed (a Rust call result or a network constant table) are
-reported as ANCHOR by ``run_vectors.py`` and never counted as verification.
+``test/vectors/``, and every ``chain.block_structure.*`` verdict under
+``test/p42-vectors/``, is recomputed from the published ``input`` alone, so a
+case passes only when two independent implementations agree byte for byte.
+Values that cannot be recomputed (a Rust call result or a network constant
+table) are reported as ANCHOR by ``run_vectors.py`` and never counted as
+verification.
 
 Byte-order convention: ``Hash256.0`` in Rust holds the raw digest bytes. The
 JSON form ``{"internal_hex": ..., "display_hex": ...}`` publishes those bytes
@@ -2248,6 +2250,364 @@ def _verify_address(case):
     raise Unsupported(case["id"])
 
 
+# ---------------------------------------------------------------------------
+# P4.2B: independent block structure verification (rules B-3..B-15)
+# ---------------------------------------------------------------------------
+#
+# `Block::validate_structure` in `zerocoin/src/consensus/block.rs` is the
+# authority for the ordering encoded below. It short-circuits, so a live block
+# only ever reports its first violation; the P4.2A corpus nevertheless publishes
+# the set of every rule whose condition holds for the same input, so that one
+# fixture can pin several rules at once and still show which row the validator
+# reached first. This verifier therefore evaluates every rule condition
+# independently, in source order, and derives the reported verdict from the first
+# one that holds. It calls neither the C++ kernel nor the Rust reference: every
+# number below comes from the case's own `input` through the primitives already
+# in this file.
+
+BLOCK_STRUCTURE_GROUP = "chain.block_structure."
+
+# The two constants `validate_structure` compares against, restated from Rust.
+MAX_BLOCK_TRANSACTIONS = 2_000
+MAX_FUTURE_SECONDS = 2 * 60 * 60
+
+# The `BlockError` variant each row returns, keyed by the rule number the corpus
+# numbers its rows with. Payload construction is `_block_rule_payload`.
+BLOCK_RULE_ERRORS = {
+    3: "WrongChain",
+    4: "BadHeight",
+    5: "BadPreviousHash",
+    6: "WrongEngine",
+    7: "BadDifficulty",
+    8: "NoTransactions",
+    9: "TooManyTransactions",
+    10: "FirstNotCoinbase",
+    11: "DuplicateCoinbase",
+    12: "TimestampTooOld",
+    13: "TimestampTooFarFuture",
+    14: "RootMismatch",
+    15: "InsufficientProofOfWork",
+}
+
+# The scratchpad profiles whose size and round count are literal in the Rust
+# source, so that the digest the reference engine produces can be re-derived. A
+# preset outside this table is `Unsupported`, never a pass: without the exact
+# budget the engine was built with there is nothing independent to compare to.
+SCRATCHPAD_PRESETS = {
+    "ScratchPadEngine::balanced()": (64 * 1024, 1_024),
+    "ScratchPadEngine::mainnet()": (2 * 1024 * 1024, 4_096),
+}
+
+# Fields of a header or context the reference reads as a fixed-width integer.
+_BLOCK_U32_FIELDS = ("version", "chain", "difficulty_bits", "expected_chain", "expected_bits")
+_BLOCK_U64_FIELDS = (
+    "height", "timestamp", "nonce", "expected_height", "median_time_past", "now",
+)
+
+# Everything a `chain.block_structure.*` input is allowed to carry. A fixture
+# that grows a field this verifier does not understand is a corpus change, not a
+# detail to be ignored: replaying it anyway would let an unmodelled condition
+# decide the verdict silently.
+_BLOCK_INPUT_FIELDS = frozenset(
+    {
+        "engine_config",
+        "group",
+        "header",
+        "reused_from",
+        "synthetic_context",
+        "transactions",
+        "transactions_hex",
+        "tx_count",
+        "validation_context",
+    }
+)
+_BLOCK_HEADER_FIELDS = frozenset(
+    {
+        "chain",
+        "difficulty_bits",
+        "engine_id",
+        "height",
+        "merkle_root_hex",
+        "nonce",
+        "previous_hash_hex",
+        "timestamp",
+        "version",
+    }
+)
+_BLOCK_CONTEXT_FIELDS = frozenset(
+    {
+        "engine",
+        "expected_bits",
+        "expected_chain",
+        "expected_height",
+        "expected_previous_hex",
+        "median_time_past",
+        "now",
+    }
+)
+
+_verified_block_structure = 0
+
+
+def verified_block_structure_count():
+    """How many block-structure cases have independently verified so far."""
+    return _verified_block_structure
+
+
+def reset_verified_block_structure_count():
+    """Zero the tally, so a report can never quote a previous run's number."""
+    global _verified_block_structure
+    _verified_block_structure = 0
+
+
+def _block_field(where, mapping, key, width):
+    """Read one integer field and prove it fits the Rust type that holds it."""
+    if key not in mapping:
+        raise VectorMismatch(f"{where}: {key!r} is missing")
+    value = mapping[key]
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise VectorMismatch(f"{where}: {key!r} is not an integer, got {value!r}")
+    if value < 0 or value > width:
+        raise VectorMismatch(f"{where}: {key!r}={value} is outside 0..{width}")
+    return value
+
+
+def _block_struct_digest(where, key, text):
+    """Read one published 32-byte digest, in the internal byte order it uses."""
+    if not isinstance(text, str) or len(text) != 64:
+        raise VectorMismatch(f"{where}: {key} is not a 64-digit hex digest, got {text!r}")
+    try:
+        return unhex(text)
+    except ValueError as error:
+        raise VectorMismatch(f"{where}: {key} is not hex ({error})")
+
+
+def _block_transactions(where, data):
+    """Rebuild the transaction list from the case's own bytes, leaf by leaf.
+
+    Both published shapes must re-encode to the bytes beside them, which is what
+    makes the count, the coinbase flags and the leaves evidence about the block
+    rather than about the exporter's arithmetic.
+    """
+    rich = "transactions" in data
+    if rich == ("transactions_hex" in data):
+        raise VectorMismatch(
+            f"{where}: input must carry exactly one of 'transactions' or 'transactions_hex'"
+        )
+    published = data["transactions"] if rich else data["transactions_hex"]
+    if not isinstance(published, list):
+        raise VectorMismatch(f"{where}: the transaction list is not a list")
+    count = _block_field(where, data, "tx_count", MASK64)
+    if count != len(published):
+        raise VectorMismatch(f"{where}: tx_count is {count}, {len(published)} transactions published")
+
+    transactions = []
+    for index, item in enumerate(published):
+        spot = f"{where}.transactions[{index}]"
+        if rich:
+            if not isinstance(item, dict):
+                raise VectorMismatch(f"{spot}: a transaction is not an object")
+            for key in ("inputs", "is_coinbase", "lock_time", "outputs", "serialized_hex", "serialized_len", "version"):
+                if key not in item:
+                    raise VectorMismatch(f"{spot}: {key!r} is missing")
+            try:
+                blob = unhex(item["serialized_hex"])
+            except (TypeError, ValueError) as error:
+                raise VectorMismatch(f"{spot}: serialized_hex is not hex ({error})")
+            if len(blob) != item["serialized_len"]:
+                raise VectorMismatch(
+                    f"{spot}: serialized_len is {item['serialized_len']}, the hex is {len(blob)} bytes"
+                )
+            tx = tx_from_json(item)
+            if tx_is_coinbase(tx) is not item["is_coinbase"]:
+                raise VectorMismatch(
+                    f"{spot}: is_coinbase is {item['is_coinbase']}, the published fields say {tx_is_coinbase(tx)}"
+                )
+            reencoded = tx_serialize(tx)
+            if reencoded != blob:
+                raise VectorMismatch(
+                    f"{spot}: the published fields re-encode to {reencoded.hex()}, not to {blob.hex()}"
+                )
+        else:
+            try:
+                blob = unhex(item)
+            except (TypeError, ValueError) as error:
+                raise VectorMismatch(f"{spot}: not hex ({error})")
+            try:
+                tx = tx_deserialize(blob)
+            except DecodeError as error:
+                raise VectorMismatch(f"{spot}: the published bytes do not decode ({error})")
+            reencoded = tx_serialize(tx)
+            if reencoded != blob:
+                raise VectorMismatch(
+                    f"{spot}: the published bytes re-encode to {reencoded.hex()}, not to {blob.hex()}"
+                )
+        transactions.append(tx)
+    return transactions, rich
+
+
+def _block_pow_engine(where, context, engine_config):
+    """The engine the reference validator calls into, as `(id, hash)`.
+
+    `engine.id()` is what B-6 compares against and `engine.hash(...)` is what
+    B-15 consumes, so both come from the same published description.
+    """
+    name = context["engine"]
+    if name == TRIVIAL_ENGINE_NAME:
+        if engine_config is not None:
+            raise VectorMismatch(f"{where}: a trivial context still publishes an engine_config")
+        return ENGINE_ID_TRIVIAL, trivial_hash
+    if name != SCRATCHPAD_ENGINE_NAME:
+        raise Unsupported(f"{where}: engine {name!r} has no independent implementation")
+    if not isinstance(engine_config, dict):
+        raise VectorMismatch(f"{where}: a scratchpad context publishes no engine_config")
+    if engine_config.get("engine_name") != SCRATCHPAD_ENGINE_NAME:
+        raise VectorMismatch(f"{where}: engine_config names {engine_config.get('engine_name')!r}")
+    if engine_config.get("engine_id") != ENGINE_ID_SCRATCHPAD:
+        raise VectorMismatch(f"{where}: engine_config ids the scratchpad engine as {engine_config.get('engine_id')!r}")
+    preset = engine_config.get("preset")
+    if preset not in SCRATCHPAD_PRESETS:
+        raise Unsupported(f"{where}: scratchpad preset {preset!r} is not modelled")
+    memory_bytes, rounds = SCRATCHPAD_PRESETS[preset]
+    return (
+        ENGINE_ID_SCRATCHPAD,
+        lambda preimage, nonce: scratchpad_hash(preimage, nonce, memory_bytes, rounds),
+    )
+
+
+def _block_rule_payload(rule, header, context, transactions, engine_id):
+    """The named fields of the `BlockError` variant this row returns."""
+    if rule == 3:
+        return {"expected": context["expected_chain"], "found": header["chain"]}
+    if rule == 4:
+        return {"expected": context["expected_height"], "found": header["height"]}
+    if rule == 6:
+        return {"expected": engine_id, "found": header["engine_id"]}
+    if rule == 7:
+        return {"expected": context["expected_bits"], "found": header["difficulty_bits"]}
+    if rule == 9:
+        return {"count": len(transactions)}
+    if rule == 12:
+        return {"found": header["timestamp"], "median": context["median_time_past"]}
+    if rule == 13:
+        return {"found": header["timestamp"], "now": context["now"]}
+    # B-5, B-8, B-10, B-11, B-14 and B-15 are unit variants.
+    return None
+
+
+def _verify_block_structure(case):
+    where = case["id"]
+    data = case["input"]
+    if not isinstance(data, dict):
+        raise VectorMismatch(f"{where}: the input is not an object")
+    unknown = sorted(set(data) - _BLOCK_INPUT_FIELDS)
+    if unknown:
+        raise VectorMismatch(f"{where}: unpublished input fields {unknown}")
+    for key in ("header", "validation_context"):
+        if not isinstance(data.get(key), dict):
+            raise VectorMismatch(f"{where}: input.{key} is missing or not an object")
+    header_data = data["header"]
+    context = data["validation_context"]
+    for name, mapping, allowed in (
+        ("header", header_data, _BLOCK_HEADER_FIELDS),
+        ("validation_context", context, _BLOCK_CONTEXT_FIELDS),
+    ):
+        extra = sorted(set(mapping) - allowed)
+        if extra:
+            raise VectorMismatch(f"{where}: input.{name} has unpublished fields {extra}")
+
+    header = {
+        "version": _block_field(f"{where}.header", header_data, "version", MASK32),
+        "chain": _block_field(f"{where}.header", header_data, "chain", MASK32),
+        "height": _block_field(f"{where}.header", header_data, "height", MASK64),
+        "previous_hash": _block_struct_digest(f"{where}.header", "previous_hash_hex", header_data.get("previous_hash_hex")),
+        "merkle_root": _block_struct_digest(f"{where}.header", "merkle_root_hex", header_data.get("merkle_root_hex")),
+        "timestamp": _block_field(f"{where}.header", header_data, "timestamp", MASK64),
+        "difficulty_bits": _block_field(f"{where}.header", header_data, "difficulty_bits", MASK32),
+        "engine_id": _block_field(f"{where}.header", header_data, "engine_id", 0xFF),
+    }
+    nonce = _block_field(f"{where}.header", header_data, "nonce", MASK64)
+
+    expected_chain = _block_field(f"{where}.validation_context", context, "expected_chain", MASK32)
+    expected_height = _block_field(f"{where}.validation_context", context, "expected_height", MASK64)
+    expected_bits = _block_field(f"{where}.validation_context", context, "expected_bits", MASK32)
+    median = _block_field(f"{where}.validation_context", context, "median_time_past", MASK64)
+    now = _block_field(f"{where}.validation_context", context, "now", MASK64)
+    expected_previous = _block_struct_digest(
+        f"{where}.validation_context", "expected_previous_hex", context.get("expected_previous_hex")
+    )
+
+    transactions, rich = _block_transactions(where, data)
+    engine_id, hasher = _block_pow_engine(where, context, data.get("engine_config"))
+
+    leaves = [tx_txid(tx) for tx in transactions]
+    computed = merkle_root(leaves)
+    claimed = header["merkle_root"]
+    target = compact_to_target(header["difficulty_bits"])
+    meets_own_target = hash_meets_target(hasher(header_preimage(header), nonce), target)
+
+    violated = []
+    if header["chain"] != expected_chain:  # B-3
+        violated.append(3)
+    if header["height"] != expected_height:  # B-4
+        violated.append(4)
+    if header["previous_hash"] != expected_previous:  # B-5
+        violated.append(5)
+    if header["engine_id"] != engine_id:  # B-6
+        violated.append(6)
+    if header["difficulty_bits"] != expected_bits:  # B-7
+        violated.append(7)
+    if not transactions:  # B-8
+        violated.append(8)
+    if len(transactions) > MAX_BLOCK_TRANSACTIONS:  # B-9
+        violated.append(9)
+    # B-10 and B-11 index the list, so their condition is undefined rather than
+    # false while it is empty; the reference never reaches them either, because
+    # B-8 has already returned by then.
+    if transactions:
+        if not tx_is_coinbase(transactions[0]):  # B-10
+            violated.append(10)
+        if any(tx_is_coinbase(tx) for tx in transactions[1:]):  # B-11
+            violated.append(11)
+    if header["timestamp"] <= median:  # B-12
+        violated.append(12)
+    # `now.saturating_add(MAX_FUTURE_SECONDS)`, not `now +`: a wrapping add would
+    # wrap the bound down to a small number and reject every sane timestamp.
+    if header["timestamp"] > min(now + MAX_FUTURE_SECONDS, MASK64):  # B-13
+        violated.append(13)
+    if claimed != computed:  # B-14
+        violated.append(14)
+    if not meets_own_target:  # B-15
+        violated.append(15)
+
+    reported = violated[0] if violated else None
+    out = {
+        "accepted": not violated,
+        "claimed_root": hash256_json(claimed),
+        "coinbase_count": sum(1 for tx in transactions if tx_is_coinbase(tx)),
+        "coinbase_flags": "".join("1" if tx_is_coinbase(tx) else "0" for tx in transactions),
+        "computed_root": hash256_json(computed),
+        "computed_root_len": len(computed),
+        "error_kind": BLOCK_RULE_ERRORS[reported] if reported is not None else None,
+        "error_payload": _block_rule_payload(reported, header, context, transactions, engine_id)
+        if reported is not None
+        else None,
+        "first_is_coinbase": tx_is_coinbase(transactions[0]) if transactions else False,
+        "is_first_violation": (reported == violated[0]) if violated else None,
+        "leaf_count": len(transactions),
+        "proof_of_work_meets_target": meets_own_target,
+        "reported_rule": reported,
+        "roots_match": claimed == computed,
+        "violated_rules": violated,
+    }
+    # The leaf digests are published only for the rich input shape; the 2,000- and
+    # 2,001-transaction cases carry bare hex instead, and a recomputed key the
+    # corpus does not publish is a mismatch, not a free extra.
+    if rich:
+        out["leaves"] = [{"txid": hash256_json(leaf)} for leaf in leaves]
+    return out
+
+
 def verify_case(case, corpus=None):
     """Recompute one case from its inputs; return PASS or ANCHOR, or raise."""
     corpus = corpus or {}
@@ -2268,6 +2628,8 @@ def verify_case(case, corpus=None):
         recomputed = _verify_chain_header(case)
     elif case_id.startswith("chain.merkle."):
         recomputed = _verify_merkle(case)
+    elif case_id.startswith(BLOCK_STRUCTURE_GROUP):
+        recomputed = _verify_block_structure(case)
     elif case_id.startswith("chain.anchors.genesis_coinbase"):
         recomputed = _verify_anchor_genesis_coinbase(case)
     elif case_id.startswith("chain.anchors.regtest_genesis"):
@@ -2292,4 +2654,9 @@ def verify_case(case, corpus=None):
     else:
         raise Unsupported(f"{case_id}: no verifier is registered")
     _compare(case, recomputed)
+    if case_id.startswith(BLOCK_STRUCTURE_GROUP):
+        # Counted only after the comparison passed, so a tally can never include
+        # a case that failed or was skipped.
+        global _verified_block_structure
+        _verified_block_structure += 1
     return "ANCHOR" if case_id in ANCHOR_CASES else "PASS"

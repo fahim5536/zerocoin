@@ -141,6 +141,8 @@ def load_corpus(root):
 
 def run(root, verbose):
     index, ordered, manifest = load_corpus(root)
+    # A run reports its own tally, never the one a previous run left behind.
+    zro_vectors.reset_verified_block_structure_count()
     counts = {"PASS": 0, "ANCHOR": 0, "SKIP": 0, "FAIL": 0}
     failures = []
     for case in ordered:
@@ -167,6 +169,11 @@ def run(root, verbose):
         f"PASS {counts['PASS']}  ANCHOR {counts['ANCHOR']}  "
         f"SKIP {counts['SKIP']}  FAIL {counts['FAIL']}"
     )
+    # Named explicitly: PASS alone cannot say how many of these cases the verifier
+    # actually re-derived instead of anchoring or skipping.
+    verified_blocks = zro_vectors.verified_block_structure_count()
+    if verified_blocks:
+        print(f"block-structure cases independently verified: {verified_blocks}")
     if failures:
         print()
         for case_id, status, detail in failures:
