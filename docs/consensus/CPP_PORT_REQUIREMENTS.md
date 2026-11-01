@@ -231,6 +231,118 @@ is P4.2B, and no parity is claimed here. P4.2A.1 added one more fixture to that 
 `chain.block_structure.pair_13_14_future_and_stale_root`, which is the B-13/B-14 precedence witness
 described in C-13 below; it is still Rust-side evidence only.
 
+**Implementation status (P4.2B-1, 2026-11-01; the ordering, not the differential).**
+`kernel/include/zerocoin/block.h` and `kernel/src/block.cpp` now carry the `Block` type P4.1B
+declined to create and the ordering it said did not exist. `zk::Block` is the reference's two
+fields and nothing else (`header`, `transactions`); everything the ordering compares the block
+against that is *not* in the block — this node's configured `PowEngine`, the expected chain id and
+height, the expected previous-block hash, the bits the schedule requires, the median of the
+previous eleven blocks, and this node's clock — is `zk::ValidationContext`, in `block.rs:165-171`'s
+own parameter order, with no default initialisers on any member. `PowEngine` is itself
+non-default-constructible, so a context that names an engine either exists at compile time or the
+call does not compile; there is no path in which a missing engine, bits value or tip hash is filled
+in from the block. `zk::validate_block_structure(const Block&, const ValidationContext&)` returns
+`zk::BlockStructureResult`: `std::variant<BlockAccepted, …>` with one distinct struct per Rust
+`BlockError` variant, each carrying that variant's own payload fields and widths (C-12), so
+`WrongChain` is two `u32`s, `BadHeight` two `u64`s, `WrongEngine` two `u8`s, `BadDifficulty` two
+`u32`s, `TooManyTransactions` one `size_t`, and the six unit variants are empty types.
+`kMaxBlockTransactions = 2000` and `kMaxFutureSeconds = 7200` are the reference's constants (C-11,
+C-17 — no size, weight, sigop or version rule was added, and `lock_time`, `sequence` and
+transaction `version` are still not validated: C-18).
+
+The implemented sequence is exactly `Block::validate_structure` read top to bottom, and each step
+reuses an existing kernel verb rather than restating it where one already implements the rule:
+
+| Position | Rule | Condition as implemented | Verb reused |
+|---|---|---|---|
+| 1 | B-3 `WrongChain` | `header.chain != context.expected_chain` | `validate_header_identity` (owns B-3/B-4 precedence, C-29) |
+| 2 | B-4 `BadHeight` | `header.height != context.expected_height` | `validate_header_identity` |
+| 3 | B-5 `BadPreviousHash` | `header.previous_hash != context.expected_previous` | `Hash256::operator!=` |
+| 4 | B-6 `WrongEngine` | `!header_engine_matches(header, context.engine)` | `header_engine_matches` (pow.h) |
+| 5 | B-7 `BadDifficulty` | `header.difficulty_bits != context.expected_bits` | none — plain equality, see below |
+| 6 | B-8 `NoTransactions` | `transactions.empty()` | none |
+| 7 | B-9 `TooManyTransactions` | `transactions.size() > kMaxBlockTransactions` | none |
+| 8 | B-10 `FirstNotCoinbase` | `!transactions.front().is_coinbase()` | `Transaction::is_coinbase` |
+| 9 | B-11 `DuplicateCoinbase` | any of `transactions[1..]` is a coinbase | `Transaction::is_coinbase` |
+| 10 | B-12 `TimestampTooOld` | `header.timestamp <= context.median_time_past` | none — `<=`, so equality rejects |
+| 11 | B-13 `TimestampTooFarFuture` | `header.timestamp > future_timestamp_limit(context.now)` | `future_timestamp_limit` (saturating) |
+| 12 | B-14 `RootMismatch` | the P4.1 verb's own answer | `compare_claimed_merkle_root` — called, not restated, and **unchanged** by this slice |
+| 13 | B-15 `InsufficientProofOfWork` | `!header_meets_own_target(header, context.engine)` | `header_meets_own_target` (pow.h, which uses C-8 decode and C-24 comparison) |
+
+Four properties of that table are requirements, not styling, and are stated here because a later
+reader needs them where they are decided:
+
+- **The `std::variant` mapping convention (C-14).** Each alternative declares
+  `static constexpr BlockErrorKind kind`, and `zk::block_structure_kind` reads it through
+  `std::visit` over `std::remove_cvref_t<decltype(alternative)>::kind`.
+  `std::variant::index()` is **never** consulted and must never be: it is a memory-layout detail of
+  one header, while `BlockErrorKind` is append-only and numerically frozen by the P4.1A corpus. The
+  two numberings deliberately do not coincide — `RootMismatchError` is the twelfth error
+  alternative in the variant, it carries kind `3`, and it is Rust discriminant 3 of 12. An
+  alternative that ever fails to declare its kind stops compiling rather than reporting the wrong
+  rule. `block_structure_name` delegates to `block_error_kind_name`; there is one name table.
+- **Numeric values frozen.** `kNone = 0`, `kWrongChain = 1`, `kBadHeight = 2` and `kRootMismatch = 3`
+  keep the values the P4.1A corpus stamped. The ten kinds this slice adds are appended above them
+  in evaluation order: `kBadPreviousHash = 4`, `kWrongEngine = 5`, `kBadDifficulty = 6`,
+  `kNoTransactions = 7`, `kTooManyTransactions = 8`, `kFirstNotCoinbase = 9`,
+  `kDuplicateCoinbase = 10`, `kTimestampTooOld = 11`, `kTimestampTooFarFuture = 12`,
+  `kInsufficientProofOfWork = 13`. `block_error_kind_has_payload` is widened to the five appended
+  payload-carrying kinds (`WrongEngine`, `BadDifficulty`, `TooManyTransactions`, `TimestampTooOld`,
+  `TimestampTooFarFuture`), matching the payload object or `null` the P4.2A corpus publishes per
+  case; `block_error_kind_name` gained the ten names verbatim and its `switch` stays default-free,
+  so a future appended enumerator fails to compile instead of silently reporting `Unknown`.
+- **B-7 is equality, not the bits policy.** It compares against `context.expected_bits` and never
+  calls `validate_bits` (C-27 is a different rule on a different path). The consequence is pinned by
+  a test rather than argued: a header whose bits equal an expectation the pow-limit policy would
+  reject passes B-7, and a pair of bits values the policy would accept *and* reject is reported as
+  `BadDifficulty{expected, found}` purely because they differ.
+- **API preconditions are not consensus verdicts.** `validate_block_structure` takes a `const Block&`
+  that owns its transactions, so the null-pointer-with-nonzero-count shape does not exist at this
+  entry point (`compare_claimed_merkle_root` keeps its own pointer-and-count contract unchanged). A
+  verb that returns a kind it does not produce, and a `BlockErrorKind` whose payload this call site
+  does not hold, raise `std::logic_error` through `block_structure_verdict_for`; they are never
+  mapped onto a nearby variant and never turned into an accept.
+
+Two ordering facts remain **limitations of the evidence, not of the port**, and are recorded as
+such. First, **(B-8, B-9) cannot be ordered by any input**: `is_empty()` and `len() > 2000` are
+mutually exclusive, so the pair is exempt from C-13 and no fixture claims to have settled it; the
+C++ implementation inherits that exemption and its relative position is unobservable. Second,
+**B-8's precedence over B-14 and B-15 is inferred from the Rust source order and is not directly
+demonstrated by the current corpus**: the corpus's only empty-list case publishes
+`roots_match: true` and `proof_of_work_meets_target: true`, so it reports `NoTransactions` while
+being in no position to show that the Merkle comparison was skipped. The C++ ordering returns at
+B-8 before any composition, and `kernel/tests/test_block_structure.cpp` pins the skip by making the
+comparison reachable and deliberately answering it — but that is a C++-side pin, not Rust-side
+evidence, and it is not a substitute for the differential replay.
+
+One fixture-level fact cost this slice real debugging time and is recorded so the next reader does
+not pay it again: the C-8 compact decode treats bit `0x0080_0000` as a **sign**, so a bits value whose
+mantissa has bit 23 set decodes to a target of *zero*, not to a wide target. `0x20ff_ffff` therefore
+names an unmeetable target and no nonce can satisfy B-15 against it; the widest easy value that
+actually decodes is `0x207f_ffff` (`2^255 − 2^232`, one leading zero, met by roughly half of
+trivial-engine digests). The acceptance-path fixtures use `0x207f_ffff`, the rejection-path fixtures
+use `0x1d00_ffff`, and `kernel/tests/test_block_structure.cpp` pins the trap itself with a test that
+asserts `block_target(0x20ff_ffff).is_zero()`. Neither constant is a consensus parameter and no
+network default changed (C-11).
+
+**What this slice does not close.** There is still **no** Python independent verifier and **no**
+Gate A for this group: `kernel/tools/p42_conformance.py` does not exist, `run_vectors.py` registers
+no verifier for `chain.block_structure` (its 35 cases are neither run nor skipped by that entry
+point — the P0 run reports `PASS 112 ANCHOR 5 SKIP 0 FAIL 0` over its own 117 cases), and no new
+CTest differential entry is added; the nine registered tests are unchanged. The 35 fixtures have
+therefore **not** been diffed against this C++ implementation, and nothing here may be described as
+successful conformance for them: the differential runner and its registration are P4.2B-2 and
+P4.2B-3. `connect_block`, `required_bits` and retarget derivation, UTXO, reward, signature and
+fork-choice validation, P2P, and any consensus-parameter change remain out of scope. Sanitizers were
+**NOT RUN**: the toolchain used for every gate in this milestone (MinGW-W64 UCRT GCC 16.2.0) ships
+no `libasan` and no `libubsan`, a `-fsanitize=address,undefined` link fails with
+`cannot find -lasan` / `cannot find -lubsan`, and no `clang++` is installed, so no sanitizer build
+of the kernel or the new tests exists. **F-1 remains open** — `expected_bits` is supplied by the
+caller and this module never derives it from a height it has not validated — and **C-29's
+obligation is unchanged**: the ordering delegates chain-before-height precedence to
+`validate_header_identity` rather than re-deciding it. `validate_structure` accepting a block in C++
+is not consensus parity, not `connect_block`, and not production readiness; Rust remains the oracle.
+
 
 ---
 
@@ -255,6 +367,20 @@ with `reported_rule` 13 and `violated_rules` `[13, 14]`. B-13 before B-14 is the
 demonstrated Rust ordering, and P4.2B can take it as a differential row; nothing here states that
 a C++ implementation produces the same first failure.
 
+**P4.2B-1 status of C-13 (2026-11-01; implemented, not differentially demonstrated).** A C++
+implementation of the order now exists. `zk::validate_block_structure` in `kernel/src/block.cpp`
+evaluates B-3 … B-15 in exactly the sequence above, reuses `validate_header_identity`,
+`header_engine_matches`, `compare_claimed_merkle_root` and `header_meets_own_target` instead of
+restating them, returns the **first** failure it reaches, and returns `BlockAccepted` only when all
+thirteen pass. That satisfies the *implementation* half of this requirement. It does **not**
+discharge the verification half: no verifier is registered for `chain.block_structure`, so none of
+the 35 oracle cases has been replayed against this code, and C-13 cannot be called *demonstrated*
+for the port until P4.2B-2/P4.2B-3 do that (§11.2). Both clauses above stand unchanged: (B-8, B-9)
+remains exempt and its relative position unobservable, and B-8's precedence over B-14/B-15 is
+asserted only by a C++ test rather than by corpus evidence. The (B-13, B-14) row is reproduced by
+construction — the future-window check sits above the root comparison in the source — and
+`kernel/tests/test_block_structure.cpp` pins it with a single block violating both.
+
 **C-14** — The port MUST expose the same error *taxonomy*, even if names differ:
 `WrongChain`, `BadHeight`, `BadPreviousHash`, `WrongEngine`, `BadDifficulty`,
 `NoTransactions`, `TooManyTransactions(n)`, `FirstNotCoinbase`, `DuplicateCoinbase`,
@@ -266,6 +392,21 @@ a C++ implementation produces the same first failure.
 `ImmatureCoinbase{outpoint,matures,spent}`, `DoubleSpend`, `ScriptInvalid{index,source}`,
 `InputOverflow`, `OutputOverflow`, `NegativeFee{inputs,outputs}`.
 (Verification: outcome-mapping table in the differential harness.)
+
+**P4.2B-1 status of C-14 (2026-11-01).** The first thirteen names in this list — the
+`validate_structure` family — are now exposed by the port from a single table.
+`block_error_kind_name` (declared in `kernel/include/zerocoin/header.h`, defined in
+`kernel/src/header.cpp`) spells each one the way the reference spells it, `zk::block_structure_name`
+delegates to it instead of keeping a second spelling, and
+`block_error_kind_has_payload` answers per variant so that `WrongChain`/`BadHeight` (which the P4.1A
+corpus already stamped as payload-carrying) and the five appended payload kinds are distinguished
+from the six unit kinds (C-12). Each variant is its own C++ type declaring its own
+`BlockErrorKind`, so the taxonomy is read from the alternative and never from
+`std::variant::index()`; the numbers 0–3 are frozen and 4–13 are appended in evaluation order. What
+this does **not** close: the reward and UTXO/script families further down this list are untouched by
+this slice and remain unported (`ZeroTarget` and `TargetAbovePowLimit` were already ported in P2 as
+`DifficultyErrorKind`, and this slice does not change them), and the outcome-mapping table this
+requirement nominates as its verification is still the missing P4.2B-2 runner.
 
 **C-15** — State MUST be mutated only after every check passes, matching
 `connect_block`'s clone-then-swap (`CONSENSUS_RULES.md` §3 step 4–7). A rejected block MUST
@@ -565,6 +706,19 @@ the order is now evidence about the shipped validator and not only about the com
 C-13 is met for this one rule in isolation, not for a block, and F-1, C-29 and full consensus
 parity remain unresolved.
 
+**P4.2B-1 note (2026-11-01).** The F-1 row's disposition is **unchanged**, and this slice must not
+be read as moving it. A C++ block module now exists and validates a block structure, but it does not
+read chain history: `expected_bits`, the expected chain id, the expected height and the expected
+tip hash are all inputs of `zk::ValidationContext` that the caller supplies, so the port never
+indexes a history by a height it has not yet accepted and cannot reproduce the defect this row
+records. That is also why the F-1 invalid-height class stays **excluded** from any future differential
+corpus (§11.2) and why M-F1 criterion 4 is still unmet: `connect_block` is not ported, so there is
+no C++ negative test at that layer. **C-29 is likewise unchanged** — the ordering reaches
+chain-before-height precedence by calling `validate_header_identity`, which already owns it, rather
+than by deciding it a second time. What this slice does change is narrower and is recorded in the
+§2 status block above: B-3 … B-15 now exist as one C++ sequence with the reference's first-failure
+semantics, with the differential replay of the 35 oracle fixtures still open in P4.2B-2/P4.2B-3.
+
 ---
 
 ## 11. Conformance suite (acceptance gate)
@@ -602,6 +756,15 @@ The C++ port milestone is not complete until all four layers pass.
   reason to re-run the exporter. The corpus is generated by
   `ZRO_VECTOR_WRITE=1 cargo test --test export_baseline_vectors`; a port that regenerates it has
   rewritten the reference.
+- **P4.2B-1 status of this layer: no differential has run, and none may be claimed.** A C++
+  `validate_block_structure` now exists, which is the precondition §11.2 was waiting for, but the
+  replay itself does not: there is no `kernel/tools/p42_conformance.py`, `run_vectors.py` registers
+  no verifier for `chain.block_structure`, and no `kernel_p42_conformance` CTest entry exists, so the
+  nine registered CTest entries are unchanged by this slice. The 35 fixtures are therefore compared
+  against nothing — a state that MUST NOT be reported as passing conformance, as skipping, or as a
+  green gate. Registering a verifier that always prints PASS would be worse than registering none.
+  The runner is P4.2B-2 and its CTest registration plus full-suite replay are P4.2B-3; until those
+  land, §12 item 2 is not met for the block-structure group and this port is not P4-compatible.
 
 ### 11.3 Differential fuzzing (mandatory before mainnet use)
 

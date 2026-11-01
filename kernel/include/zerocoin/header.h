@@ -5,12 +5,13 @@
 // The scope is exactly the two functions the P3.1A corpus pins, and nothing
 // else. This module does NOT decode a serialized header, does NOT hash the
 // preimage and does NOT dispatch a proof-of-work engine: the block's identity
-// is `engine.hash(preimage, nonce)` (CPP_PORT_REQUIREMENTS.md C-4), the kernel
-// has no `Block` type or chain state, so `connect_block` and its ordering
-// obligation stay in P4. Rust remains the oracle and F-1 is not closed by this
-// file. The one block rule ported so far — the claimed-Merkle-root comparison
-// of B-14 — is not a header rule and does not live here either; it is in
-// block.h, and only the `BlockError` taxonomy below is shared between them.
+// is `engine.hash(preimage, nonce)` (CPP_PORT_REQUIREMENTS.md C-4), so those
+// belong to pow.h. The block rules that need the transactions alongside the
+// header — the `Block` type, the `connect_block` ordering obligation, and the
+// B-14 claimed-root comparison — are not header rules and do not live here
+// either; they are in block.h, and only the `BlockError` taxonomy below is
+// shared between them. Rust remains the oracle and F-1 is not closed by this
+// file.
 //
 // Two behaviours are compatibility requirements rather than choices:
 //
@@ -95,9 +96,16 @@ std::array<std::uint8_t, kHeaderPreimageSize> header_preimage(const BlockHeader&
 /// discriminants (`BlockError::WrongChain` is discriminant 0 there): `kNone`
 /// must occupy 0 so a default-constructed result means "accepted", which is the
 /// convention `DifficultyError` already sets. A variant is therefore appended,
-/// never inserted, so no existing value moves when a rule is ported. The
-/// remaining ten `BlockError` variants are not declared here — nothing produces
-/// them yet, and declaring them would imply a ported rule that does not exist.
+/// never inserted, so no existing value moves when a rule is ported.
+///
+/// P4.1 published 0 through 3 and nothing else, because nothing else was
+/// produced. P4.2B-1 appends the remaining ten, in the order
+/// `Block::validate_structure` reaches them (block.h), above the frozen four —
+/// `kRootMismatch` keeps the value 3 it has had since the P4.1A corpus was
+/// stamped, even though the ordering evaluates it twelfth. With this the
+/// declaration covers all thirteen `BlockError` variants; a variant would still
+/// be undeclared only if nothing produced it, which is no longer true of any of
+/// them.
 ///
 /// `kRootMismatch` belongs to this enum because the Rust type is one enum: it is
 /// the variant `Block::validate_structure` returns for the B-14 comparison, which
@@ -109,6 +117,17 @@ enum class BlockErrorKind : std::uint8_t {
   kWrongChain = 1,
   kBadHeight = 2,
   kRootMismatch = 3,
+  // --- appended by P4.2B-1, in validate_structure's evaluation order ---------
+  kBadPreviousHash = 4,
+  kWrongEngine = 5,
+  kBadDifficulty = 6,
+  kNoTransactions = 7,
+  kTooManyTransactions = 8,
+  kFirstNotCoinbase = 9,
+  kDuplicateCoinbase = 10,
+  kTimestampTooOld = 11,
+  kTimestampTooFarFuture = 12,
+  kInsufficientProofOfWork = 13,
 };
 
 /// Whether the reference's `BlockError` variant carries a numeric payload
@@ -117,8 +136,22 @@ enum class BlockErrorKind : std::uint8_t {
 /// not a rejection at all. Declared before `BlockIdentityError` so the member
 /// below can call it — a name declared after the class is not yet visible in an
 /// inline member body.
+///
+/// The P4.2A corpus is the source of truth for which of the ten appended kinds
+/// answer yes, because it publishes the payload object or `null` per case: the
+/// four that read two numbers off the header or the context (`WrongEngine`,
+/// `BadDifficulty`, `TimestampTooOld`, `TimestampTooFarFuture`) and the one that
+/// wraps a count (`TooManyTransactions`) do; the five unit variants
+/// (`BadPreviousHash`, `NoTransactions`, `FirstNotCoinbase`, `DuplicateCoinbase`
+/// and `InsufficientProofOfWork`) do not. `BlockIdentityError`
+/// below still only ever holds the two identity kinds, so its own `has_payload()`
+/// is unchanged in behaviour by this widening.
 constexpr bool block_error_kind_has_payload(BlockErrorKind kind) noexcept {
-  return kind == BlockErrorKind::kWrongChain || kind == BlockErrorKind::kBadHeight;
+  return kind == BlockErrorKind::kWrongChain || kind == BlockErrorKind::kBadHeight ||
+         kind == BlockErrorKind::kWrongEngine || kind == BlockErrorKind::kBadDifficulty ||
+         kind == BlockErrorKind::kTooManyTransactions ||
+         kind == BlockErrorKind::kTimestampTooOld ||
+         kind == BlockErrorKind::kTimestampTooFarFuture;
 }
 
 /// The rejection, with the reference's payload widths kept distinct per variant

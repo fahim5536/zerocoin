@@ -11,9 +11,10 @@
 // The boundary is unchanged by that addition. This module still does NOT encode
 // or hash a header, does NOT dispatch a proof-of-work engine, does NOT validate
 // a block and does NOT compare a header's claimed root against the transactions
-// present (B-1 / B-14): the kernel has no `Block` type, and producing a root
-// from a transaction list is not a block-validation path. Nor does it
-// re-implement the id rule — it calls `Transaction::txid()`, which owns C-2.
+// present (B-1 / B-14): producing a root from a transaction list is not a
+// block-validation path, and the block ordering that reaches it lives in
+// block.h. Nor does it re-implement the id rule — it calls
+// `Transaction::txid()`, which owns C-2.
 // Both functions are pure: given input, they return a digest, and nothing else.
 //
 // The contract is CPP_PORT_REQUIREMENTS.md C-5, and each part of it is an

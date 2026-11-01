@@ -72,7 +72,33 @@ const char* block_error_kind_name(BlockErrorKind kind) noexcept {
       // The reference's name is `BlockError::RootMismatch`; the fixture asserts
       // it verbatim, and it has no payload to name afterwards (C-14).
       return "RootMismatch";
+    // The ten names P4.2B-1 appends. Each is the reference's variant spelled
+    // verbatim (C-14); the cases above stay default-free, so a future appended
+    // enumerator fails to compile here instead of silently reporting "Unknown".
+    case BlockErrorKind::kBadPreviousHash:
+      return "BadPreviousHash";
+    case BlockErrorKind::kWrongEngine:
+      return "WrongEngine";
+    case BlockErrorKind::kBadDifficulty:
+      return "BadDifficulty";
+    case BlockErrorKind::kNoTransactions:
+      return "NoTransactions";
+    case BlockErrorKind::kTooManyTransactions:
+      return "TooManyTransactions";
+    case BlockErrorKind::kFirstNotCoinbase:
+      return "FirstNotCoinbase";
+    case BlockErrorKind::kDuplicateCoinbase:
+      return "DuplicateCoinbase";
+    case BlockErrorKind::kTimestampTooOld:
+      return "TimestampTooOld";
+    case BlockErrorKind::kTimestampTooFarFuture:
+      return "TimestampTooFarFuture";
+    case BlockErrorKind::kInsufficientProofOfWork:
+      return "InsufficientProofOfWork";
   }
+  // Reachable only from a value outside the enum's declared range, which is
+  // undefined behaviour in C++ rather than a state this function is asked to
+  // name; the return exists so no path falls out of the switch.
   return "Unknown";
 }
 

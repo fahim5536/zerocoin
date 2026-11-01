@@ -107,6 +107,7 @@ add_executable(kernel_tests
   tests/test_pow.cpp
   tests/test_merkle.cpp
   tests/test_block.cpp
+  tests/test_block_structure.cpp
   tests/test_varint.cpp
   tests/test_transaction.cpp
   tests/test_script.cpp
