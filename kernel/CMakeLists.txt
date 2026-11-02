@@ -219,3 +219,20 @@ add_test(NAME kernel_p41_conformance
           ${CMAKE_CURRENT_SOURCE_DIR}/tools/p41_conformance.py
           --vectors ${CMAKE_CURRENT_SOURCE_DIR}/../test/p41-vectors
           --runner $<TARGET_FILE:kernel_conformance>)
+
+# P4.2B-3 replays the thirty-five block-structure cases the P4.2A corpus exports,
+# from its own root test/p42-vectors through the same runner binary. The wrapper is
+# a differential, not a replay of published bytes: it derives every expected value
+# from the independent Python verifier in test/harness/zro_vectors.py (imported from
+# the wrapper, never from the kernel) and asks the production
+# zk::validate_block_structure for its own verdict, so the comparison stays two
+# sources of truth rather than one. Its corpus is separate for the reason
+# P3.1-P3.3 and P4.1 each gave theirs: the P0 manifest pins one source_commit across
+# the 117 historical cases, and these came from the P4.2A exporter. Additive entry
+# only — no existing test changes count, and gate-g1.ps1 runs the whole ctest set,
+# so this line is the gate wiring.
+add_test(NAME kernel_p42_conformance
+  COMMAND ${PYTHON_EXECUTABLE}
+          ${CMAKE_CURRENT_SOURCE_DIR}/tools/p42_conformance.py
+          --vectors ${CMAKE_CURRENT_SOURCE_DIR}/../test/p42-vectors
+          --runner $<TARGET_FILE:kernel_conformance>)

@@ -38,6 +38,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "zerocoin/block.h"
@@ -880,6 +881,162 @@ Produced op_pow_mine_from_zero(const Case& c) {
        std::to_string(bits));
 }
 
+// --- P4.2B: the whole block structure ordering --------------------------------
+
+/// `chain.block_structure.*`: rules B-3 through B-15, reached through the
+/// production `validate_block_structure` and nothing else. The runner builds the
+/// block and the caller-supplied context out of the fixture's own published bytes
+/// and numbers, hands them to the kernel, and serialises the verdict. There is no
+/// second copy of a consensus predicate in this function: every rule it reports is
+/// a rule the kernel itself decided.
+///
+/// It publishes ONE verdict plus the evidence around it, and deliberately NOT the
+/// set of every rule the input fails. `validate_block_structure` short-circuits
+/// because `Block::validate_structure` does, so the first failure is the only
+/// verdict the production path can be asked for; reconstructing the full set here
+/// would mean restating B-5 and B-7 through B-13 inside a test binary, which is the
+/// one thing this phase may not do. Precedence is therefore diffed against the
+/// oracle's `reported_rule` — the head of the set the Python verifier derives
+/// independently — and a fixture that violates several rows still witnesses the
+/// ordering claim by naming the row the kernel reached first.
+///
+/// The three evidence values at the end are the reason that diff is not a
+/// tautology. `merkle_root_from_transactions`, `header_meets_own_target` and
+/// `future_timestamp_limit` are production calls, made unconditionally, so a block
+/// stopped at B-13 still shows whether rows B-14 and B-15 were failing underneath —
+/// which is what makes `pair_13_14_*` a precedence witness rather than a single-rule
+/// observation, and what makes `iso_08_no_transactions` a witness to the documented
+/// limitation (the empty list reaches B-14 nowhere, so B-8-before-B-14 is inferred
+/// from source order, not demonstrated). Nothing branches on them: they are echoed,
+/// never consulted, the same stance `op_claimed_merkle_root` takes.
+Produced op_block_structure(const Case& c) {
+  const zk::BlockHeader header = header_of(c, "header.");
+
+  // The engine is the node's own policy, so it is built from the context the
+  // fixture publishes and never selected from `header.engine_id` — that byte is
+  // the peer's claim and the B-6 payload's `found` side only (pow.h, trust
+  // boundary). The scratchpad profile is resolved through `engine_for_id` so
+  // dispatch is on the corpus path, and its identity is compared against the
+  // declared name and budget before anything is validated.
+  const std::string declared_engine = c.one("engine");
+  zk::PowEngine engine = zk::PowEngine::trivial();
+  if (declared_engine != std::string(zk::kTrivialEngineName)) {
+    if (declared_engine != std::string(zk::kScratchpadEngineName)) {
+      fail("engine: the corpus names " + declared_engine +
+           ", which the kernel has no engine for; the fixture is unsupported rather "
+           "than replayed under a different algorithm");
+    }
+    const std::string engine_text = c.one("engine_id");
+    const std::uint64_t declared_id = parse_u64(engine_text, "engine_id");
+    if (declared_id > 0xffull) {
+      fail("engine_id: does not fit in 8 bits: " + engine_text);
+    }
+    const zk::ScratchPadParams params{parse_size(c.one("memory_bytes"), "memory_bytes"),
+                                      parse_size(c.one("rounds"), "rounds")};
+    const std::optional<zk::PowEngine> resolved =
+        zk::engine_for_id(static_cast<std::uint8_t>(declared_id), params);
+    if (!resolved.has_value()) {
+      fail("engine_id: the kernel resolves no engine for " + engine_text);
+    }
+    if (std::string(resolved->name()) != declared_engine ||
+        resolved->scratchpad_params() != params) {
+      fail("engine identity: the resolved engine is not the one the corpus declares");
+    }
+    engine = *resolved;
+  }
+
+  const zk::ValidationContext context{
+      engine, parse_u32(c.one("expected_chain"), "expected_chain"),
+      parse_u64(c.one("expected_height"), "expected_height"),
+      hash256_of(c.one("expected_previous_hex"), "expected_previous_hex"),
+      parse_u32(c.one("expected_bits"), "expected_bits"),
+      parse_u64(c.one("median_time_past"), "median_time_past"),
+      parse_u64(c.one("now"), "now")};
+
+  // One `IN tx_hex=<canonical bytes>` per transaction, in corpus order. `tx_of`
+  // rejects a bad decode or any trailing byte, so the list the kernel validates is
+  // exactly the list the fixture published — the count B-9 reads and the leaves B-14
+  // hashes are both the codec's own output.
+  std::vector<Transaction> txs;
+  for (const std::string& hex : c.all("tx_hex")) {
+    txs.push_back(tx_of(hex, "tx_hex"));
+  }
+  const zk::Block block{header, std::move(txs)};
+
+  const zk::BlockStructureResult result = zk::validate_block_structure(block, context);
+  const zk::BlockErrorKind kind = zk::block_structure_kind(result);
+
+  Produced produced{
+      {"accepted", bool_text(zk::block_structure_accepted(result))},
+      // The reference's variant name, from the one table header.h owns (C-14).
+      {"error_kind", zk::block_structure_name(result)},
+      // The frozen kernel taxonomy number, published next to the name because the
+      // three numberings in this port agree with each other only by coincidence:
+      // rule row 14 is `RootMismatch`, kind 3, and variant index 12.
+      {"error_kind_numeric", std::to_string(static_cast<unsigned>(kind))},
+      {"error_payload_present", bool_text(zk::block_error_kind_has_payload(kind))},
+  };
+
+  // The payload fields, under the names the Rust variant declares them with. Only
+  // the alternative that was actually returned contributes keys, so an accepted
+  // case publishes no payload at all and a fixture that expected one fails with
+  // "produced no value for" instead of comparing against an invented zero.
+  if (const auto* wrong_chain = std::get_if<zk::WrongChainError>(&result)) {
+    produced["error_payload_expected"] = std::to_string(wrong_chain->expected);
+    produced["error_payload_found"] = std::to_string(wrong_chain->found);
+  } else if (const auto* bad_height = std::get_if<zk::BadHeightError>(&result)) {
+    produced["error_payload_expected"] = std::to_string(bad_height->expected);
+    produced["error_payload_found"] = std::to_string(bad_height->found);
+  } else if (const auto* wrong_engine = std::get_if<zk::WrongEngineError>(&result)) {
+    produced["error_payload_expected"] =
+        std::to_string(static_cast<unsigned>(wrong_engine->expected));
+    produced["error_payload_found"] =
+        std::to_string(static_cast<unsigned>(wrong_engine->found));
+  } else if (const auto* bad_difficulty = std::get_if<zk::BadDifficultyError>(&result)) {
+    produced["error_payload_expected"] = std::to_string(bad_difficulty->expected);
+    produced["error_payload_found"] = std::to_string(bad_difficulty->found);
+  } else if (const auto* too_many = std::get_if<zk::TooManyTransactionsError>(&result)) {
+    produced["error_payload_count"] =
+        std::to_string(static_cast<unsigned long long>(too_many->count));  // NOLINT
+  } else if (const auto* too_old = std::get_if<zk::TimestampTooOldError>(&result)) {
+    produced["error_payload_median"] = std::to_string(too_old->median);
+    produced["error_payload_found"] = std::to_string(too_old->found);
+  } else if (const auto* too_far = std::get_if<zk::TimestampTooFarFutureError>(&result)) {
+    produced["error_payload_now"] = std::to_string(too_far->now);
+    produced["error_payload_found"] = std::to_string(too_far->found);
+  }
+
+  const Hash256 root =
+      zk::merkle_root_from_transactions(block.transactions.data(), block.transactions.size());
+
+  std::string flags;
+  unsigned long long coinbases = 0;  // NOLINT
+  for (const Transaction& tx : block.transactions) {
+    if (tx.is_coinbase()) {
+      flags += "1";
+      ++coinbases;
+    } else {
+      flags += "0";
+    }
+  }
+
+  produced["leaf_count"] =
+      std::to_string(static_cast<unsigned long long>(block.transactions.size()));  // NOLINT
+  produced["coinbase_count"] = std::to_string(coinbases);
+  produced["coinbase_flags"] = flags;
+  // The reference's `transactions.first()`, and the reason an empty list reports
+  // false here rather than being undefined: B-8 has already returned by the point
+  // the ordering would index the list.
+  produced["first_is_coinbase"] =
+      bool_text(!block.transactions.empty() && block.transactions.front().is_coinbase());
+  produced["claimed_root_internal_hex"] = header.merkle_root.to_hex().str();
+  produced["computed_root_internal_hex"] = root.to_hex().str();
+  produced["roots_match"] = bool_text(header.merkle_root == root);
+  produced["proof_of_work_meets_target"] = bool_text(zk::header_meets_own_target(header, engine));
+  produced["future_limit"] = std::to_string(zk::future_timestamp_limit(context.now));
+  return produced;
+}
+
 Produced execute(const Case& c) {
   if (c.op == "sha256_utf8") return op_sha256_utf8(c);
   if (c.op == "sha256d_utf8") return op_sha256d_utf8(c);
@@ -911,6 +1068,7 @@ Produced execute(const Case& c) {
   if (c.op == "pow_trivial_hash") return op_pow_trivial_hash(c);
   if (c.op == "pow_scratchpad_hash") return op_pow_scratchpad_hash(c);
   if (c.op == "pow_mine_from_zero") return op_pow_mine_from_zero(c);
+  if (c.op == "block_structure") return op_block_structure(c);
   fail("unknown OP: " + c.op);
 }
 
