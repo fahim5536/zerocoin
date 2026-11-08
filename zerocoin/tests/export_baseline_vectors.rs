@@ -4484,16 +4484,21 @@ const P42_VERBOSE_LIMIT: usize = 8;
 /// and the one accept case that overrides it is the only fixture to write a non-trivial id
 /// there.
 ///
-/// Two scratchpad presets appear below because `balanced()` and `mainnet()` share *both*
-/// `ENGINE_ID_SCRATCHPAD` and `PowEngine::name()`. The preset token is the only thing that
-/// distinguishes them, so every consumer has to rebuild from `preset` and never from the name.
+/// Three scratchpad presets appear below because `balanced()`, `mainnet()` and `low_spec()`
+/// share *both* `ENGINE_ID_SCRATCHPAD` and `PowEngine::name()`. The preset token is the only
+/// thing that distinguishes them, so every consumer has to rebuild from `preset` and never
+/// from the name.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum P42Engine {
     Trivial,
     ScratchPad,
     /// The mainnet preset. Not the default: `DEFAULT_ENGINE` and the devnet parameters both
-    /// select `balanced()`, so this is the corpus's one non-default scratchpad witness.
+    /// select `balanced()`, so this is the corpus's first non-default scratchpad witness.
     ScratchPadMainnet,
+    /// The low-spec preset: 512 MiB of pad and 2,048 rounds, built by production from
+    /// `LOW_SPEC_SCRATCHPAD_BYTES`. The corpus's second non-default scratchpad witness and the
+    /// largest production budget it reaches.
+    ScratchPadLowSpec,
 }
 
 impl P42Engine {
@@ -4509,6 +4514,9 @@ impl P42Engine {
             // 2 MiB of pad and 4096 rounds instead of 64 KiB and 1024, so the nonce that
             // solves this preset is not the nonce that solves `balanced()`.
             P42Engine::ScratchPadMainnet => Box::new(ScratchPadEngine::mainnet()),
+            // 512 MiB of pad and 2048 rounds: the production `low_spec()` constructor, whose
+            // budget is neither the default nor the mainnet one.
+            P42Engine::ScratchPadLowSpec => Box::new(ScratchPadEngine::low_spec()),
         }
     }
 
@@ -4519,6 +4527,7 @@ impl P42Engine {
             P42Engine::Trivial => None,
             P42Engine::ScratchPad => Some("ScratchPadEngine::balanced()"),
             P42Engine::ScratchPadMainnet => Some("ScratchPadEngine::mainnet()"),
+            P42Engine::ScratchPadLowSpec => Some("ScratchPadEngine::low_spec()"),
         }
     }
 
@@ -4528,6 +4537,7 @@ impl P42Engine {
         match token {
             "ScratchPadEngine::balanced()" => Some(P42Engine::ScratchPad),
             "ScratchPadEngine::mainnet()" => Some(P42Engine::ScratchPadMainnet),
+            "ScratchPadEngine::low_spec()" => Some(P42Engine::ScratchPadLowSpec),
             _ => None,
         }
     }
@@ -4543,6 +4553,10 @@ impl P42Engine {
             }
             P42Engine::ScratchPadMainnet => {
                 let engine = ScratchPadEngine::mainnet();
+                Some((engine.memory_bytes, engine.rounds))
+            }
+            P42Engine::ScratchPadLowSpec => {
+                let engine = ScratchPadEngine::low_spec();
                 Some((engine.memory_bytes, engine.rounds))
             }
         }
@@ -4714,11 +4728,11 @@ struct P42Spec {
     /// Either way it is searched with the *selected* engine, because publishing a proof of work
     /// verified against a different engine than the validator ran would be an undeclared fault.
     honest_pow: bool,
-    /// When set beside `honest_pow`, the nonce is searched for one that meets the *selected*
-    /// engine's target and misses this rival preset's. A validator that substituted the rival
-    /// would then reject the case instead of accepting it, which is what makes the accept
-    /// evidence about the preset rather than about the label on it.
-    discriminating_preset: Option<P42Engine>,
+    /// When non-empty beside `honest_pow`, the nonce is searched for one that meets the
+    /// *selected* engine's target and misses every listed rival preset's. A validator that
+    /// substituted any rival would then reject the case instead of accepting it, which is what
+    /// makes the accept evidence about the preset rather than about the label on it.
+    discriminating_presets: &'static [P42Engine],
     declare_variant: &'static str,
     declare_payload: Value,
     declare_rules: Vec<u8>,
@@ -4769,7 +4783,7 @@ impl P42Spec {
             claim: None,
             stale_claim: false,
             honest_pow: true,
-            discriminating_preset: None,
+            discriminating_presets: &[],
             declare_variant: "Ok",
             declare_payload: Value::Null,
             declare_rules: Vec::new(),
@@ -5007,33 +5021,39 @@ fn p42_construct(
         claimed
     };
     header.nonce = if spec.honest_pow {
-        match spec.discriminating_preset {
-            None => mine(
+        if spec.discriminating_presets.is_empty() {
+            mine(
                 engine,
                 &header.preimage(),
                 &compact_to_target(header.difficulty_bits),
                 0,
             )
             .expect("the difficulty every P4.2A fixture advertises is solvable from nonce zero")
-            .0,
-            // A nonce that solves the selected preset and misses the rival one. Both targets
-            // admit roughly half of all nonces, so the conjunction appears within a handful of
-            // tries; the scan stays deterministic because it is an upward search from zero.
-            Some(rival) => {
-                let rival = rival.build();
-                (0u64..1_000_000)
-                    .find(|nonce| {
-                        header.nonce = *nonce;
-                        header.meets_own_target(engine) && !header.meets_own_target(rival.as_ref())
-                    })
-                    .expect(
-                        "a 2^255-class target pair admits a discriminating nonce within 10^6 tries",
-                    )
-            }
+            .0
+        } else {
+            // A nonce that solves the selected preset and misses every rival. Each target
+            // admits roughly half of all nonces, so a conjunction over k rivals appears within
+            // a handful of tries; the scan stays deterministic because it is an upward search
+            // from zero. The rivals are built once, outside the scan, so the search does not
+            // pay for construction per candidate.
+            let rivals: Vec<Box<dyn PowEngine>> = spec
+                .discriminating_presets
+                .iter()
+                .map(|preset| preset.build())
+                .collect();
+            (0u64..1_000_000)
+                .find(|nonce| {
+                    header.nonce = *nonce;
+                    header.meets_own_target(engine)
+                        && rivals
+                            .iter()
+                            .all(|rival| !header.meets_own_target(rival.as_ref()))
+                })
+                .expect("a 2^255-class target pair admits a discriminating nonce within 10^6 tries")
         }
     } else {
         assert!(
-            spec.discriminating_preset.is_none(),
+            spec.discriminating_presets.is_empty(),
             "a failing-nonce case cannot also ask for a discriminating nonce"
         );
         (0u64..512)
@@ -5146,37 +5166,39 @@ fn p42_emit(spec: &P42Spec) -> Value {
     let roots_match = computed.0 == claimed.0;
     let proof_of_work = header.meets_own_target(engine.as_ref());
 
-    // A non-default preset is only a witness if the nonce is load-bearing. Three assertions:
+    // A non-default preset is only a witness if the nonce is load-bearing. For every rival:
     // the published nonce really solves the preset this case names; it does not solve the
     // preset a silent substitution would install; and the two presets' configurations differ,
     // read out of `ScratchPadEngine`'s own public fields rather than restated here.
-    if let Some(rival) = spec.discriminating_preset {
+    if !spec.discriminating_presets.is_empty() {
         assert!(
             proof_of_work,
             "{label}: the published nonce does not solve the engine this fixture selects"
-        );
-        let rival_engine = rival.build();
-        assert!(
-            !header.meets_own_target(rival_engine.as_ref()),
-            "{label}: the published nonce also solves `{}`, so this case would stay an accept if \
-             the selected preset were silently substituted with that one, and it is therefore not \
-             evidence about the preset it names",
-            rival_engine.name()
         );
         let selected = spec
             .engine
             .scratchpad_params()
             .expect("a discriminating case selects a scratchpad preset");
-        assert_ne!(
-            selected,
-            rival
-                .scratchpad_params()
-                .expect("the rival preset is a scratchpad preset"),
-            "{label}: `{}` and `{}` publish the same (memory_bytes, rounds), so the nonce search \
-             above cannot tell them apart",
-            spec.engine.preset_token().unwrap_or("?"),
-            rival.preset_token().unwrap_or("?")
-        );
+        for rival in spec.discriminating_presets {
+            let rival_engine = rival.build();
+            assert!(
+                !header.meets_own_target(rival_engine.as_ref()),
+                "{label}: the published nonce also solves `{}`, so this case would stay an accept if \
+                 the selected preset were silently substituted with that one, and it is therefore not \
+                 evidence about the preset it names",
+                rival_engine.name()
+            );
+            assert_ne!(
+                selected,
+                rival
+                    .scratchpad_params()
+                    .expect("the rival preset is a scratchpad preset"),
+                "{label}: `{}` and `{}` publish the same (memory_bytes, rounds), so the nonce search \
+                 above cannot tell them apart",
+                spec.engine.preset_token().unwrap_or("?"),
+                rival.preset_token().unwrap_or("?")
+            );
+        }
         let balanced = ScratchPadEngine::balanced();
         assert_ne!(
             selected,
@@ -5329,19 +5351,20 @@ fn p42_spec(
     spec
 }
 
-/// The frozen matrix: 15 group-A cases, 8 boundary cases, 12 representable adjacent-pair
-/// cases and 1 dominance witness. 36. One pair is deliberately absent: (B-8, B-9), because the
+/// The frozen matrix: 16 group-A cases, 8 boundary cases, 12 representable adjacent-pair
+/// cases and 1 dominance witness. 37. One pair is deliberately absent: (B-8, B-9), because the
 /// two predicates are mutually exclusive, so no input violates both and no input can distinguish
 /// their order — that gap is not presented as proven by a fixture here. The pair (B-13, B-14),
 /// which the corrected P4.2 design contract left unfrozen and the original P4.2A corpus deferred,
 /// is now frozen by `pair_13_14_future_and_stale_root`: one block, both predicates failing, and
 /// the reference's own verdict recorded as row 13.
 ///
-/// Group A is one guard per case with every earlier guard demonstrably satisfied. The last of
-/// those cases is the only accept in the group and the only non-default scratchpad witness in
-/// the corpus: `eng_06_scratchpad_mainnet_accept` is the pass-side counterpart of
-/// `iso_06_wrong_engine`, and its nonce is chosen to solve the mainnet pad and miss the devnet
-/// one, so the verdict cannot survive a silent substitution.
+/// Group A is one guard per case with every earlier guard demonstrably satisfied. Its last two
+/// cases are the group's only accepts and the corpus's two non-default scratchpad witnesses:
+/// `eng_06_scratchpad_mainnet_accept` is the pass-side counterpart of `iso_06_wrong_engine`, and
+/// `eng_07_scratchpad_low_spec_accept` is the same shape at a 512 MiB pad. Each nonce is chosen
+/// to solve the preset its case names and miss the cheaper production presets, so neither
+/// verdict can survive a silent substitution.
 fn p42_specs() -> Vec<P42Spec> {
     let specs = vec![
         // ---- Group A: one guard per case, every earlier guard demonstrably satisfied ----
@@ -5401,7 +5424,7 @@ fn p42_specs() -> Vec<P42Spec> {
                 );
             },
         ),
-        // The accept-side counterpart of `iso_06_wrong_engine`, and the corpus's only
+        // The accept-side counterpart of `iso_06_wrong_engine`, and the corpus's first
         // non-default scratchpad witness: the header advertises the scratchpad id *and* the
         // context selects the mainnet preset, so B-6 passes and B-15 is a real proof of work
         // against a 2 MiB, 4096-round pad rather than the devnet `balanced()` configuration.
@@ -5414,7 +5437,26 @@ fn p42_specs() -> Vec<P42Spec> {
             |s| {
                 s.engine = P42Engine::ScratchPadMainnet;
                 s.header_engine_id = Some(ScratchPadEngine::mainnet().id());
-                s.discriminating_preset = Some(P42Engine::ScratchPad);
+                s.discriminating_presets = &[P42Engine::ScratchPad];
+                s.declare("Ok", Value::Null, &[]);
+            },
+        ),
+        // The P4.2B-4E case, and the corpus's second non-default scratchpad witness: the same
+        // shape as `eng_06_scratchpad_mainnet_accept`, resolved through the production
+        // `low_spec()` constructor instead, so B-15 is a real proof of work against a 512 MiB,
+        // 2048-round pad — the largest budget the corpus reaches. The rival list holds *both*
+        // cheaper presets, so the published nonce is one that solves `low_spec()` and misses
+        // `balanced()` and `mainnet()`: neither substitution could keep this accept, which is
+        // the corpus-level form of the three-distinct-digest argument the C++ differential makes.
+        p42_spec(
+            "eng_07_scratchpad_low_spec_accept",
+            "A",
+            "rule",
+            "every published field matches its expected value under `ScratchPadEngine::low_spec()`: the header advertises `ENGINE_ID_SCRATCHPAD`, the context names the low-spec engine, and the nonce solves that preset's target while missing both `ScratchPadEngine::balanced()`'s and `ScratchPadEngine::mainnet()`'s",
+            |s| {
+                s.engine = P42Engine::ScratchPadLowSpec;
+                s.header_engine_id = Some(ScratchPadEngine::low_spec().id());
+                s.discriminating_presets = &[P42Engine::ScratchPad, P42Engine::ScratchPadMainnet];
                 s.declare("Ok", Value::Null, &[]);
             },
         ),
@@ -5868,7 +5910,7 @@ the root comparison, which is the relative order the P4.2A corpus previously def
     specs
 }
 
-/// The corpus's 36 cases, each one produced by `p42_emit` and therefore by a direct call into
+/// The corpus's 37 cases, each one produced by `p42_emit` and therefore by a direct call into
 /// `Block::validate_structure`.
 fn block_structure_cases() -> Vec<Value> {
     p42_specs().iter().map(p42_emit).collect()
@@ -6061,7 +6103,7 @@ cases at export, so neither is a claim this file makes on its own behalf.",
                 [13, 14], [14, 15],
             ],
             "basis": "a pair is represented when one case's published input violates both rows \
-and `reported_rule` equals the smaller of them. The emitter asserts that equality for all 36 \
+and `reported_rule` equals the smaller of them. The emitter asserts that equality for all 37 \
 cases, so the array above is a summary of assertions that ran during generation, not a list of \
 hopes.",
         },
@@ -6199,7 +6241,7 @@ or assert.",
 claims its own root — a shape the P4.1 corpus cannot contain at all.",
             "The version field is published and never validated (F-2), so no case here depends on \
 it; `BLOCK_VERSION` is written by `header_at` and read by nothing in the path under test.",
-            "These 36 cases are new with the `p42_*` exporter. `reference_commits` names the commit \
+            "These 37 cases are new with the `p42_*` exporter. `reference_commits` names the commit \
 whose code is under test, not the commit that introduced these cases, because a fixture cannot \
 truthfully claim to predate its own generator.",
             "`pair_13_14_future_and_stale_root` is the one case added after the original P4.2A \
@@ -6208,7 +6250,7 @@ so the two cases differ in one construction line and the pair's verdict is the r
 `TimestampTooFarFuture`. That closes the (B-13, B-14) deferral — see `resolved_pairs` — and no \
 older case, id or expected value changed. The (B-8, B-9) deferral is untouched, because no input \
 can represent that pair.",
-            "`eng_06_scratchpad_mainnet_accept` is the P4.2B-4C case and the corpus's only \
+            "`eng_06_scratchpad_mainnet_accept` is the P4.2B-4C case and the corpus's first \
 non-default scratchpad witness: `input.engine_config.preset` is `ScratchPadEngine::mainnet()`, \
 and its nonce is mined with that preset and asserted at export to miss \
 `ScratchPadEngine::balanced()`'s target, so a consumer that substituted one preset for the other \
@@ -6216,6 +6258,14 @@ would reject a case this corpus publishes as accepted. The preset's `(memory_byt
 deliberately not published — `engine_config` keeps the three keys every other scratchpad fixture \
 already carries — and are asserted at export from the production struct's own public fields \
 instead. No older case, id or expected value changed.",
+            "`eng_07_scratchpad_low_spec_accept` is the P4.2B-4E case and the corpus's second \
+non-default scratchpad witness: `input.engine_config.preset` is `ScratchPadEngine::low_spec()`, \
+whose 512 MiB pad and 2,048 rounds are the largest production budget this corpus reaches. Its \
+nonce is asserted at export to solve that preset's target and to miss *both* \
+`ScratchPadEngine::balanced()`'s and `ScratchPadEngine::mainnet()`'s, so neither substitution \
+could leave it an accept. Like `eng_06` it publishes `preset` rather than numeric configuration, \
+and the discrimination is asserted from the production struct's public fields. No older case, id \
+or expected value changed.",
         ],
         "files": counts,
     });
@@ -6298,24 +6348,24 @@ fn p42_reference_fixtures_are_reproducible_and_pinned() {
     assert_eq!(document["source_commit"], json!(P42_SOURCE_COMMIT), "source_commit");
     let cases = document["cases"].as_array().expect("a cases array").clone();
     assert_eq!(document["case_count"], json!(cases.len()), "case_count matches the array");
-    assert_eq!(cases.len(), 36, "the pinned case count for P4.2A, the P4.2A.1 precedence fixture and the P4.2B-4C non-default preset witness");
+    assert_eq!(cases.len(), 37, "the pinned case count for P4.2A, the P4.2A.1 precedence fixture and the P4.2B-4C and P4.2B-4E non-default preset witnesses");
 
     let manifest: Value =
         serde_json::from_str(&first[1].1).expect("the generated manifest parses as JSON");
     assert_eq!(manifest["phase"], json!("P4.2A"), "phase");
     assert_eq!(manifest["group"], json!("chain.block_structure"), "manifest group");
-    assert_eq!(manifest["total_cases"], json!(36), "manifest total_cases");
+    assert_eq!(manifest["total_cases"], json!(37), "manifest total_cases");
     assert_eq!(manifest["source_commit"], json!(P42_SOURCE_COMMIT), "manifest source_commit");
     assert_eq!(
         manifest["case_ids"].as_array().expect("case_ids").len(),
-        36,
+        37,
         "the manifest lists one id per case"
     );
 
     // The arithmetic the mission statement froze, checked against the ids actually published.
     let ids: Vec<&str> = cases.iter().map(|c| c["id"].as_str().expect("id")).collect();
     let unique: std::collections::BTreeSet<&str> = ids.iter().copied().collect();
-    assert_eq!(unique.len(), 36, "every fixture id must appear exactly once");
+    assert_eq!(unique.len(), 37, "every fixture id must appear exactly once");
     assert!(
         ids.contains(&"chain.block_structure.pair_13_14_future_and_stale_root"),
         "the B-13/B-14 precedence fixture must be part of the corpus that resolves the deferral"
@@ -6330,18 +6380,18 @@ fn p42_reference_fixtures_are_reproducible_and_pinned() {
             .filter(|c| c["input"]["group"].as_str() == Some(letter))
             .count()
     };
-    assert_eq!(count_group("A"), 15, "Group A is 15 isolation cases");
+    assert_eq!(count_group("A"), 16, "Group A is 16 isolation cases");
     assert_eq!(count_group("B"), 8, "Group B is 8 boundary cases");
     assert_eq!(count_group("C"), 12, "Group C is the 12 representable adjacent-pair cases");
     assert_eq!(count_group("D"), 1, "Group D is the single dominance witness");
     assert_eq!(
         manifest["groups"],
         json!({
-            "A_isolation": 15,
+            "A_isolation": 16,
             "B_boundary": 8,
             "C_adjacent_pair": 12,
             "D_dominance": 1,
-            "sum": 36,
+            "sum": 37,
         }),
         "the manifest's group counts must equal the published corpus"
     );
@@ -6378,8 +6428,8 @@ fn p42_reference_fixtures_are_reproducible_and_pinned() {
             reported.push(value["expected"]["reported_rule"].as_u64().expect("row") as u8);
         }
     }
-    assert_eq!((rule, boundary, ordering), (15, 8, 13), "the published intent mix");
-    assert_eq!((accepted_count, rejected_count), (6, 30), "the published verdict mix");
+    assert_eq!((rule, boundary, ordering), (16, 8, 13), "the published intent mix");
+    assert_eq!((accepted_count, rejected_count), (7, 30), "the published verdict mix");
     reported.sort_unstable();
     reported.dedup();
     assert_eq!(

@@ -1025,25 +1025,37 @@ def trivial_hash(preimage, nonce):
 
 
 def scratchpad_hash(preimage, nonce, memory_bytes, rounds):
-    """Seed, fill, data-dependent rounds, then one streaming SHA-256 finalizer."""
+    """Seed, fill, data-dependent rounds, then one streaming SHA-256 finalizer.
+
+    The pad is one flat `cells * 32` byte buffer rather than a list of 32-byte
+    objects. Both layouts produce the same bytes in the same order; the flat one
+    keeps the peak footprint at the pad size, which matters at the 512 MiB
+    `low_spec()` budget where a list of 16,777,216 separate objects would cost
+    more than twice that.
+    """
     cells = max(memory_bytes // SCRATCHPAD_CELL, 1)
     state = sha256(preimage + le64(nonce))
 
-    pad = []
+    pad = bytearray()
     for _ in range(cells):
         state = sha256(state)
-        pad.append(state)
+        pad += state
 
     power_of_two = (cells & (cells - 1)) == 0
     mask = cells - 1
     for _ in range(rounds):
         index_word = int.from_bytes(state[0:8], "little")
         index = (index_word & mask) if power_of_two else (index_word % cells)
-        state = sha256(state + pad[index])
-        pad[index] = state
+        offset = index * SCRATCHPAD_CELL
+        state = sha256(state + pad[offset:offset + SCRATCHPAD_CELL])
+        pad[offset:offset + SCRATCHPAD_CELL] = state
 
-    finalizer = sha256(state + b"".join(pad))
-    return finalizer
+    # The finalizer folds the state then every cell in ascending order, with no
+    # separators; feeding the buffer straight in avoids a second 512 MiB copy.
+    finalizer = hashlib.sha256()
+    finalizer.update(state)
+    finalizer.update(pad)
+    return finalizer.digest()
 
 
 def mine(hasher, preimage, target, start=0):
@@ -2296,6 +2308,11 @@ BLOCK_RULE_ERRORS = {
 SCRATCHPAD_PRESETS = {
     "ScratchPadEngine::balanced()": (64 * 1024, 1_024),
     "ScratchPadEngine::mainnet()": (2 * 1024 * 1024, 4_096),
+    # `LOW_SPEC_SCRATCHPAD_BYTES` = 512 * 1024 * 1024, paired with 2,048 rounds
+    # by `ScratchPadEngine::low_spec()`. 512 MiB / 32 = 16,777,216 cells, which
+    # is 2**24, so this preset takes the bitmask index path rather than the
+    # modulo one.
+    "ScratchPadEngine::low_spec()": (512 * 1024 * 1024, 2_048),
 }
 
 # Fields of a header or context the reference reads as a fixed-width integer.

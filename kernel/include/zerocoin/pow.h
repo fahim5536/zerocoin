@@ -98,6 +98,18 @@ inline constexpr ScratchPadParams kScratchpadDevnet{64 * 1024, 1024};
 /// `ScratchPadEngine::mainnet()` — 2 MiB, 4,096 rounds.
 inline constexpr ScratchPadParams kScratchpadMainnet{2 * 1024 * 1024, 4096};
 
+/// `ScratchPadEngine::low_spec()` — 512 MiB, 2,048 rounds. The reference builds
+/// it from `LOW_SPEC_SCRATCHPAD_BYTES = 512 * 1024 * 1024`, and
+/// `HardwareProfile::memory_budget_bytes()` hands the same figure to both the
+/// low-spec and the desktop profile.
+///
+/// It shares `id()` and `name()` with the two profiles above, so no header byte
+/// distinguishes it from them: the only thing that identifies this budget is the
+/// preset the caller resolved. A node that configured it as 512 MiB and forgot
+/// the round count, or vice versa, would compute a different digest over the same
+/// header while still calling itself "scratchpad-memory-hard".
+inline constexpr ScratchPadParams kScratchpadLowSpec{512 * 1024 * 1024, 2048};
+
 /// `(memory_bytes / CELL).max(1)`, exactly as `cells()` computes it. The floor
 /// matters: a `memory_bytes` below one cell still addresses one cell, so the
 /// index arithmetic never sees a zero-width pad.
@@ -249,6 +261,14 @@ static_assert(scratchpad_cell_count(kScratchpadDevnet.memory_bytes) == 2048,
               "the devnet pad is 2,048 cells");
 static_assert(scratchpad_cell_count(kScratchpadMainnet.memory_bytes) == 65536,
               "the mainnet pad is 65,536 cells");
+static_assert(scratchpad_cell_count(kScratchpadLowSpec.memory_bytes) == 16777216,
+              "the low-spec pad is 16,777,216 cells, which is 2**24");
+static_assert((scratchpad_cell_count(kScratchpadLowSpec.memory_bytes) &
+               (scratchpad_cell_count(kScratchpadLowSpec.memory_bytes) - 1)) == 0,
+              "a power-of-two pad takes the bitmask index path, not the modulo one");
+static_assert(kScratchpadLowSpec != kScratchpadDevnet &&
+                  kScratchpadLowSpec != kScratchpadMainnet,
+              "the low-spec budget must not alias another profile");
 static_assert(kHeaderPreimageSize == 107, "the engine hashes the frozen 107-byte preimage");
 
 }  // namespace zk

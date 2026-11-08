@@ -58,6 +58,17 @@ constexpr const char* kScratchDevnet1 = "3efa396d1920fea0e3d7b942de423a5dd101e20
 constexpr const char* kScratchDevnet42 = "a6c380c7ed1e30c6e517ce20c19067debaf4b5bc3d3ff7632a51029aef5353ff";
 constexpr const char* kScratchMainnet0 = "da324a51e074a7018a162d3b02553bf7375bfa77dab35a77767205aecdaaa55a";
 constexpr const char* kScratchMainnet1 = "b0c6929750813bcb5280a5172f25583de55876eb9c70eb6b7c84a8cbda6fd9ec";
+// `zerocoin-pow`, nonce 1, at the `low_spec()` budget. Not published by
+// test/vectors/pow/engines.json -- it was derived by
+// `test/harness/zro_vectors.py::scratchpad_hash`, which is an independent
+// implementation of the same algorithm, and the Rust reference is held to the
+// same literal by
+// `zerocoin/tests/p42_block_structure_parity.rs::the_low_spec_engine_reproduces_the_digest_the_other_two_implementations_pin`.
+// Pinning it here is what makes the differential real: the C++ engine has to
+// reproduce a digest it did not compute, over a budget whose id() and name() are
+// identical to devnet's.
+constexpr const char* kScratchLowSpec1 =
+    "086fa583ae54a2d9fd3524497130ec2f97f50d81b5cc5cd824dc6979e5c36201";
 
 // The header the 214-character preimage above decodes to. Every field was read off
 // that byte string, little-endian, and the engine byte is the fixture's 0.
@@ -376,6 +387,66 @@ ZK_TEST(scratchpad_engine_matches_the_committed_mainnet_vectors) {
   const PowEngine engine = PowEngine::scratchpad(zk::kScratchpadMainnet);
   expect_internal(hash_raw(engine, 0), kScratchMainnet0);
   expect_internal(hash_raw(engine, 1), kScratchMainnet1);
+}
+
+ZK_TEST(the_low_spec_profile_carries_its_own_budget) {
+  // The reference's `low_spec()` is `ScratchPadEngine::new(LOW_SPEC_SCRATCHPAD_BYTES,
+  // 2_048)` with `LOW_SPEC_SCRATCHPAD_BYTES = 512 * 1024 * 1024`. Neither figure is
+  // a tuning knob here: a pad length or round count that differs is a different
+  // hash function, which is why the budget is asserted before the digest is.
+  ZK_CHECK(zk::kScratchpadLowSpec.memory_bytes == 512u * 1024u * 1024u);
+  ZK_CHECK(zk::kScratchpadLowSpec.rounds == 2048);
+
+  const PowEngine engine = PowEngine::scratchpad(zk::kScratchpadLowSpec);
+  ZK_CHECK(engine.id() == zk::kEngineIdScratchpad);
+  // Same id, same name, different hash: the identity fields cannot be the thing
+  // a caller selects on, and nothing in a block header can either.
+  ZK_CHECK(engine.name() == "scratchpad-memory-hard");
+  ZK_CHECK(engine.name() == PowEngine::scratchpad(zk::kScratchpadDevnet).name());
+  ZK_CHECK(engine.id() == PowEngine::scratchpad(zk::kScratchpadDevnet).id());
+
+  ZK_CHECK(engine.scratchpad_params() == zk::kScratchpadLowSpec);
+  ZK_CHECK(engine.scratchpad_params() != zk::kScratchpadDevnet);
+  ZK_CHECK(engine.scratchpad_params() != zk::kScratchpadMainnet);
+
+  // 512 MiB / 32 is 2**24, so this profile takes the mask branch rather than the
+  // remainder branch. Both are the same function on a power-of-two width, but the
+  // cell count itself is part of the pad layout and is checked here so a mistyped
+  // budget cannot land on a near miss.
+  const std::size_t cells = zk::scratchpad_cell_count(zk::kScratchpadLowSpec.memory_bytes);
+  ZK_CHECK(cells == 16777216);
+  ZK_CHECK((cells & (cells - 1)) == 0);
+}
+
+ZK_TEST(engine_for_id_hands_back_the_low_spec_budget_it_was_given) {
+  // Resolution never rewrites the budget: `engine_for_id` is not a place where a
+  // caller's 512 MiB could quietly become the cheaper devnet pad.
+  const auto engine = zk::engine_for_id(zk::kEngineIdScratchpad, zk::kScratchpadLowSpec);
+  ZK_CHECK(engine.has_value());
+  ZK_CHECK(engine->id() == zk::kEngineIdScratchpad);
+  ZK_CHECK(engine->scratchpad_params() == zk::kScratchpadLowSpec);
+  ZK_CHECK(engine->scratchpad_params() != zk::kScratchpadDevnet);
+  ZK_CHECK(engine->scratchpad_params() != zk::kScratchpadMainnet);
+}
+
+ZK_TEST(scratchpad_engine_matches_the_low_spec_oracle_digest) {
+  // The expensive one: 512 MiB of pad. It is kept to a single hash by reusing the
+  // published `zerocoin-pow` preimage and by comparing against digests that the
+  // cheaper profiles already pin.
+  const PowEngine engine = PowEngine::scratchpad(zk::kScratchpadLowSpec);
+  const Hash256 low = hash_raw(engine, 1);
+  expect_internal(low, kScratchLowSpec1);
+
+  // A silent substitution for either other profile would make these equal; they
+  // are checked against literals rather than against another engine call so the
+  // assertion cannot pass by comparing a value with itself.
+  const Hash256 devnet = hash_raw(PowEngine::scratchpad(zk::kScratchpadDevnet), 1);
+  expect_internal(devnet, kScratchDevnet1);
+  ZK_CHECK(low != devnet);
+  const Hash256 mainnet = hash_raw(PowEngine::scratchpad(zk::kScratchpadMainnet), 1);
+  expect_internal(mainnet, kScratchMainnet1);
+  ZK_CHECK(low != mainnet);
+  ZK_CHECK(devnet != mainnet);
 }
 
 ZK_TEST(scratchpad_engine_and_trivial_engine_never_agree) {

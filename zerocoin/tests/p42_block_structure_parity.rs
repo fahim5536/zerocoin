@@ -48,7 +48,7 @@ use zerocoin::ledger::transaction::Transaction;
 
 /// How many fixtures the committed corpus publishes. Asserted, not assumed: a
 /// fixture silently disappearing is a parity failure, not a smaller test run.
-const EXPECTED_CASE_COUNT: usize = 36;
+const EXPECTED_CASE_COUNT: usize = 37;
 
 /// Every fixture id is this prefix plus a stable suffix. The manifest, the C++
 /// harness and the Python verifier all key off the same string.
@@ -729,9 +729,9 @@ fn every_committed_fixture_matches_the_rust_validator() {
         EXPECTED_CASE_COUNT, accepted, rejected
     );
     assert_eq!(accepted + rejected, EXPECTED_CASE_COUNT);
-    // The corpus publishes 6 accepted and 30 rejected cases. Pinning the split
+    // The corpus publishes 7 accepted and 30 rejected cases. Pinning the split
     // catches a fixture flipping verdict without the count moving.
-    assert_eq!(accepted, 6, "the corpus publishes six accepted fixtures");
+    assert_eq!(accepted, 7, "the corpus publishes seven accepted fixtures");
     assert_eq!(rejected, 30, "the corpus publishes thirty rejected fixtures");
 }
 
@@ -805,7 +805,7 @@ fn the_verdict_is_derived_from_the_input_not_copied_from_the_expected_side() {
 // ---------------------------------------------------------------------------
 
 /// Every fixture's engine comes from its own published fields. This walks the
-/// five scratchpad fixtures and asserts the budget they resolved is the one the
+/// six scratchpad fixtures and asserts the budget they resolved is the one the
 /// published preset names -- and that it was reached by resolving that token,
 /// not by falling back to a default. "The one the published preset names" is
 /// only a real constraint because the corpus now publishes more than one preset:
@@ -850,8 +850,8 @@ fn every_scratchpad_fixture_resolves_the_preset_it_publishes() {
     }
 
     assert_eq!(
-        scratchpad, 5,
-        "the corpus publishes five scratchpad fixtures; {} were resolved",
+        scratchpad, 6,
+        "the corpus publishes six scratchpad fixtures; {} were resolved",
         scratchpad
     );
 }
@@ -954,13 +954,15 @@ fn an_unmodelled_engine_or_preset_is_refused_rather_than_substituted() {
 }
 
 /// The corpus-backed form of the non-default probe above. P4.2B-4C added the
-/// corpus's first non-default scratchpad witness, so the resolver's non-default
-/// branch is now exercised by committed data rather than only by synthetic
-/// controls. Nothing here names a fixture id: the witness is found through the
-/// preset token it publishes, and its engine is rebuilt from that token with
-/// production constructors. The fixture's `expected` side is compared, never
-/// read as an input -- so a consumer that substituted `balanced()` for the named
-/// preset would show up as a nonce that no longer meets its own target.
+/// corpus's first non-default scratchpad witness (`mainnet()`) and P4.2B-4E the
+/// second (`low_spec()`), so the resolver's non-default branch is now exercised
+/// by committed data rather than only by synthetic controls -- and by two
+/// *different* non-default budgets rather than one. Nothing here names a fixture
+/// id: every witness is found through the preset token it publishes, and its
+/// engine is rebuilt from that token with production constructors. The fixture's
+/// `expected` side is compared, never read as an input -- so a consumer that
+/// substituted `balanced()` for the named preset would show up as a nonce that
+/// no longer meets its own target.
 #[test]
 fn the_committed_corpus_carries_a_non_default_scratchpad_witness() {
     let path = corpus_path();
@@ -970,7 +972,7 @@ fn the_committed_corpus_carries_a_non_default_scratchpad_witness() {
     let balanced_budget = (balanced.memory_bytes, balanced.rounds);
 
     // Pass one: every fixture that publishes an `engine_config` must resolve
-    // through a production constructor, and exactly one of them must carry a
+    // through a production constructor, and two of them must carry a
     // configuration that differs from `balanced()`.
     let mut configured = 0usize;
     let mut non_default: Vec<(&str, ScratchPadPreset)> = Vec::new();
@@ -1023,74 +1025,149 @@ fn the_committed_corpus_carries_a_non_default_scratchpad_witness() {
     }
 
     assert_eq!(
-        configured, 5,
-        "the corpus publishes five engine_config fixtures; {configured} resolved"
+        configured, 6,
+        "the corpus publishes six engine_config fixtures; {configured} resolved"
     );
     assert_eq!(
         non_default.len(),
-        1,
-        "exactly one committed fixture must witness a non-default scratchpad preset, found {:?}",
+        2,
+        "exactly two committed fixtures must witness a non-default scratchpad preset, found {:?}",
         non_default.iter().map(|(id, _)| *id).collect::<Vec<_>>()
     );
 
-    // Pass two: take that witness and prove the case is load-bearing rather than
-    // merely labelled. Everything below reads only the fixture's own `input`.
-    let (witness_id, preset) = non_default[0];
-    assert_ne!(
-        preset,
-        ScratchPadPreset::Balanced,
-        "{witness_id}: the witness resolved to the default preset"
+    // The two witnesses must be genuine witnesses of *different* presets: the
+    // corpus has to carry `low_spec()` and not just a second copy of `mainnet()`,
+    // and the two tokens must resolve to different budgets. Pinned here rather
+    // than by fixture id, so renaming a case cannot make the pair vacuous.
+    assert!(
+        non_default.iter().any(|(_, preset)| *preset == ScratchPadPreset::LowSpec),
+        "the corpus must witness `ScratchPadEngine::low_spec()`, found {:?}",
+        non_default.iter().map(|(_, preset)| *preset).collect::<Vec<_>>()
     );
-    let witness = cases_of(&corpus, &path)
+    let witness_budgets: std::collections::BTreeSet<(usize, usize)> = non_default
         .iter()
-        .find(|case| id_of(*case) == witness_id)
-        .unwrap_or_else(|| panic!("{witness_id} disappeared from the corpus between passes"));
-    let input = &witness["input"];
-    let published = preset.construct();
-    let configured_engine = ScratchPadEngine::new(published.memory_bytes, published.rounds);
+        .map(|(_, preset)| {
+            let engine = preset.construct();
+            (engine.memory_bytes, engine.rounds)
+        })
+        .collect();
+    assert_eq!(
+        witness_budgets.len(),
+        non_default.len(),
+        "two witnesses resolved to the same scratchpad budget, so one of them is not evidence \
+         about the preset it names"
+    );
 
-    // The configuration really is non-default, stated against `balanced()` as
-    // production code rather than against restated numbers.
+    // Pass two: take each witness and prove the case is load-bearing rather than
+    // merely labelled. Everything below reads only the fixture's own `input`.
+    for (witness_id, preset) in non_default {
+        assert_ne!(
+            preset,
+            ScratchPadPreset::Balanced,
+            "{witness_id}: the witness resolved to the default preset"
+        );
+        let witness = cases_of(&corpus, &path)
+            .iter()
+            .find(|case| id_of(*case) == witness_id)
+            .unwrap_or_else(|| panic!("{witness_id} disappeared from the corpus between passes"));
+        let input = &witness["input"];
+        let published = preset.construct();
+        let configured_engine = ScratchPadEngine::new(published.memory_bytes, published.rounds);
+
+        // The configuration really is non-default, stated against `balanced()` as
+        // production code rather than against restated numbers.
+        assert_ne!(
+            (configured_engine.memory_bytes, configured_engine.rounds),
+            balanced_budget,
+            "{witness_id}: the selected preset publishes the balanced budget, so it is not a \
+             non-default configuration"
+        );
+
+        // The header advertises the engine the fixture selects, which is what makes
+        // B-6 a statement about this preset and lets B-15 be reached at all.
+        assert_eq!(
+            integer(witness_id, "header.engine_id", &input["header"]["engine_id"]),
+            u64::from(configured_engine.id()),
+            "{witness_id}: the header does not advertise the engine the fixture selects"
+        );
+
+        // The nonce is load-bearing: it solves the preset this fixture names and it
+        // does not solve `balanced()`. If a consumer silently substituted the default
+        // preset, this published nonce would fail -- which is what makes the case a
+        // witness instead of a label.
+        let header = rebuild_header(witness_id, &input["header"]);
+        assert!(
+            header.meets_own_target(&configured_engine),
+            "{witness_id}: the published nonce does not solve the preset the fixture names"
+        );
+        assert!(
+            !header.meets_own_target(&balanced),
+            "{witness_id}: the published nonce also solves `balanced()`, so it is not evidence about \
+             the preset the fixture names"
+        );
+
+        // The production validator accepts it under the engine it publishes.
+        let verdict = validate_fixture(witness);
+        assert!(
+            verdict.accepted,
+            "{witness_id}: the production validator rejects a fixture the corpus publishes as accepted"
+        );
+        assert_eq!(
+            witness["expected"]["accepted"].as_bool(),
+            Some(true),
+            "{witness_id}: this test relies on the corpus publishing the witness as accepted"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The ScratchPad digest itself, at the one point all three implementations
+// publish
+// ---------------------------------------------------------------------------
+
+/// The probe the other two implementations pin their low-spec digest against:
+/// the ASCII preimage `zerocoin-pow`, nonce 1, hashed at the `low_spec()`
+/// budget. The corpus cannot carry this comparison. A fixture publishes a
+/// verdict, and `proof_of_work_meets_target` only says the digest fell under a
+/// threshold roughly half the space wide -- a digest function that had diverged
+/// from the reference would still clear it about half the time. This test
+/// therefore compares the digest itself, byte for byte, against the literal that
+/// `kernel/tests/test_pow.cpp` (`kScratchLowSpec1`) and
+/// `test/harness/test_low_spec_engine.py` both pin. It costs one 512 MiB hash and
+/// is the only 512 MiB hash this file performs.
+#[test]
+fn the_low_spec_engine_reproduces_the_digest_the_other_two_implementations_pin() {
+    const PREIMAGE: &[u8] = b"zerocoin-pow";
+    const LOW_SPEC_PROBE: &str =
+        "086fa583ae54a2d9fd3524497130ec2f97f50d81b5cc5cd824dc6979e5c36201";
+    const BALANCED_PROBE: &str =
+        "3efa396d1920fea0e3d7b942de423a5dd101e20a14eea042ecee4fd159997d1a";
+    const MAINNET_PROBE: &str =
+        "b0c6929750813bcb5280a5172f25583de55876eb9c70eb6b7c84a8cbda6fd9ec";
+
+    let engine = ScratchPadEngine::low_spec();
+    // Read off production code, so a mistyped budget in this test cannot agree
+    // with a mistyped budget in the engine.
+    assert_eq!(engine.memory_bytes, 512 * 1024 * 1024);
+    assert_eq!(engine.rounds, 2_048);
+
+    let observed = hex::encode(engine.hash(PREIMAGE, 1).0);
+    assert_eq!(
+        observed, LOW_SPEC_PROBE,
+        "`low_spec()` at (`zerocoin-pow`, 1) does not reproduce the digest the Python oracle and \
+         the C++ engine both pin"
+    );
+
+    // All three presets share `id()` and `name()`, so the digest is the only
+    // thing that separates them. Reproducing either neighbour's digest would mean
+    // the 512 MiB budget never reached the hash.
     assert_ne!(
-        (configured_engine.memory_bytes, configured_engine.rounds),
-        balanced_budget,
-        "{witness_id}: the selected preset publishes the balanced budget, so it is not a \
-         non-default configuration"
+        observed, BALANCED_PROBE,
+        "`low_spec()` reproduced the `balanced()` digest"
     );
-
-    // The header advertises the engine the fixture selects, which is what makes
-    // B-6 a statement about this preset and lets B-15 be reached at all.
-    assert_eq!(
-        integer(witness_id, "header.engine_id", &input["header"]["engine_id"]),
-        u64::from(configured_engine.id()),
-        "{witness_id}: the header does not advertise the engine the fixture selects"
-    );
-
-    // The nonce is load-bearing: it solves the preset this fixture names and it
-    // does not solve `balanced()`. If a consumer silently substituted the default
-    // preset, this published nonce would fail -- which is what makes the case a
-    // witness instead of a label.
-    let header = rebuild_header(witness_id, &input["header"]);
-    assert!(
-        header.meets_own_target(&configured_engine),
-        "{witness_id}: the published nonce does not solve the preset the fixture names"
-    );
-    assert!(
-        !header.meets_own_target(&balanced),
-        "{witness_id}: the published nonce also solves `balanced()`, so it is not evidence about \
-         the preset the fixture names"
-    );
-
-    // The production validator accepts it under the engine it publishes.
-    let verdict = validate_fixture(witness);
-    assert!(
-        verdict.accepted,
-        "{witness_id}: the production validator rejects a fixture the corpus publishes as accepted"
-    );
-    assert_eq!(
-        witness["expected"]["accepted"].as_bool(),
-        Some(true),
-        "{witness_id}: this test relies on the corpus publishing the witness as accepted"
+    assert_ne!(
+        observed, MAINNET_PROBE,
+        "`low_spec()` reproduced the `mainnet()` digest"
     );
 }
 
