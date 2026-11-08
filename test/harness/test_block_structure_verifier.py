@@ -2,7 +2,7 @@
 """Focused tests for the independent P4.2B block-structure verifier.
 
 `zro_vectors._verify_block_structure` re-derives every published field of the
-35 `chain.block_structure.*` fixtures in `test/p42-vectors/` from the case's own
+36 `chain.block_structure.*` fixtures in `test/p42-vectors/` from the case's own
 `input`: it re-serializes each transaction, recomputes each transaction id and
 the Merkle root, rebuilds the header preimage, re-runs proof of work, and then
 evaluates rules B-3 through B-15 in the order `Block::validate_structure` writes
@@ -88,16 +88,16 @@ def transactions_of(sample):
 class TestCommittedCorpus(unittest.TestCase):
     """The corpus is the one this milestone was asked to verify, unedited."""
 
-    def test_corpus_is_the_35_block_structure_fixtures(self):
-        self.assertEqual(MANIFEST["total_cases"], 35)
-        self.assertEqual(len(CASES), 35)
+    def test_corpus_is_the_36_block_structure_fixtures(self):
+        self.assertEqual(MANIFEST["total_cases"], 36)
+        self.assertEqual(len(CASES), 36)
         self.assertEqual(MANIFEST["phase"], "P4.2A")
         for sample in CASES:
             self.assertTrue(sample["id"].startswith(GROUP), sample["id"])
 
     def test_every_fixture_verifies_and_none_is_skipped(self):
         statuses = [zv.verify_case(sample, _INDEX) for sample in CASES]
-        self.assertEqual(statuses, ["PASS"] * 35)
+        self.assertEqual(statuses, ["PASS"] * 36)
         self.assertNotIn("ANCHOR", statuses)
 
     def test_the_tally_reports_the_number_of_verified_cases(self):
@@ -105,7 +105,7 @@ class TestCommittedCorpus(unittest.TestCase):
         self.assertEqual(zv.verified_block_structure_count(), 0)
         for sample in CASES:
             zv.verify_case(sample, _INDEX)
-        self.assertEqual(zv.verified_block_structure_count(), 35)
+        self.assertEqual(zv.verified_block_structure_count(), 36)
 
     def test_the_tally_excludes_a_case_that_does_not_verify(self):
         zv.reset_verified_block_structure_count()
@@ -491,16 +491,64 @@ class TestDigestDerivation(unittest.TestCase):
                 sample["id"],
             )
 
-    def test_the_scratchpad_cases_are_verified_with_the_balanced_preset(self):
+    def test_the_scratchpad_cases_resolve_the_preset_each_one_publishes(self):
         scratchpad = [s for s in CASES if s["input"]["validation_context"]["engine"] == zv.SCRATCHPAD_ENGINE_NAME]
-        # Four fixtures set the context engine to scratchpad: the isolated wrong
-        # engine case, two precedence pairs that straddle it, and the chaos case.
-        self.assertEqual(len(scratchpad), 4, [s["id"] for s in scratchpad])
+        # Five fixtures set the context engine to scratchpad: the isolated wrong
+        # engine case, the non-default witness, two precedence pairs that straddle
+        # it, and the chaos case.
+        self.assertEqual(len(scratchpad), 5, [s["id"] for s in scratchpad])
         for sample in scratchpad:
-            self.assertEqual(sample["input"]["engine_config"]["preset"], "ScratchPadEngine::balanced()")
-            self.assertEqual(sample["input"]["engine_config"]["engine_id"], 1)
-            self.assertEqual(zv.SCRATCHPAD_PRESETS["ScratchPadEngine::balanced()"], (64 * 1024, 1_024))
+            config = sample["input"]["engine_config"]
+            self.assertEqual(config["engine_id"], zv.ENGINE_ID_SCRATCHPAD, sample["id"])
+            self.assertEqual(config["engine_name"], zv.SCRATCHPAD_ENGINE_NAME, sample["id"])
+            self.assertIn(config["preset"], zv.SCRATCHPAD_PRESETS, sample["id"])
             self.assertEqual(recompute(sample)["proof_of_work_meets_target"], self._expected_pow(sample), sample["id"])
+
+    def test_the_corpus_carries_a_non_default_scratchpad_witness(self):
+        """P4.2B-4C: one committed fixture is configured away from `balanced()`.
+
+        The witness is found through the preset token it publishes, never through
+        its id, and its budget comes from the oracle's own preset table. The nonce
+        is then shown to be load-bearing: it solves the published preset and it
+        does not solve `balanced()`. That is what makes the case evidence about a
+        configuration rather than a label on one -- a consumer that substituted
+        the default preset would reject a case the corpus publishes as accepted.
+        """
+        balanced_budget = zv.SCRATCHPAD_PRESETS["ScratchPadEngine::balanced()"]
+        self.assertEqual(balanced_budget, (64 * 1024, 1_024))
+
+        witnesses = [
+            s for s in CASES
+            if s["input"]["validation_context"]["engine"] == zv.SCRATCHPAD_ENGINE_NAME
+            and s["input"]["engine_config"]["preset"] in zv.SCRATCHPAD_PRESETS
+            and zv.SCRATCHPAD_PRESETS[s["input"]["engine_config"]["preset"]] != balanced_budget
+        ]
+        self.assertEqual(len(witnesses), 1, [s["id"] for s in witnesses])
+        sample = witnesses[0]
+
+        memory_bytes, rounds = zv.SCRATCHPAD_PRESETS[sample["input"]["engine_config"]["preset"]]
+        self.assertNotEqual((memory_bytes, rounds), balanced_budget, sample["id"])
+
+        header = sample["input"]["header"]
+        preimage = zv.header_preimage(zv._header_from_json(header))
+        target = zv.compact_to_target(header["difficulty_bits"])
+        self.assertTrue(
+            zv.hash_meets_target(zv.scratchpad_hash(preimage, header["nonce"], memory_bytes, rounds), target),
+            f"{sample['id']}: the nonce does not solve the preset the fixture publishes",
+        )
+        self.assertFalse(
+            zv.hash_meets_target(
+                zv.scratchpad_hash(preimage, header["nonce"], *balanced_budget), target
+            ),
+            f"{sample['id']}: the nonce also solves `balanced()`, so it is not evidence about the "
+            "preset the fixture names",
+        )
+
+        # It is an accept, so B-15 is actually evaluated rather than short-circuited.
+        got = recompute(sample)
+        self.assertTrue(got["accepted"], sample["id"])
+        self.assertEqual(got["violated_rules"], [], sample["id"])
+        self.assertTrue(got["proof_of_work_meets_target"], sample["id"])
 
 
 class TestDerivedVerdicts(unittest.TestCase):

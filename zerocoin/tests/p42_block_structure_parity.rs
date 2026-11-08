@@ -48,7 +48,7 @@ use zerocoin::ledger::transaction::Transaction;
 
 /// How many fixtures the committed corpus publishes. Asserted, not assumed: a
 /// fixture silently disappearing is a parity failure, not a smaller test run.
-const EXPECTED_CASE_COUNT: usize = 35;
+const EXPECTED_CASE_COUNT: usize = 36;
 
 /// Every fixture id is this prefix plus a stable suffix. The manifest, the C++
 /// harness and the Python verifier all key off the same string.
@@ -605,7 +605,7 @@ fn the_parity_test_executes_the_committed_corpus_on_disk() {
     );
 }
 
-/// The corpus and the manifest it ships beside must describe the same 35
+/// The corpus and the manifest it ships beside must describe the same 36
 /// fixtures under the same identifiers. This is the stable-identifier check: a
 /// renamed or dropped fixture fails here rather than quietly shrinking coverage.
 #[test]
@@ -665,7 +665,7 @@ fn the_corpus_and_the_manifest_agree_on_every_fixture_identifier() {
 // G-1 + G-2: every fixture, validated by production code
 // ---------------------------------------------------------------------------
 
-/// All 35 committed fixtures, rebuilt from their own inputs and validated by
+/// All 36 committed fixtures, rebuilt from their own inputs and validated by
 /// `Block::validate_structure`. Every assertion names the fixture id, so a
 /// mismatch is attributable without re-running anything by hand.
 #[test]
@@ -729,9 +729,9 @@ fn every_committed_fixture_matches_the_rust_validator() {
         EXPECTED_CASE_COUNT, accepted, rejected
     );
     assert_eq!(accepted + rejected, EXPECTED_CASE_COUNT);
-    // The corpus publishes 5 accepted and 30 rejected cases. Pinning the split
+    // The corpus publishes 6 accepted and 30 rejected cases. Pinning the split
     // catches a fixture flipping verdict without the count moving.
-    assert_eq!(accepted, 5, "the corpus publishes five accepted fixtures");
+    assert_eq!(accepted, 6, "the corpus publishes six accepted fixtures");
     assert_eq!(rejected, 30, "the corpus publishes thirty rejected fixtures");
 }
 
@@ -805,9 +805,11 @@ fn the_verdict_is_derived_from_the_input_not_copied_from_the_expected_side() {
 // ---------------------------------------------------------------------------
 
 /// Every fixture's engine comes from its own published fields. This walks the
-/// four scratchpad fixtures and asserts the budget they resolved is the one the
+/// five scratchpad fixtures and asserts the budget they resolved is the one the
 /// published preset names -- and that it was reached by resolving that token,
-/// not by falling back to a default.
+/// not by falling back to a default. "The one the published preset names" is
+/// only a real constraint because the corpus now publishes more than one preset:
+/// with a single preset, `construct()` and a hardcoded default would agree.
 #[test]
 fn every_scratchpad_fixture_resolves_the_preset_it_publishes() {
     let path = corpus_path();
@@ -848,8 +850,8 @@ fn every_scratchpad_fixture_resolves_the_preset_it_publishes() {
     }
 
     assert_eq!(
-        scratchpad, 4,
-        "the corpus publishes four scratchpad fixtures; {} were resolved",
+        scratchpad, 5,
+        "the corpus publishes five scratchpad fixtures; {} were resolved",
         scratchpad
     );
 }
@@ -951,18 +953,27 @@ fn an_unmodelled_engine_or_preset_is_refused_rather_than_substituted() {
     );
 }
 
-/// The honest statement of this milestone's engine coverage limit. The committed
-/// corpus publishes `ScratchPadEngine::balanced()` for all four of its scratchpad
-/// fixtures, so the resolver's non-default branch has no *corpus* witness: it is
-/// exercised only by the synthetic negative controls above. This test fails if a
-/// future fixture adds a non-default preset, which is the moment the synthetic
-/// probe should be promoted to a corpus-backed one. No fixture is edited here.
+/// The corpus-backed form of the non-default probe above. P4.2B-4C added the
+/// corpus's first non-default scratchpad witness, so the resolver's non-default
+/// branch is now exercised by committed data rather than only by synthetic
+/// controls. Nothing here names a fixture id: the witness is found through the
+/// preset token it publishes, and its engine is rebuilt from that token with
+/// production constructors. The fixture's `expected` side is compared, never
+/// read as an input -- so a consumer that substituted `balanced()` for the named
+/// preset would show up as a nonce that no longer meets its own target.
 #[test]
-fn the_committed_corpus_publishes_only_the_balanced_scratchpad_preset() {
+fn the_committed_corpus_carries_a_non_default_scratchpad_witness() {
     let path = corpus_path();
     let (_, corpus) = read_json(&path);
 
-    let mut presets: Vec<String> = Vec::new();
+    let balanced = ScratchPadEngine::balanced();
+    let balanced_budget = (balanced.memory_bytes, balanced.rounds);
+
+    // Pass one: every fixture that publishes an `engine_config` must resolve
+    // through a production constructor, and exactly one of them must carry a
+    // configuration that differs from `balanced()`.
+    let mut configured = 0usize;
+    let mut non_default: Vec<(&str, ScratchPadPreset)> = Vec::new();
     for case in cases_of(&corpus, &path) {
         let fixture_id = id_of(case);
         let input = &case["input"];
@@ -979,17 +990,108 @@ fn the_committed_corpus_publishes_only_the_balanced_scratchpad_preset() {
             );
             continue;
         };
-        presets.push(text(fixture_id, "engine_config.preset", &config["preset"]).to_owned());
+
+        let token = text(fixture_id, "engine_config.preset", &config["preset"]);
+        let preset = ScratchPadPreset::from_token(token)
+            .unwrap_or_else(|| panic!("{fixture_id}: corpus publishes unmodelled preset `{token}`"));
+        // The budget is reached by resolving the published token through the
+        // production constructor, not by assuming whichever preset is default.
+        let published = preset.construct();
+        let selected = select_engine(
+            fixture_id,
+            Some(config),
+            text(
+                fixture_id,
+                "validation_context.engine",
+                &input["validation_context"]["engine"],
+            ),
+        )
+        .unwrap_or_else(|message| panic!("{message}"));
+        let SelectedEngine::ScratchPad(engine) = selected else {
+            panic!("{fixture_id}: engine_config names a scratchpad preset but a different engine was selected")
+        };
+        assert_eq!(
+            (engine.memory_bytes, engine.rounds),
+            (published.memory_bytes, published.rounds),
+            "{fixture_id}: the selected budget is not the published preset's budget"
+        );
+
+        configured += 1;
+        if (engine.memory_bytes, engine.rounds) != balanced_budget {
+            non_default.push((fixture_id, preset));
+        }
     }
 
-    assert_eq!(presets.len(), 4, "four fixtures publish an engine_config");
-    for token in &presets {
-        assert_eq!(
-            token, "ScratchPadEngine::balanced()",
-            "the corpus publishes a non-default scratchpad preset; promote the synthetic \
-             non-default probe in this file to a corpus-backed assertion"
-        );
-    }
+    assert_eq!(
+        configured, 5,
+        "the corpus publishes five engine_config fixtures; {configured} resolved"
+    );
+    assert_eq!(
+        non_default.len(),
+        1,
+        "exactly one committed fixture must witness a non-default scratchpad preset, found {:?}",
+        non_default.iter().map(|(id, _)| *id).collect::<Vec<_>>()
+    );
+
+    // Pass two: take that witness and prove the case is load-bearing rather than
+    // merely labelled. Everything below reads only the fixture's own `input`.
+    let (witness_id, preset) = non_default[0];
+    assert_ne!(
+        preset,
+        ScratchPadPreset::Balanced,
+        "{witness_id}: the witness resolved to the default preset"
+    );
+    let witness = cases_of(&corpus, &path)
+        .iter()
+        .find(|case| id_of(*case) == witness_id)
+        .unwrap_or_else(|| panic!("{witness_id} disappeared from the corpus between passes"));
+    let input = &witness["input"];
+    let published = preset.construct();
+    let configured_engine = ScratchPadEngine::new(published.memory_bytes, published.rounds);
+
+    // The configuration really is non-default, stated against `balanced()` as
+    // production code rather than against restated numbers.
+    assert_ne!(
+        (configured_engine.memory_bytes, configured_engine.rounds),
+        balanced_budget,
+        "{witness_id}: the selected preset publishes the balanced budget, so it is not a \
+         non-default configuration"
+    );
+
+    // The header advertises the engine the fixture selects, which is what makes
+    // B-6 a statement about this preset and lets B-15 be reached at all.
+    assert_eq!(
+        integer(witness_id, "header.engine_id", &input["header"]["engine_id"]),
+        u64::from(configured_engine.id()),
+        "{witness_id}: the header does not advertise the engine the fixture selects"
+    );
+
+    // The nonce is load-bearing: it solves the preset this fixture names and it
+    // does not solve `balanced()`. If a consumer silently substituted the default
+    // preset, this published nonce would fail -- which is what makes the case a
+    // witness instead of a label.
+    let header = rebuild_header(witness_id, &input["header"]);
+    assert!(
+        header.meets_own_target(&configured_engine),
+        "{witness_id}: the published nonce does not solve the preset the fixture names"
+    );
+    assert!(
+        !header.meets_own_target(&balanced),
+        "{witness_id}: the published nonce also solves `balanced()`, so it is not evidence about \
+         the preset the fixture names"
+    );
+
+    // The production validator accepts it under the engine it publishes.
+    let verdict = validate_fixture(witness);
+    assert!(
+        verdict.accepted,
+        "{witness_id}: the production validator rejects a fixture the corpus publishes as accepted"
+    );
+    assert_eq!(
+        witness["expected"]["accepted"].as_bool(),
+        Some(true),
+        "{witness_id}: this test relies on the corpus publishing the witness as accepted"
+    );
 }
 
 // ---------------------------------------------------------------------------

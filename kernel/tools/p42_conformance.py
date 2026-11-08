@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """P4.2B-3: diff the C++ Block structure validator against the Python oracle.
 
-test/p42-vectors/chain/block_structure.json holds the 35 `chain.block_structure.*`
+test/p42-vectors/chain/block_structure.json holds the 36 `chain.block_structure.*`
 cases the P4.2A exporter published from a direct call to the shipping Rust
 `Block::validate_structure`. Every one of them is replayed here through
 `zk::validate_block_structure` — the production ordering in kernel/src/block.cpp,
@@ -74,7 +74,7 @@ from pathlib import Path
 
 SOURCE_FILES = ("chain/block_structure.json",)
 
-EXPECTED_FILE_CASES = {"chain/block_structure.json": 35}
+EXPECTED_FILE_CASES = {"chain/block_structure.json": 36}
 EXPECTED_CASE_COUNT = sum(EXPECTED_FILE_CASES.values())
 
 # The one operation this corpus drives, and the only place its rules are decided.
@@ -87,13 +87,14 @@ EXPECTED_SOURCE_COMMIT = "b71d769be8357bcf10d768d915770125cf7f7c24"
 
 # The exact case-id table, in the order the corpus publishes it. Matching no id
 # pattern is deliberate: a corpus that gained, lost or renamed one case has to be
-# re-read by whoever extends this differential, and a 36th case must never be able
-# to slip through a wildcard into a run that reports "35".
+# re-read by whoever extends this differential, and a 37th case must never be able
+# to slip through a wildcard into a run that reports "36".
 EXPECTED_CASE_IDS = (
     "chain.block_structure.iso_03_wrong_chain",
     "chain.block_structure.iso_04_bad_height",
     "chain.block_structure.iso_05_bad_previous_hash",
     "chain.block_structure.iso_06_wrong_engine",
+    "chain.block_structure.eng_06_scratchpad_mainnet_accept",
     "chain.block_structure.iso_07_bad_difficulty",
     "chain.block_structure.iso_08_no_transactions",
     "chain.block_structure.iso_09_too_many_transactions",
@@ -246,17 +247,18 @@ INPUT_KEYS = (
 )
 
 # The corpus's own published totals. Restated so a corpus that quietly changed its
-# shape is caught before 35 cases are replayed against the wrong question.
-EXPECTED_MANIFEST_GROUPS = {"A_isolation": 14, "B_boundary": 8, "C_adjacent_pair": 12,
+# shape is caught before 36 cases are replayed against the wrong question.
+EXPECTED_MANIFEST_GROUPS = {"A_isolation": 15, "B_boundary": 8, "C_adjacent_pair": 12,
                             "D_dominance": 1}
-EXPECTED_GROUP_LETTERS = {"A": 14, "B": 8, "C": 12, "D": 1}
-EXPECTED_INTENTS = {"rule": 14, "boundary": 8, "ordering": 13}
+EXPECTED_GROUP_LETTERS = {"A": 15, "B": 8, "C": 12, "D": 1}
+EXPECTED_INTENTS = {"rule": 15, "boundary": 8, "ordering": 13}
 EXPECTED_ACCEPTED_IDS = (
     "chain.block_structure.bnd_09_count_at_limit_accept",
     "chain.block_structure.bnd_12_one_above_median_accept",
     "chain.block_structure.bnd_13_equal_limit_accept",
     "chain.block_structure.bnd_13_near_max_last_exact_accept",
     "chain.block_structure.bnd_13_near_max_saturating_accept",
+    "chain.block_structure.eng_06_scratchpad_mainnet_accept",
 )
 EXPECTED_RULE_COVERAGE = list(range(RULE_FIRST, RULE_LAST + 1))
 # `manifest.precedence.adjacent_pairs_represented`: the eleven adjacent pairs one
@@ -967,7 +969,11 @@ def check_case_shape(cases: list[dict], oracle: dict) -> None:
         names = sorted(set(case["input"]) - {"transactions", "transactions_hex"})
         expect(f"{case_id}.input keys", names, sorted(INPUT_KEYS))
 
-    letter = {"iso": "A", "bnd": "B", "pair": "C", "chaos": "D"}
+    # `eng` shares group A with `iso`: `iso` is the one-violation family and
+    # `eng_06_scratchpad_mainnet_accept` is its accept-side counterpart, violating
+    # no row at all. The letters are a taxonomy of the *condition* a case states,
+    # not of its verdict.
+    letter = {"iso": "A", "eng": "A", "bnd": "B", "pair": "C", "chaos": "D"}
     counts: dict[str, int] = {}
     intents: dict[str, int] = {}
     for case in cases:

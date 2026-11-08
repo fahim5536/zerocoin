@@ -1,5 +1,5 @@
 {
-  "case_count": 35,
+  "case_count": 36,
   "cases": [
     {
       "expected": {
@@ -324,6 +324,96 @@
           "height": 5,
           "merkle_root_hex": "bfc6d72c720dd1ff374beeac82aa925f13cd2ae460a0d141638dc5fd4e60d4b5",
           "nonce": 3,
+          "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "timestamp": 1700000005,
+          "version": 1
+        },
+        "reused_from": null,
+        "synthetic_context": false,
+        "transactions": [
+          {
+            "inputs": [
+              {
+                "script_sig_hex": "0105085a65726f436f696e",
+                "sequence": 4294967295,
+                "txid_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "vout": 4294967295
+              }
+            ],
+            "is_coinbase": true,
+            "lock_time": 0,
+            "outputs": [
+              {
+                "script_pubkey_hex": "76a914751e76e8199196d454941c45d1b3a323f1433bd688ac",
+                "value": 5000000000
+              }
+            ],
+            "serialized_hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0b0105085a65726f436f696effffffff0100f2052a010000001976a914751e76e8199196d454941c45d1b3a323f1433bd688ac00000000",
+            "serialized_len": 96,
+            "version": 1
+          }
+        ],
+        "tx_count": 1,
+        "validation_context": {
+          "engine": "scratchpad-memory-hard",
+          "expected_bits": 545259519,
+          "expected_chain": 1515343616,
+          "expected_height": 5,
+          "expected_previous_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "median_time_past": 1700000004,
+          "now": 1700000010
+        }
+      },
+      "intent": "rule"
+    },
+    {
+      "expected": {
+        "accepted": true,
+        "claimed_root": {
+          "display_hex": "b5d4604efdc58d6341d1a060e42acd135f92aa82acee4b37ffd10d722cd7c6bf",
+          "internal_hex": "bfc6d72c720dd1ff374beeac82aa925f13cd2ae460a0d141638dc5fd4e60d4b5"
+        },
+        "coinbase_count": 1,
+        "coinbase_flags": "1",
+        "computed_root": {
+          "display_hex": "b5d4604efdc58d6341d1a060e42acd135f92aa82acee4b37ffd10d722cd7c6bf",
+          "internal_hex": "bfc6d72c720dd1ff374beeac82aa925f13cd2ae460a0d141638dc5fd4e60d4b5"
+        },
+        "computed_root_len": 32,
+        "error_kind": null,
+        "error_payload": null,
+        "first_is_coinbase": true,
+        "is_first_violation": null,
+        "leaf_count": 1,
+        "leaves": [
+          {
+            "txid": {
+              "display_hex": "b5d4604efdc58d6341d1a060e42acd135f92aa82acee4b37ffd10d722cd7c6bf",
+              "internal_hex": "bfc6d72c720dd1ff374beeac82aa925f13cd2ae460a0d141638dc5fd4e60d4b5"
+            }
+          }
+        ],
+        "proof_of_work_meets_target": true,
+        "reported_rule": null,
+        "roots_match": true,
+        "violated_rules": []
+      },
+      "id": "chain.block_structure.eng_06_scratchpad_mainnet_accept",
+      "independent_check": "every published field matches its expected value under `ScratchPadEngine::mainnet()`: the header advertises `ENGINE_ID_SCRATCHPAD`, the context names the mainnet engine, and the nonce solves that preset's target while missing `ScratchPadEngine::balanced()`'s",
+      "input": {
+        "engine_config": {
+          "engine_id": 1,
+          "engine_name": "scratchpad-memory-hard",
+          "preset": "ScratchPadEngine::mainnet()"
+        },
+        "group": "A",
+        "header": {
+          "chain": 1515343616,
+          "difficulty_bits": 545259519,
+          "engine_id": 1,
+          "height": 5,
+          "merkle_root_hex": "bfc6d72c720dd1ff374beeac82aa925f13cd2ae460a0d141638dc5fd4e60d4b5",
+          "nonce": 1,
           "previous_hash_hex": "3333333333333333333333333333333333333333333333333333333333333333",
           "timestamp": 1700000005,
           "version": 1

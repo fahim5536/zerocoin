@@ -20,6 +20,7 @@
     "chain.block_structure.iso_04_bad_height",
     "chain.block_structure.iso_05_bad_previous_hash",
     "chain.block_structure.iso_06_wrong_engine",
+    "chain.block_structure.eng_06_scratchpad_mainnet_accept",
     "chain.block_structure.iso_07_bad_difficulty",
     "chain.block_structure.iso_08_no_transactions",
     "chain.block_structure.iso_09_too_many_transactions",
@@ -81,7 +82,7 @@
   ],
   "files": [
     {
-      "cases": 35,
+      "cases": 36,
       "group": "chain.block_structure",
       "path": "chain/block_structure.json"
     }
@@ -89,17 +90,17 @@
   "generator": "zerocoin/tests/export_baseline_vectors.rs, `p42_*` functions, added by the P4.2A commit that lands immediately after the baseline; no fixture can record the hash of the commit that contains it, and none here claims to have existed before this exporter did",
   "group": "chain.block_structure",
   "groups": {
-    "A_isolation": 14,
+    "A_isolation": 15,
     "B_boundary": 8,
     "C_adjacent_pair": 12,
     "D_dominance": 1,
-    "sum": 35
+    "sum": 36
   },
   "independent_verifier": "test/harness/zro_vectors.py already provides the transaction deserializer, `tx_txid`, `tx_is_coinbase` and `merkle_root` needed to re-derive every published digest and every `serialized_hex` from bytes alone; `run_vectors.py` registers no verifier for this group and this corpus does not wire one in, so the Rust exporter remains the origin of every value published here",
   "intents": {
     "boundary": 8,
     "ordering": 13,
-    "rule": 14
+    "rule": 15
   },
   "notes": [
     "`MAX_BLOCK_TRANSACTIONS` is 2000 and the guard is `len() > 2000`, so 2000 is admitted and 2001 is rejected with the length published back out of the variant.",
@@ -107,8 +108,9 @@
     "Three orderings are deliberately not conflated here: `error_kind` names the `BlockError` variant, `reported_rule` is the row of `validate_structure`'s body that returned it, and the kernel's own `BlockErrorKind` numbering is a C++-side sequence this corpus does not assign or assert.",
     "B-15 is reachable only when B-14 passed, which is why `.iso_15_insufficient_pow` claims its own root — a shape the P4.1 corpus cannot contain at all.",
     "The version field is published and never validated (F-2), so no case here depends on it; `BLOCK_VERSION` is written by `header_at` and read by nothing in the path under test.",
-    "These 35 cases are new with the `p42_*` exporter. `reference_commits` names the commit whose code is under test, not the commit that introduced these cases, because a fixture cannot truthfully claim to predate its own generator.",
-    "`pair_13_14_future_and_stale_root` is the one case added after the original P4.2A corpus: it is `.iso_13_timestamp_too_far_future` with a single extra fault, a stale claimed root, so the two cases differ in one construction line and the pair's verdict is the reference's own `TimestampTooFarFuture`. That closes the (B-13, B-14) deferral — see `resolved_pairs` — and no older case, id or expected value changed. The (B-8, B-9) deferral is untouched, because no input can represent that pair."
+    "These 36 cases are new with the `p42_*` exporter. `reference_commits` names the commit whose code is under test, not the commit that introduced these cases, because a fixture cannot truthfully claim to predate its own generator.",
+    "`pair_13_14_future_and_stale_root` is the one case added after the original P4.2A corpus: it is `.iso_13_timestamp_too_far_future` with a single extra fault, a stale claimed root, so the two cases differ in one construction line and the pair's verdict is the reference's own `TimestampTooFarFuture`. That closes the (B-13, B-14) deferral — see `resolved_pairs` — and no older case, id or expected value changed. The (B-8, B-9) deferral is untouched, because no input can represent that pair.",
+    "`eng_06_scratchpad_mainnet_accept` is the P4.2B-4C case and the corpus's only non-default scratchpad witness: `input.engine_config.preset` is `ScratchPadEngine::mainnet()`, and its nonce is mined with that preset and asserted at export to miss `ScratchPadEngine::balanced()`'s target, so a consumer that substituted one preset for the other would reject a case this corpus publishes as accepted. The preset's `(memory_bytes, rounds)` are deliberately not published — `engine_config` keeps the three keys every other scratchpad fixture already carries — and are asserted at export from the production struct's own public fields instead. No older case, id or expected value changed."
   ],
   "phase": "P4.2A",
   "precedence": {
@@ -158,7 +160,7 @@
         15
       ]
     ],
-    "basis": "a pair is represented when one case's published input violates both rows and `reported_rule` equals the smaller of them. The emitter asserts that equality for all 35 cases, so the array above is a summary of assertions that ran during generation, not a list of hopes.",
+    "basis": "a pair is represented when one case's published input violates both rows and `reported_rule` equals the smaller of them. The emitter asserts that equality for all 36 cases, so the array above is a summary of assertions that ran during generation, not a list of hopes.",
     "witnesses": [
       {
         "id": "chain.block_structure.pair_03_04_chain_and_height",
@@ -366,10 +368,11 @@
     "chain.block_structure.chaos_all_later_guards_broken"
   ],
   "synthetic_context_meaning": "a case labelled synthetic deliberately combines published values that a running node would never produce together — `median_time_past` above `now + MAX_FUTURE_SECONDS`, or eleven guards broken in one block. The isolation and boundary cases reach their verdicts with ordinary contexts; these two need the label so no reader mistakes an observation about guard order for an observation about the network.",
-  "total_cases": 35,
+  "total_cases": 36,
   "verdicts": {
-    "accepted": 5,
+    "accepted": 6,
     "accepted_case_ids": [
+      "chain.block_structure.eng_06_scratchpad_mainnet_accept",
       "chain.block_structure.bnd_09_count_at_limit_accept",
       "chain.block_structure.bnd_12_one_above_median_accept",
       "chain.block_structure.bnd_13_equal_limit_accept",
