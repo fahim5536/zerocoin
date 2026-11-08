@@ -391,7 +391,7 @@ return the same accept/reject decision and the same *first* failing rule as
 `validate_structure` (`CONSENSUS_RULES.md` §3, order B-3 … B-15). The order is observable
 because it determines which error is reported; a port that checks PoW before the merkle root
 would report a different error for the same block. Since P4.2A the whole order has a committed
-Rust oracle to be diffed against — 35 cases in `test/p42-vectors/chain/block_structure.json`,
+Rust oracle to be diffed against — 36 cases in `test/p42-vectors/chain/block_structure.json`,
 each publishing the returned `error_kind`, its `error_payload`, the `reported_rule` and the full
 `violated_rules` set — so C-13 is now falsifiable per rule pair rather than per document reading.
 One of its pairs is deliberately **not** an obligation: (B-8, B-9) cannot be distinguished by any
@@ -418,6 +418,37 @@ remains exempt and its relative position unobservable, and B-8's precedence over
 asserted only by a C++ test rather than by corpus evidence. The (B-13, B-14) row is reproduced by
 construction — the future-window check sits above the root comparison in the source — and
 `kernel/tests/test_block_structure.cpp` pins it with a single block violating both.
+
+**P4.2B status of C-13 (2026-11-08; implemented and differentially demonstrated).** The verification
+half above is now discharged. `kernel/tools/p42_conformance.py` drives `zk::validate_block_structure`
+as a differential — it derives every expected value from `test/harness/zro_vectors.py` and asks the
+production path for its own verdict, so the comparison stays two sources of truth — and is
+registered as the `kernel_p42_conformance` ctest entry. Over the 36 committed cases it reports 36
+processed, 36 matched, 0 mismatched, 0 missing, 0 unsupported. `python test/harness/run_vectors.py
+--vectors test/p42-vectors` reports `PASS 36 ANCHOR 0 SKIP 0 FAIL 0`, `test/harness/
+test_block_structure_verifier.py` holds 64 tests, and `zerocoin/tests/p42_block_structure_parity.rs`
+adds the third leg by reading the committed corpus from disk and exercising all 36 fixtures against
+the shipping validator. That file also carries the count-drift guard:
+`the_corpus_and_the_manifest_agree_on_every_fixture_identifier` reads the committed corpus and the
+committed manifest and fails when `case_count`, `total_cases`, the case array length or the
+identifier set disagree, so a fixture added or removed without updating the manifest fails at
+`cargo +stable-x86_64-pc-windows-gnu test --test p42_block_structure_parity
+ the_corpus_and_the_manifest_agree_on_every_fixture_identifier`. Two limitations are unchanged and
+belong to the corpus rather than to the
+port: (B-8, B-9) stays unobservable because those two conditions are mutually exclusive, and B-8's
+precedence over B-10/B-11/B-14/B-15 remains source-order inference wherever no discriminating
+fixture exists. Five C++ output fields remain **deferred, not passed**, and this is block-structure
+corpus parity, not full Rust/C++ consensus parity.
+
+**P4.2B-4C status of engine coverage (2026-11-08; one non-default preset, not all of them).** The
+corpus's 36th fixture, `chain.block_structure.eng_06_scratchpad_mainnet_accept`, is the first
+witness that does not run `ScratchPadEngine::balanced()`. It publishes `preset:
+"ScratchPadEngine::mainnet()"` — 2 MiB and 4 096 rounds — and it is accepted, so the C++ port, the
+Python verifier and the Rust parity test all have to resolve a non-default preset instead of
+substituting the default one. Coverage is exactly the presets the corpus represents and the oracle
+models: `balanced()` and `mainnet()`. `low_spec()` and `mobile()` are **not** independently modelled
+by the Python or C++ oracle, and the `engine_config` schema publishes no numeric `memory_bytes` or
+`rounds` — the preset token is what identifies the configuration.
 
 **C-14** — The port MUST expose the same error *taxonomy*, even if names differ:
 `WrongChain`, `BadHeight`, `BadPreviousHash`, `WrongEngine`, `BadDifficulty`,
@@ -786,7 +817,7 @@ The C++ port milestone is not complete until all four layers pass.
   would have encoded a Rust panic as expected behaviour. M-F1 supplies the Rust negative
   tests (`findings_regression.rs`); the matching C++ test stays deferred with the P3 block
   module (§10), so the exclusion currently has no C++ counterpart.
-- Since P4.2A the block-structure half of §11.3 has a committed, deterministic input set: the 35
+- Since P4.2A the block-structure half of §11.3 has a committed, deterministic input set: the 36
   `chain.block_structure.*` cases in `test/p42-vectors/`, including the 2000- and
   2001-transaction lists §11.3 asks for as fuzz cases. P4.2B MUST replay them against the C++
   validator once one exists, and MUST replay them **without** editing a published expectation: a

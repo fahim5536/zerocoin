@@ -220,7 +220,7 @@ add_test(NAME kernel_p41_conformance
           --vectors ${CMAKE_CURRENT_SOURCE_DIR}/../test/p41-vectors
           --runner $<TARGET_FILE:kernel_conformance>)
 
-# P4.2B-3 replays the thirty-five block-structure cases the P4.2A corpus exports,
+# P4.2B-3 replays the thirty-six block-structure cases the P4.2A corpus exports,
 # from its own root test/p42-vectors through the same runner binary. The wrapper is
 # a differential, not a replay of published bytes: it derives every expected value
 # from the independent Python verifier in test/harness/zro_vectors.py (imported from

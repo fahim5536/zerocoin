@@ -532,8 +532,8 @@ before the runner is invoked; a disagreement is a mapping failure (exit 2) again
 never a root mismatch blamed on the kernel. The corpus also records, rather than edits, one
 stale claim in `docs/consensus/CONSENSUS_RULES.md` §3: see the B-14 boundary note there.
 
-`test/p42-vectors/**` is the sixth corpus root and holds one group, `chain.block_structure` (35
-cases: 14 isolation, 8 boundary, 12 adjacent-pair precedence, 1 dominance witness; by verdict 5
+`test/p42-vectors/**` is the sixth corpus root and holds one group, `chain.block_structure` (36
+cases: 15 isolation, 8 boundary, 12 adjacent-pair precedence, 1 dominance witness; by verdict 6
 accepted and 30 rejected). Its `source_commit` is the same `b71d769` as the P4.1 root, and
 `zerocoin/src/consensus/block.rs` is byte-identical to it at this baseline, so the two corpora
 describe one validator; `reference_commits` again names `e464695f` for the introduction of
@@ -552,7 +552,7 @@ computed and claimed roots, `roots_match`, the proof-of-work flag, the coinbase 
 `error_kind`, the `error_payload`, the `reported_rule` and the complete `violated_rules` set. That
 last pair is the contract P4.2B has to reproduce: a port must agree not only with the verdict but
 with *which guard the reference named first*, and the emitter asserts `reported_rule` equals the
-smallest violated row for all 35 cases.
+smallest violated row for all 36 cases.
 
 One absence is recorded rather than papered over. **(B-8, B-9) has no fixture and is not
 claimed to be proven**: `transactions.is_empty()` and `transactions.len() > 2000` are mutually
@@ -566,7 +566,8 @@ now.saturating_add(7200)`) and row 14 (`merkle_root != computed`) at once, while
 after the stale claim is written and row 15 therefore passes. The reference returned
 `TimestampTooFarFuture`, published as `reported_rule` 13 beside `violated_rules` `[13, 14]`, and the
 manifest moved that pair from `deferred_pairs` to `resolved_pairs`. That is an observed Rust
-ordering and nothing more: no C++ `validate_structure` exists, so no port ordering is claimed here.
+ordering, and `kernel/tools/p42_conformance.py` replays it against the port as one row of the
+differential rather than as a claim about it.
 Five cases replay committed P4.1 blocks byte for byte (`iso_08_no_transactions`, `iso_14_root_mismatch`,
 `bnd_13_near_max_saturating_accept`, `pair_14_15_root_mismatch_and_failing_pow`,
 `pair_14_15_zero_root_claim_and_failing_pow`); the exporter rebuilds the header, the serialized
@@ -574,18 +575,19 @@ transactions and the context from the P4.1 JSON, asserts the rebuild equals what
 and re-checks that the reused block still solves, so the two corpora cannot drift apart in
 silence.
 
-Unlike the five earlier roots this one is **not yet executable in C++**, and that is the whole
-content of P4.2B: there is no `kernel/tools/p42_conformance.py`, no `kernel_p42_conformance` ctest
-entry, and no runner verb that takes a block and returns a first failing rule, because
-`kernel/src/block.cpp` still exposes only `zk::compare_claimed_merkle_root` — no `Block` type, no
-`validate_structure`, none of the other twelve guards. `run_vectors.py` dispatches by case-id
-namespace and registers no verifier for `chain.block_structure`, so pointing it at this root is a
-structural check only (envelope, manifest, provenance, counts) and reports 35 SKIP with exit 1; the
-P0 gate is unchanged. The independent Python second opinion for this corpus re-derives published
-bytes, not verdicts: every canonical serialization, transaction id, leaf order, Merkle root,
-coinbase flag, PoW status and rejection payload reproduces from
-`test/harness/zro_vectors.py` alone, and it cannot disagree about a verdict because it never
-computes one.
+Unlike the five earlier roots this one is executable by all three implementations.
+`kernel/src/block.cpp` now exposes `zk::Block` and `zk::validate_block_structure`, which evaluates
+B-3 … B-15 in the reference's order and returns the first failure it reaches;
+`kernel/tools/p42_conformance.py` drives it as a differential rather than replaying published
+bytes, and is registered as the `kernel_p42_conformance` ctest entry, so all 36 cases are replayed
+against the port. `run_vectors.py` dispatches by case-id namespace and registers
+`_verify_block_structure` for `chain.block_structure`, so pointing it at this root verifies every
+fixture independently rather than checking only the envelope (manifest, ids, provenance, counts);
+the P0 gate is unchanged. That independent Python second opinion re-derives each verdict from the
+case's own `input` — every canonical serialization, transaction id, leaf order, Merkle root,
+coinbase flag, PoW status, context comparison, first failing rule and payload — so a published
+expectation is never read to produce it. This is block-structure corpus parity, not full Rust/C++
+consensus parity.
 
 ---
 

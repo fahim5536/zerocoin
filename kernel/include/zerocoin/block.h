@@ -52,7 +52,7 @@
 //   B-15  InsufficientProofOfWork !header.meets_own_target(engine)        (unit)
 //
 // Three facts about that sequence are worth stating where they are decided,
-// because the P4.2A corpus (test/p42-vectors/chain/block_structure.json, 35 cases)
+// because the P4.2A corpus (test/p42-vectors/chain/block_structure.json, 36 cases)
 // does not demonstrate them and a later reader should not have to rediscover it:
 //
 //   (8, 9)   mutually exclusive by construction. `is_empty()` and `len() > 2000`
@@ -72,9 +72,10 @@
 // any retargeting (the caller supplies `expected_bits`; computing it would mean
 // reading chain history through an untrusted height, which is finding F-1 and is
 // not closed here), UTXO and reward validation, signature checking, fork choice,
-// and any networking. The P4.2A differential replay of the 35 fixtures and the
-// Python verifier registration are P4.2B-2/P4.2B-3, not this slice. Rust remains
-// the oracle; this is not full consensus parity and not production readiness.
+// and any networking. The P4.2A differential replay of the 36 fixtures and the
+// Python verifier registration landed in P4.2B-2/P4.2B-3 and live outside this
+// module. Rust remains the oracle; this is not full consensus parity and not
+// production readiness.
 
 #ifndef ZEROCOIN_KERNEL_BLOCK_H
 #define ZEROCOIN_KERNEL_BLOCK_H

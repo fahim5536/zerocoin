@@ -1056,7 +1056,7 @@ Unverified by this milestone (open questions, not claims):
 | P0 corpus | `python test/harness/run_vectors.py` (117 cases) |
 | P0 emitter | `cargo test --test export_baseline_vectors` |
 | P4.1A claimed-root oracle | `test/p41-vectors/chain/claimed_merkle_root.json` (30 cases), pinned by `p41_reference_fixtures_are_reproducible_and_pinned` |
-| P4.2A B-3 … B-15 oracle: isolation, boundaries, adjacent pairs, dominance | `test/p42-vectors/chain/block_structure.json` (35 cases), generated and re-validated by `p42_vectors_match_the_committed_reference_corpus` and `p42_reference_fixtures_are_reproducible_and_pinned`; the structural gate is `python test/harness/run_vectors.py --vectors test/p42-vectors` |
+| P4.2A B-3 … B-15 oracle: isolation, boundaries, adjacent pairs, dominance | `test/p42-vectors/chain/block_structure.json` (36 cases), generated and re-validated by `p42_vectors_match_the_committed_reference_corpus` and `p42_reference_fixtures_are_reproducible_and_pinned`; fixture-count and fixture-identifier drift between the corpus and `test/p42-vectors/manifest.json` is guarded by `the_corpus_and_the_manifest_agree_on_every_fixture_identifier`; the verifier gate is `python test/harness/run_vectors.py --vectors test/p42-vectors` |
 
 The tests live in `zerocoin/tests/consensus_rules.rs` and reuse, rather than invent, the
 values in `test/vectors/` and the pinned constants in `src/consensus/immutability.rs`.
