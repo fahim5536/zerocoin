@@ -55,6 +55,8 @@
 #include "zerocoin/uint256.h"
 #include "zerocoin/varint.h"
 
+#include "p42_evidence.h"
+
 namespace {
 
 using zk::Hash160;
@@ -101,6 +103,11 @@ struct Case {
       fail("fixture has " + std::to_string(values.size()) + " IN " + key + " for case " + id);
     }
     return values.front();
+  }
+
+  bool expects(const std::string& key) const {
+    return std::any_of(outputs.begin(), outputs.end(),
+                       [&key](const auto& entry) { return entry.first == key; });
   }
 };
 
@@ -1034,6 +1041,15 @@ Produced op_block_structure(const Case& c) {
   produced["roots_match"] = bool_text(header.merkle_root == root);
   produced["proof_of_work_meets_target"] = bool_text(zk::header_meets_own_target(header, engine));
   produced["future_limit"] = std::to_string(zk::future_timestamp_limit(context.now));
+  // P4.2B-4F, field 1 of 5: `leaves` — one `internal_hex|display_hex` txid per
+  // transaction in list order. Rendered only when the fixture declares the key,
+  // which is exactly the reference's verbose gate: the corpus publishes `leaves`
+  // only for eight or fewer transactions, so an over-limit list keeps the key
+  // absent.
+  if (const std::optional<std::string> leaves =
+          p42_evidence::leaves_out(block.transactions, c.expects("leaves"))) {
+    produced["leaves"] = *leaves;
+  }
   return produced;
 }
 

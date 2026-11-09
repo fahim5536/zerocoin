@@ -49,13 +49,15 @@ evidence about rules the reported verdict never reached:
   bound B-13 compares against — so `bnd_13_near_max_*` distinguishes a saturating
   port from a wrapping one even where the two would return the same verdict.
 
-`violated_rules`, `reported_rule`, `is_first_violation`, `leaves` and
-`computed_root_len` are published by the oracle and deliberately not replayed; they
-are named in DEFERRED_KEYS with the reason each one cannot be. None of them is
-silently dropped: an expected key that is neither mapped nor deferred is a mapping
-failure (exit 2), and so is any input the current C++ API cannot represent — the
-kernel has no engine for an unmodelled algorithm, and an unsupported fixture is
-reported as unsupported rather than converted into a pass.
+`violated_rules`, `reported_rule`, `is_first_violation` and `computed_root_len`
+are published by the oracle and deliberately not replayed; they are named in
+DEFERRED_KEYS with the reason each one cannot be. `leaves` is replayed: the runner
+renders one `internal|display` txid per transaction through `Transaction::txid`,
+and this file compares the whole list against the oracle's own. None of the
+deferred keys is silently dropped: an expected key that is neither mapped nor
+deferred is a mapping failure (exit 2), and so is any input the current C++ API
+cannot represent — the kernel has no engine for an unmodelled algorithm, and an
+unsupported fixture is reported as unsupported rather than converted into a pass.
 
 Usage:
   python kernel/tools/p42_conformance.py --vectors test/p42-vectors --runner <exe>
@@ -181,12 +183,6 @@ DEFERRED_KEYS: dict[str, str] = {
     "is_first_violation": (
         "an assertion about `violated_rules`, which is deferred above; it is true for "
         "every case by the oracle's own construction and needs no kernel evidence"
-    ),
-    "leaves": (
-        "the per-transaction ids the reference hashed. The ported composition "
-        "(`merkle_root_from_transactions`) returns only the root, and asking for the "
-        "leaves would mean calling `Transaction::txid` from the runner per leaf, which "
-        "is a P3.3/P4.1 job and already replayed by those gates"
     ),
     "computed_root_len": (
         "the digest width is `Hash256::kWidth`, a compile-time constant; the compared "
@@ -575,6 +571,25 @@ def digest_pair(value: object, case_id: str, what: str) -> tuple[str, str]:
     return internal, display
 
 
+def leaves_text(value: object, case_id: str, count: int) -> str:
+    """The canonical `leaves` OUT text, in lockstep with the C++ runner's
+    p42_evidence.h: one `internal_hex|display_hex` per transaction in list
+    order, `;`-joined, and the literal `[]` for an empty list so absent and
+    empty stay distinct."""
+    if not isinstance(value, list):
+        raise MappingError(f"{case_id}: leaves is {value!r}, expected a list")
+    if len(value) != count:
+        raise MappingError(
+            f"{case_id}: leaves has {len(value)} entries for leaf_count={count}")
+    entries: list[str] = []
+    for index, leaf in enumerate(value):
+        if not isinstance(leaf, dict) or set(leaf) != {"txid"}:
+            raise MappingError(f"{case_id}: leaves[{index}] is not exactly a txid object")
+        internal, display = digest_pair(leaf["txid"], case_id, f"leaves[{index}].txid")
+        entries.append(f"{internal}|{display}")
+    return "[]" if not entries else ";".join(entries)
+
+
 def hex_bytes(value: object, case_id: str, what: str) -> str:
     if not isinstance(value, str) or not re.fullmatch(r"(?:[0-9a-f]{2})*", value or ""):
         raise MappingError(f"{case_id}: {what} is not even-length lowercase hex: {value!r}")
@@ -622,6 +637,7 @@ MAPPED_EXPECTED_KEYS = {
     "error_payload",
     "first_is_coinbase",
     "leaf_count",
+    "leaves",
     "proof_of_work_meets_target",
     "roots_match",
 }
@@ -782,6 +798,12 @@ def map_case(case: dict, oracle: dict) -> tuple[FixtureCase, Evidence]:
         # this is the field that separates a saturating port from a wrapping one.
         ("future_limit", text(min(int(context["now"]) + oracle["MAX_FUTURE_SECONDS"], MASK64))),
     ]
+    # `leaves` appears only where the reference published it — the verbose gate —
+    # so an over-limit case keeps the key absent and the runner is never asked
+    # for a list the oracle did not derive.
+    if "leaves" in expected:
+        outputs.append(("leaves", leaves_text(verdict["leaves"], case_id,
+                                              verdict["leaf_count"])))
 
     mapped = set(MAPPED_EXPECTED_KEYS)
     deferred = split_expected(expected, mapped, case_id)
